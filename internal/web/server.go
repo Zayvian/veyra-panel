@@ -29,9 +29,91 @@ import (
 var assets embed.FS
 
 const (
-	settingSessionKey = "web.session_key"
-	settingCSRFKey     = "web.csrf_key"
+	settingSessionKey    = "web.session_key"
+	settingCSRFKey        = "web.csrf_key"
+	settingSessionGen     = "web.session_generation"
+	settingSetupDeadline  = "web.setup_deadline"
 )
+
+// setupWindow is how long the first-run setup form stays open after the
+// panel is first started. A one-click install creates the admin before the
+// server starts, so this window only matters when the binary is run by hand:
+// there, the form must not stay open forever, or anyone who reaches the
+// panel before the operator notices could take it over. Ten minutes is
+// plenty to open a browser and fill in a form, and short enough that
+// leaving the process running unattended stops being a race with a
+// stranger.
+const setupWindow = 10 * time.Minute
+
+// sessionGeneration reads the current session generation counter, or 0 if it
+// has never been bumped. The generation is what makes logout meaningful: a
+// cookie signed under an older generation is rejected by user(), so bumping
+// the counter on logout invalidates every cookie issued before it.
+func (s *Server) sessionGeneration() (int64, error) {
+	v, err := s.svc.Store().Setting(settingSessionGen)
+	if err != nil {
+		return 0, err
+	}
+	if v == "" {
+		return 0, nil
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("stored session generation is corrupt: %w", err)
+	}
+	return n, nil
+}
+
+// bumpSessionGeneration increments the counter manometrically: read, add one,
+// write. Only the admin logout path calls it, so there is no contention to
+// worry about, and a lost update (two concurrent logouts) would at worst keep
+// an already-logged-out cookie valid for another logout's worth of time.
+func (s *Server) bumpSessionGeneration() (int64, error) {
+	cur, err := s.sessionGeneration()
+	if err != nil {
+		return 0, err
+	}
+	next := cur + 1
+	if err := s.svc.Store().SetSetting(settingSessionGen, strconv.FormatInt(next, 10)); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
+// setupOpen reports whether the first-run setup form is still available.
+// The deadline is written on the first boot and never overwritten, so a
+// one-click install that creates the admin before the server starts never
+// opens the window; a hand-run binary has setupWindow from its first boot
+// to create the admin before the form locks and refuses new claims.
+func (s *Server) setupOpen(now time.Time) (bool, error) {
+	raw, err := s.svc.Store().Setting(settingSetupDeadline)
+	if err != nil {
+		return false, err
+	}
+	if raw == "" {
+		// No deadline has been claimed yet: this is the first boot (or the
+		// database is new). Claim it atomically — the guard is the key's
+		// own absence, so two processes booting together cannot both race
+		// to write different deadlines.
+		deadline := now.Add(setupWindow)
+		wrote, err := s.svc.Store().SetSettingsIfAbsent(settingSetupDeadline, map[string]string{
+			settingSetupDeadline: strconv.FormatInt(deadline.Unix(), 10),
+		})
+		if err != nil {
+			return false, err
+		}
+		if !wrote {
+			// Someone else claimed it first; read their deadline.
+			return s.setupOpen(now)
+		}
+		return true, nil
+	}
+	deadline, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("stored setup deadline is corrupt: %w", err)
+	}
+	return now.Unix() <= deadline, nil
+}
 
 type Server struct {
 	svc     *service.Service
@@ -42,6 +124,7 @@ type Server struct {
 	nodes   NodeChannel
 	logins  *ratelimit.Limiter
 	secureCookies bool
+	sessionGen    int64 // current session generation, cached to avoid a DB read per request
 }
 
 // NodeChannel is the node control channel, mounted by the router. It is an
@@ -112,7 +195,7 @@ func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookie
 	if nodes == nil {
 		return nil, fmt.Errorf("a node channel is required")
 	}
-	return &Server{
+	srv := &Server{
 		svc:           svc,
 		nodes:         nodes,
 		log:           log,
@@ -121,7 +204,15 @@ func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookie
 		csrf:          newCSRF(csrfKey),
 		secureCookies: secureCookies,
 		logins:        ratelimit.New(10, 5*time.Second),
-	}, nil
+	}
+	// The session generation is cached for the lifetime of the Server; it
+	// only changes on logout, which goes through this same Server.
+	gen, err := srv.sessionGeneration()
+	if err != nil {
+		return nil, err
+	}
+	srv.sessionGen = gen
+	return srv, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -245,7 +336,7 @@ func harden(next http.Handler) http.Handler {
 // thing the user would see if they had just sat on a form for a day.
 func (s *Server) requireCSRF(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		username, err := s.sess.user(r)
+		username, err := s.sess.user(r, s.sessionGen)
 		if err != nil {
 			s.errorBanner(w, http.StatusForbidden, "session expired; please sign in again")
 			return
@@ -274,7 +365,7 @@ func (s *Server) auth(next http.Handler) http.Handler {
 			s.redirect(w, r, "/setup")
 			return
 		}
-		if _, err := s.sess.user(r); err != nil {
+		if _, err := s.sess.user(r, s.sessionGen); err != nil {
 			s.redirect(w, r, "/login")
 			return
 		}

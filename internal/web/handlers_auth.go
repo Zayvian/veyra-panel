@@ -25,9 +25,21 @@ func (s *Server) getSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if exists {
-		// Setup is one-shot. Leaving it open would let anyone who
-		// reaches the panel replace the administrator's password.
 		s.redirect(w, r, "/login")
+		return
+	}
+	// The setup form is only available within a bounded window after the
+	// panel's first boot. After that, /setup is locked even if no admin
+	// has been created — a hand-run binary left unattended cannot stay
+	// open forever, or anyone who reaches it first takes the account.
+	open, err := s.setupOpen(time.Now())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !open {
+		s.errorBanner(w, http.StatusForbidden,
+			"setup window has expired; restart the panel with the -set-admin flag")
 		return
 	}
 	s.page(w, r, "setup", nil)
@@ -41,6 +53,16 @@ func (s *Server) postSetup(w http.ResponseWriter, r *http.Request) {
 	}
 	if exists {
 		s.redirect(w, r, "/login")
+		return
+	}
+	open, err := s.setupOpen(time.Now())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !open {
+		s.errorBanner(w, http.StatusForbidden,
+			"setup window has expired; restart the panel with the -set-admin flag")
 		return
 	}
 	username := r.FormValue("username")
@@ -65,7 +87,7 @@ func (s *Server) postSetup(w http.ResponseWriter, r *http.Request) {
 	// will need to make any state-changing request from this point on.
 	// The token is bound to the username: a cookie issued here only
 	// verifies for forms posted by this user.
-	s.sess.issue(w, username, s.secureCookies)
+	s.sess.issue(w, username, s.secureCookies, s.sessionGen)
 	s.csrf.issue(w, username, s.secureCookies)
 	s.redirect(w, r, "/")
 }
@@ -80,7 +102,7 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "/setup")
 		return
 	}
-	if _, err := s.sess.user(r); err == nil {
+	if _, err := s.sess.user(r, s.sessionGen); err == nil {
 		s.redirect(w, r, "/")
 		return
 	}
@@ -108,7 +130,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	s.sess.issue(w, username, s.secureCookies)
+	s.sess.issue(w, username, s.secureCookies, s.sessionGen)
 	// Pair the session cookie with a CSRF cookie. They are issued
 	// together because the verifier binds them: a token signed for
 	// this user only verifies for this user, and there is no token
@@ -124,6 +146,14 @@ func (s *Server) postLogout(w http.ResponseWriter, r *http.Request) {
 	// accept (against a new, identical session) until the TTL runs
 	// out.
 	s.csrf.clear(w, s.secureCookies)
+	// Bump the session generation so every cookie issued before this
+	// logout is invalidated, whether the browser deleted it or not. A
+	// copied or resurrected cookie can no longer authenticate.
+	if next, err := s.bumpSessionGeneration(); err != nil {
+		s.log.Warn("bump session generation", "error", err)
+	} else {
+		s.sessionGen = next
+	}
 	s.redirect(w, r, "/login")
 }
 
