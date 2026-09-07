@@ -1,3 +1,8 @@
+// handlers_policy.go - 完整替换文件
+//
+// 修改：render(...) 增加 CSRFToken
+// getPolicy 改成 s.page(w, r, ...) 形式
+
 package web
 
 import (
@@ -23,6 +28,7 @@ func (s *Server) renderPolicy(w http.ResponseWriter, r *http.Request, code int, 
 		"Speedtests": service.SpeedtestDomains(),
 		"Saved":      saved,
 		"Page":       "policy",
+		"CSRFToken":  s.csrf.csrfValue(r),
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
@@ -33,10 +39,6 @@ func (s *Server) renderPolicy(w http.ResponseWriter, r *http.Request, code int, 
 	s.render(w, "policy", data)
 }
 
-// setPolicy saves and pushes. Every node gets a new configuration, which
-// rebuilds its listeners and drops live connections — the confirmation on the
-// button says so, because a policy that only takes effect at the next
-// unrelated edit is not a policy.
 func (s *Server) setPolicy(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		s.errorBanner(w, http.StatusBadRequest, "bad form")

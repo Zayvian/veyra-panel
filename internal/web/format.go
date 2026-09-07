@@ -31,6 +31,12 @@ func templateFuncs() template.FuncMap {
 		// 号" would be a promise February cannot keep.
 		"days28":    func() []int { return daysTo28 },
 		"nextreset": nextResetLabel,
+
+		// csrfField emits the hidden input that posts the CSRF token
+		// back to the server. The alternative — rendering {{ .CSRFToken }}
+		// directly — works for htmx (where the page reads it from a meta
+		// tag) but is one more thing to remember for every form.
+		"csrfField": csrfField,
 	}
 }
 

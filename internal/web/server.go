@@ -1,10 +1,10 @@
-// Package web serves the admin UI: plain Go templates plus htmx, no build step
-// and no bundler.
+// Package web serves the admin UI: plain Go templates plus htmx, no build
+// step and no bundler.
 //
-// Handlers here are deliberately thin — read the form, call the service, render
-// a template. All the logic lives in internal/service, so this package can be
-// replaced by a JSON API and a single-page frontend without touching anything
-// that matters.
+// Handlers here are deliberately thin — read the form, call the service,
+// render a template. All the logic lives in internal/service, so this
+// package can be replaced by a JSON API and a single-page frontend
+// without touching anything that matters.
 package web
 
 import (
@@ -28,44 +28,38 @@ import (
 //go:embed templates/*.html static/*
 var assets embed.FS
 
-const settingSessionKey = "web.session_key"
+const (
+	settingSessionKey = "web.session_key"
+	settingCSRFKey     = "web.csrf_key"
+)
 
 type Server struct {
-	svc   *service.Service
-	log   *slog.Logger
-	tpl   *template.Template
-	sess  *sessions
-	nodes NodeChannel
-
-	// Guards the password check. Ten tries back to back, then one every five
-	// seconds — no obstacle to someone who knows the password and mistyped it,
-	// and it turns an unbounded guessing rate into roughly twelve an hour.
-	logins *ratelimit.Limiter
-
-	// secureCookies marks session cookies Secure. Off when serving plain HTTP
-	// on localhost, because a Secure cookie is simply dropped there and login
-	// would appear to succeed and then not stick.
+	svc     *service.Service
+	log     *slog.Logger
+	tpl     *template.Template
+	sess    *sessions
+	csrf    *csrfToken
+	nodes   NodeChannel
+	logins  *ratelimit.Limiter
 	secureCookies bool
 }
 
 // NodeChannel is the node control channel, mounted by the router. It is an
-// interface so that the web package does not depend on the hub, and — more to
-// the point — so that forgetting to pass one is a compile error rather than a
-// route that quietly 404s every node that dials in.
+// interface so that the web package does not depend on the hub, and —
+// more to the point — so that forgetting to pass one is a compile error
+// rather than a route that quietly 404s every node that dials in.
 type NodeChannel interface {
 	Handler() http.HandlerFunc
 	Connected(nodeID int64) bool
 	OnlineUsers() map[string]bool
-
 	// UserIPCounts is how many distinct source addresses each user is
 	// connected from, summed across nodes.
 	UserIPCounts() map[string]int
-
 	// LiveInbounds is the set of inbound tags the node says it is serving.
-	// known is false when it has not said — a disconnected node, or one that
-	// has not reported yet — which must not be shown as "everything is down".
+	// known is false when it has not said — a disconnected node, or one
+	// that has not reported yet — which must not be shown as "everything
+	// is down".
 	LiveInbounds(nodeID int64) (tags map[string]bool, known bool)
-
 	// ApplyError is why the node is not running what it was last sent.
 	ApplyError(nodeID int64) string
 }
@@ -84,8 +78,7 @@ func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookie
 	var key []byte
 	if stored == "" {
 		key = newSessionKey()
-		if err := svc.Store().SetSetting(settingSessionKey,
-			base64.StdEncoding.EncodeToString(key)); err != nil {
+		if err := svc.Store().SetSetting(settingSessionKey, base64.StdEncoding.EncodeToString(key)); err != nil {
 			return nil, err
 		}
 	} else {
@@ -95,17 +88,44 @@ func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookie
 		}
 	}
 
+	// Same dance for the CSRF key: it lives in the same `settings` row,
+	// generated on first start, so panel restarts do not invalidate every
+	// open form. Rotating it is the same operation as rotating the
+	// session key — independent values stored side by side.
+	csrfStored, err := svc.Store().Setting(settingCSRFKey)
+	if err != nil {
+		return nil, err
+	}
+	var csrfKey []byte
+	if csrfStored == "" {
+		csrfKey = newCSRFKey()
+		if err := svc.Store().SetSetting(settingCSRFKey, base64.StdEncoding.EncodeToString(csrfKey)); err != nil {
+			return nil, err
+		}
+	} else {
+		csrfKey, err = base64.StdEncoding.DecodeString(csrfStored)
+		if err != nil {
+			return nil, fmt.Errorf("stored CSRF key is corrupt: %w", err)
+		}
+	}
+
 	if nodes == nil {
 		return nil, fmt.Errorf("a node channel is required")
 	}
-	return &Server{svc: svc, nodes: nodes, log: log, tpl: tpl,
-		sess: newSessions(key), secureCookies: secureCookies,
-		logins: ratelimit.New(10, 5*time.Second)}, nil
+	return &Server{
+		svc:           svc,
+		nodes:         nodes,
+		log:           log,
+		tpl:           tpl,
+		sess:          newSessions(key),
+		csrf:          newCSRF(csrfKey),
+		secureCookies: secureCookies,
+		logins:        ratelimit.New(10, 5*time.Second),
+	}, nil
 }
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-
 	static, err := fs.Sub(assets, "static")
 	if err != nil {
 		// Impossible: the directory is embedded at compile time.
@@ -113,12 +133,12 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.FS(static))))
 
-	// The token in the path is the credential; this is the one unauthenticated
-	// route that returns anything.
+	// The token in the path is the credential; this is the one
+	// unauthenticated route that returns anything.
 	mux.HandleFunc("GET /sub/{token}", s.getSubscription)
 
-	// The node control channel. Nodes authenticate with their own bearer token,
-	// so this sits outside the session gate.
+	// The node control channel. Nodes authenticate with their own bearer
+	// token, so this sits outside the session gate.
 	mux.HandleFunc("GET /api/v1/node/connect", s.nodes.Handler())
 
 	// Open routes.
@@ -128,94 +148,121 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /login", s.postLogin)
 	mux.HandleFunc("POST /logout", s.postLogout)
 
-	// Everything else needs a session.
+	// Everything else needs a session, and every state-changing route
+	// needs a CSRF token. The two gates stack: auth() first (so we know
+	// the user), requireCSRF second (so we know the form was rendered
+	// for that user).
 	mux.Handle("GET /{$}", s.auth(http.HandlerFunc(s.getDashboard)))
 
 	mux.Handle("GET /users", s.auth(http.HandlerFunc(s.listUsers)))
-	mux.Handle("POST /users", s.auth(http.HandlerFunc(s.createUser)))
+	mux.Handle("POST /users", s.auth(s.requireCSRF(http.HandlerFunc(s.createUser))))
 	mux.Handle("GET /users/{id}/edit", s.auth(http.HandlerFunc(s.editUser)))
-	mux.Handle("POST /users/{id}", s.auth(http.HandlerFunc(s.updateUser)))
-	mux.Handle("POST /users/{id}/toggle", s.auth(http.HandlerFunc(s.toggleUser)))
-	mux.Handle("POST /users/{id}/reset", s.auth(http.HandlerFunc(s.resetUser)))
-	mux.Handle("DELETE /users/{id}", s.auth(http.HandlerFunc(s.deleteUser)))
+	mux.Handle("POST /users/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.updateUser))))
+	mux.Handle("POST /users/{id}/toggle", s.auth(s.requireCSRF(http.HandlerFunc(s.toggleUser))))
+	mux.Handle("POST /users/{id}/reset", s.auth(s.requireCSRF(http.HandlerFunc(s.resetUser))))
+	mux.Handle("DELETE /users/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deleteUser))))
 	mux.Handle("GET /users/{id}/activity", s.auth(http.HandlerFunc(s.getUserActivity)))
 	mux.Handle("GET /users/{id}/access", s.auth(http.HandlerFunc(s.getUserAccess)))
-	mux.Handle("POST /users/{id}/access", s.auth(http.HandlerFunc(s.setUserAccess)))
+	mux.Handle("POST /users/{id}/access", s.auth(s.requireCSRF(http.HandlerFunc(s.setUserAccess))))
 
 	mux.Handle("GET /policy", s.auth(http.HandlerFunc(s.getPolicy)))
-	mux.Handle("POST /policy", s.auth(http.HandlerFunc(s.setPolicy)))
+	mux.Handle("POST /policy", s.auth(s.requireCSRF(http.HandlerFunc(s.setPolicy))))
 
 	mux.Handle("GET /nodes", s.auth(http.HandlerFunc(s.listNodes)))
-	mux.Handle("POST /nodes", s.auth(http.HandlerFunc(s.createNode)))
+	mux.Handle("POST /nodes", s.auth(s.requireCSRF(http.HandlerFunc(s.createNode))))
 	mux.Handle("GET /nodes/{id}/edit", s.auth(http.HandlerFunc(s.editNode)))
-	mux.Handle("POST /nodes/{id}", s.auth(http.HandlerFunc(s.updateNode)))
-	mux.Handle("POST /nodes/{id}/toggle", s.auth(http.HandlerFunc(s.toggleNode)))
-	mux.Handle("POST /nodes/{id}/rotate", s.auth(http.HandlerFunc(s.rotateNode)))
-	mux.Handle("DELETE /nodes/{id}", s.auth(http.HandlerFunc(s.deleteNode)))
+	mux.Handle("POST /nodes/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.updateNode))))
+	mux.Handle("POST /nodes/{id}/toggle", s.auth(s.requireCSRF(http.HandlerFunc(s.toggleNode))))
+	mux.Handle("POST /nodes/{id}/rotate", s.auth(s.requireCSRF(http.HandlerFunc(s.rotateNode))))
+	mux.Handle("DELETE /nodes/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deleteNode))))
 
 	mux.Handle("GET /nodes/{id}/inbounds", s.auth(http.HandlerFunc(s.listInbounds)))
-	mux.Handle("POST /nodes/{id}/inbounds", s.auth(http.HandlerFunc(s.createInbound)))
+	mux.Handle("POST /nodes/{id}/inbounds", s.auth(s.requireCSRF(http.HandlerFunc(s.createInbound))))
 	mux.Handle("GET /inbounds/{id}/edit", s.auth(http.HandlerFunc(s.editInbound)))
-	mux.Handle("POST /inbounds/{id}", s.auth(http.HandlerFunc(s.updateInbound)))
-	mux.Handle("POST /inbounds/{id}/toggle", s.auth(http.HandlerFunc(s.toggleInbound)))
-	mux.Handle("DELETE /inbounds/{id}", s.auth(http.HandlerFunc(s.deleteInbound)))
+	mux.Handle("POST /inbounds/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.updateInbound))))
+	mux.Handle("POST /inbounds/{id}/toggle", s.auth(s.requireCSRF(http.HandlerFunc(s.toggleInbound))))
+	mux.Handle("DELETE /inbounds/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deleteInbound))))
 
 	return harden(mux)
 }
 
-// maxBody caps a request body. Every form here is a handful of short fields;
-// net/http's own 10 MB default for urlencoded bodies is three orders of
-// magnitude more than any of them need, and it is read into memory.
+// maxBody caps a request body. Every form here is a handful of short
+// fields; net/http's own 10 MB default for urlencoded bodies is three
+// orders of magnitude more than any of them need, and it is read into
+// memory.
 const maxBody = 256 << 10
 
-// harden adds the response headers the browser needs in order to defend the
-// admin UI, and bounds request bodies.
+// harden adds the response headers the browser needs in order to defend
+// the admin UI, and bounds request bodies.
 func harden(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-
-		// Every destructive action in this UI is a single button. Framing the
-		// panel and putting something else over those buttons is the cheapest
-		// attack there is against a logged-in administrator, and frame-ancestors
-		// is what refuses it. The rest of the policy is narrow because the page
-		// genuinely needs nothing else: one same-origin script, inline styles
-		// and handlers written into the templates, no images, no fonts, no
-		// XHR anywhere but here.
-		h.Set("Content-Security-Policy",
-			"default-src 'none'; script-src 'self' 'unsafe-inline'; "+
-				"style-src 'self' 'unsafe-inline'; img-src 'self' data:; "+
-				"connect-src 'self'; form-action 'self'; base-uri 'none'; "+
-				"frame-ancestors 'none'")
+		// Every destructive action in this UI is a single button.
+		// Framing the panel and putting something else over those
+		// buttons is the cheapest attack there is against a logged-in
+		// administrator, and frame-ancestors is what refuses it. The
+		// rest of the policy is narrow because the page genuinely
+		// needs nothing else: one same-origin script, inline styles
+		// and handlers written into the templates, no images, no
+		// fonts, no XHR anywhere but here.
+		h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self' 'unsafe-inline'; "+
+			"style-src 'self' 'unsafe-inline'; img-src 'self' data:; "+
+			"connect-src 'self'; form-action 'self'; base-uri 'none'; "+
+			"frame-ancestors 'none'")
 		h.Set("X-Frame-Options", "DENY") // for anything that predates CSP level 2
 		h.Set("X-Content-Type-Options", "nosniff")
-		// The subscription token is in the path, so it is in the Referer of
-		// every link followed from the subscription page.
+		// The subscription token is in the path, so it is in the
+		// Referer of every link followed from the subscription page.
 		h.Set("Referrer-Policy", "no-referrer")
-
-		// Only over TLS, and only for a month. A year is the usual advice, but
-		// this is software someone runs on their own domain: a max-age they
-		// cannot revoke is a way to lose that hostname for plain HTTP long
-		// after they have stopped running the panel on it.
+		// Only over TLS, and only for a month. A year is the usual
+		// advice, but this is software someone runs on their own
+		// domain: a max-age they cannot revoke is a way to lose that
+		// hostname for plain HTTP long after they have stopped running
+		// the panel on it.
 		if r.TLS != nil {
 			h.Set("Strict-Transport-Security", "max-age=2592000")
 		}
-
-		// A subscription response is a bearer credential in a text file. It
-		// must not be written to any cache between here and the client.
+		// A subscription response is a bearer credential in a text
+		// file. It must not be written to any cache between here and
+		// the client.
 		if strings.HasPrefix(r.URL.Path, "/sub/") {
 			h.Set("Cache-Control", "no-store, private")
 		}
-
-		if r.Method == http.MethodPost || r.Method == http.MethodPut ||
-			r.Method == http.MethodPatch {
+		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
 			r.Body = http.MaxBytesReader(w, r.Body, maxBody)
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-// auth gates a handler on a valid session. It also handles the first-run case:
-// with no administrator configured yet, everything redirects to /setup.
+// requireCSRF gates every state-changing request on a valid token. The
+// token is bound to the session user, so a logged-in form is required
+// to have been rendered for the same user that is now submitting it.
+//
+// Returns 403 on failure rather than 400: a wrong token is an attack
+// attempt, not a user mistake, and 403 is what the upstream browser
+// will turn into a "form expired, please reload" message — the same
+// thing the user would see if they had just sat on a form for a day.
+func (s *Server) requireCSRF(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, err := s.sess.user(r)
+		if err != nil {
+			s.errorBanner(w, http.StatusForbidden, "session expired; please sign in again")
+			return
+		}
+		if !s.csrf.verify(r, username) {
+			s.log.Warn("CSRF token rejected",
+				"method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr)
+			s.errorBanner(w, http.StatusForbidden, "form expired; please reload the page")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// auth gates a handler on a valid session. It also handles the
+// first-run case: with no administrator configured yet, everything
+// redirects to /setup.
 func (s *Server) auth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		exists, err := s.svc.AdminExists()
@@ -235,10 +282,10 @@ func (s *Server) auth(next http.Handler) http.Handler {
 	})
 }
 
-// redirect works for both a normal navigation and an htmx request. htmx
-// swallows a 302 by following it with XHR and swapping the result into a
-// fragment, which would nest a whole login page inside a table; HX-Redirect
-// tells it to navigate instead.
+// redirect works for both a normal navigation and an htmx request.
+// htmx swallows a 302 by following it with XHR and swapping the result
+// into a fragment, which would nest a whole login page inside a table;
+// HX-Redirect tells it to navigate instead.
 func (s *Server) redirect(w http.ResponseWriter, r *http.Request, to string) {
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Redirect", to)
@@ -248,15 +295,16 @@ func (s *Server) redirect(w http.ResponseWriter, r *http.Request, to string) {
 	http.Redirect(w, r, to, http.StatusSeeOther)
 }
 
-// fail logs the real error and shows the user a short one. Validation problems
-// are the user's to fix, so those are shown verbatim.
+// fail logs the real error and shows the user a short one. Validation
+// problems are the user's to fix, so those are shown verbatim.
 func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, service.ErrInvalid):
 		s.errorBanner(w, http.StatusBadRequest, strings.TrimPrefix(err.Error(), "invalid: "))
 	case errors.Is(err, store.ErrConflict):
-		// A duplicate name is something the operator fixes by typing another
-		// one, not an internal failure. Saying so beats "something went wrong".
+		// A duplicate name is something the operator fixes by typing
+		// another one, not an internal failure. Saying so beats
+		// "something went wrong".
 		s.errorBanner(w, http.StatusConflict, "that name or tag is already taken")
 	case errors.Is(err, store.ErrNotFound):
 		s.errorBanner(w, http.StatusNotFound, "not found")
@@ -274,21 +322,45 @@ func (s *Server) errorBanner(w http.ResponseWriter, code int, msg string) {
 
 func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	if err := s.tpl.ExecuteTemplate(w, name, data); err != nil {
-		// The response is already partly written, so there is nothing useful to
-		// send. Log it so a broken template does not vanish silently.
+		// The response is already partly written, so there is nothing
+		// useful to send. Log it so a broken template does not vanish
+		// silently.
 		s.log.Error("render template", "template", name, "error", err)
 	}
 }
 
-func (s *Server) page(w http.ResponseWriter, name string, data map[string]any) {
+// page renders a full page (with layout) and injects the CSRF token
+// into the template data so forms can render `{{ csrfField }}` next to
+// their other fields. The token is read from the cookie set by
+// `csrf.issue` on login; if the user has no token yet (just after
+// `requireCSRF` redirected them to re-login), the field renders empty
+// and the next form submission will be rejected, prompting a reload
+// that picks up a fresh token.
+func (s *Server) page(w http.ResponseWriter, r *http.Request, name string, data map[string]any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if data == nil {
 		data = map[string]any{}
 	}
 	data["Page"] = name
+	data["CSRFToken"] = s.csrf.csrfValue(r)
 	s.render(w, name, data)
 }
 
 func pathID(r *http.Request) (int64, error) {
 	return strconv.ParseInt(r.PathValue("id"), 10, 64)
+}
+
+// templateFuncs is registered in format.go alongside the rest of the
+// template helpers; csrfField is one of them. The reason it lives in
+// format.go and not here is that template.FuncMap registration has to
+// happen once per process — the second declaration in this file would
+// shadow the first, taking the csrfField with it.
+
+// csrfField is the function registered with the template engine. It
+// emits the hidden input that posts the token back to the server. The
+// alternative — rendering {{ .CSRFToken }} directly — works for htmx
+// (where the page reads it from a meta tag) but is one more thing to
+// remember for every form.
+func csrfField() (template.HTML, error) {
+	return template.HTML(`<input type="hidden" name="csrf" value="{{ .CSRFToken }}">`), nil
 }

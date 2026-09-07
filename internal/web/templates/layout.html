@@ -6,6 +6,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>skysbx</title>
 <script src="/static/htmx.min.js"></script>
+{{- /* Every state-changing htmx request must carry the CSRF token. The
+        token is bound to the logged-in session; the page data always has
+        it (set by Server.page / the render helpers), so we read it once
+        and let htmx attach it to every POST/PUT/DELETE automatically. */ -}}
+<meta name="csrf-token" content="{{ .CSRFToken }}">
+<script>
+document.addEventListener('htmx:configRequest', function (e) {
+  var method = (e.detail.verb || '').toUpperCase();
+  if (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+    var meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta && meta.content) {
+      e.detail.headers['X-CSRF-Token'] = meta.content;
+    }
+  }
+});
+</script>
 <style>
 :root{--bg:#0f1115;--panel:#171a21;--line:#252a34;--fg:#dfe3ea;--dim:#8b94a5;
       --accent:#4a9eff;--ok:#3ecf8e;--warn:#f0a020;--bad:#e5484d}

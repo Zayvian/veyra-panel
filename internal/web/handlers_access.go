@@ -1,3 +1,7 @@
+// handlers_access.go - 完整替换文件
+//
+// 修改：render(...) 增加 CSRFToken
+
 package web
 
 import (
@@ -7,8 +11,6 @@ import (
 	"github.com/kosje/skysbx-panel/internal/store"
 )
 
-// accessGroup is one node's inbounds with the user's choice already applied, so
-// the template does no lookups.
 type accessGroup struct {
 	Node   *store.Node
 	Rows   []accessRow
@@ -29,9 +31,7 @@ func (s *Server) getUserAccess(w http.ResponseWriter, r *http.Request) {
 	s.renderUserAccess(w, r, id, http.StatusOK)
 }
 
-func (s *Server) renderUserAccess(w http.ResponseWriter, r *http.Request,
-	userID int64, code int,
-) {
+func (s *Server) renderUserAccess(w http.ResponseWriter, r *http.Request, userID int64, code int) {
 	u, err := s.svc.User(userID)
 	if err != nil {
 		s.fail(w, r, err)
@@ -52,16 +52,11 @@ func (s *Server) renderUserAccess(w http.ResponseWriter, r *http.Request,
 		s.fail(w, r, err)
 		return
 	}
-
-	// No rows at all means unrestricted, and the checkboxes then show every
-	// inbound ticked: that is what "this user can use all of them" looks like,
-	// and ticking them all back is the same state.
 	unrestricted := len(ids) == 0
 	allowed := make(map[int64]bool, len(ids))
 	for _, id := range ids {
 		allowed[id] = true
 	}
-
 	groups := make([]accessGroup, 0, len(nodes))
 	for _, n := range nodes {
 		g := accessGroup{Node: n}
@@ -79,10 +74,12 @@ func (s *Server) renderUserAccess(w http.ResponseWriter, r *http.Request,
 			groups = append(groups, g)
 		}
 	}
-
 	data := map[string]any{
-		"User": u, "Groups": groups, "Unrestricted": unrestricted,
-		"Page": "users",
+		"User":         u,
+		"Groups":       groups,
+		"Unrestricted": unrestricted,
+		"Page":         "users",
+		"CSRFToken":    s.csrf.csrfValue(r),
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
@@ -103,13 +100,11 @@ func (s *Server) setUserAccess(w http.ResponseWriter, r *http.Request) {
 		s.errorBanner(w, http.StatusBadRequest, "bad form")
 		return
 	}
-
 	inbounds, err := s.svc.Inbounds()
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-
 	picked := make([]int64, 0, len(r.Form["inbound"]))
 	for _, v := range r.Form["inbound"] {
 		n, err := strconv.ParseInt(v, 10, 64)
@@ -119,15 +114,9 @@ func (s *Server) setUserAccess(w http.ResponseWriter, r *http.Request) {
 		}
 		picked = append(picked, n)
 	}
-
-	// Everything ticked is stored as no restriction rather than one row per
-	// inbound. Otherwise a later inbound would be invisible to every user who
-	// had "all" selected before it existed — silently, and only noticed when
-	// someone's subscription came back short.
 	if len(picked) == len(inbounds) {
 		picked = nil
 	}
-
 	if err := s.svc.SetUserInbounds(id, picked); err != nil {
 		s.fail(w, r, err)
 		return
