@@ -1,3 +1,10 @@
+// handlers_auth.go - 完整替换文件
+//
+// 修改：postSetup / postLogin 成功后签发 CSRF token
+//       postLogout 时清除 CSRF token
+//
+// 其他 handler 不变（GET 请求不需要 CSRF token）
+
 package web
 
 import (
@@ -18,12 +25,12 @@ func (s *Server) getSetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if exists {
-		// Setup is one-shot. Leaving it open would let anyone who reaches the
-		// panel replace the administrator's password.
+		// Setup is one-shot. Leaving it open would let anyone who
+		// reaches the panel replace the administrator's password.
 		s.redirect(w, r, "/login")
 		return
 	}
-	s.page(w, "setup", nil)
+	s.page(w, r, "setup", nil)
 }
 
 func (s *Server) postSetup(w http.ResponseWriter, r *http.Request) {
@@ -36,16 +43,15 @@ func (s *Server) postSetup(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "/login")
 		return
 	}
-
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	if password != r.FormValue("password2") {
 		s.errorBanner(w, http.StatusBadRequest, "the two passwords do not match")
 		return
 	}
-	// Claimed inside the write, not checked beforehand: two requests arriving
-	// together would otherwise both pass the check above and the later one would
-	// take the account.
+	// Claimed inside the write, not checked beforehand: two requests
+	// arriving together would otherwise both pass the check above and
+	// the later one would take the account.
 	created, err := s.svc.CreateAdmin(username, password)
 	if err != nil {
 		s.fail(w, r, err)
@@ -55,7 +61,12 @@ func (s *Server) postSetup(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "/login")
 		return
 	}
+	// Now that there is a session, hand the browser the CSRF token it
+	// will need to make any state-changing request from this point on.
+	// The token is bound to the username: a cookie issued here only
+	// verifies for forms posted by this user.
 	s.sess.issue(w, username, s.secureCookies)
+	s.csrf.issue(w, username, s.secureCookies)
 	s.redirect(w, r, "/")
 }
 
@@ -73,25 +84,23 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "/")
 		return
 	}
-	s.page(w, "login", nil)
+	s.page(w, r, "login", nil)
 }
 
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
-	// Before the password check, not after: the check is a bcrypt, so an
-	// unthrottled one is both a guessing oracle and a way to spend the panel's
-	// CPU without holding any credential.
+	// Before the password check, not after: the check is a bcrypt, so
+	// an unthrottled one is both a guessing oracle and a way to
+	// spend the panel's CPU without holding any credential.
 	if !s.logins.Allow(ratelimit.ClientIP(r), time.Now()) {
 		s.log.Warn("login rate limited", "remote", r.RemoteAddr)
-		s.errorBanner(w, http.StatusTooManyRequests,
-			"太多次尝试，请稍候再试")
+		s.errorBanner(w, http.StatusTooManyRequests, "太多次尝试，请稍候再试")
 		return
 	}
-
 	username := r.FormValue("username")
 	if err := s.svc.CheckAdmin(username, r.FormValue("password")); err != nil {
 		if errors.Is(err, service.ErrBadCredentials) {
-			// One message for both wrong username and wrong password: telling
-			// them apart is free reconnaissance.
+			// One message for both wrong username and wrong password:
+			// telling them apart is free reconnaissance.
 			s.log.Warn("failed login", "username", username, "remote", r.RemoteAddr)
 			s.errorBanner(w, http.StatusUnauthorized, "wrong username or password")
 			return
@@ -100,11 +109,21 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.sess.issue(w, username, s.secureCookies)
+	// Pair the session cookie with a CSRF cookie. They are issued
+	// together because the verifier binds them: a token signed for
+	// this user only verifies for this user, and there is no token
+	// without a session to bind it to.
+	s.csrf.issue(w, username, s.secureCookies)
 	s.redirect(w, r, "/")
 }
 
 func (s *Server) postLogout(w http.ResponseWriter, r *http.Request) {
 	s.sess.clear(w, s.secureCookies)
+	// Drop the CSRF cookie too. A logged-out browser should not
+	// still be carrying a token that the server would otherwise
+	// accept (against a new, identical session) until the TTL runs
+	// out.
+	s.csrf.clear(w, s.secureCookies)
 	s.redirect(w, r, "/login")
 }
 
@@ -124,7 +143,6 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-
 	var totalTraffic int64
 	active := 0
 	for _, u := range users {
@@ -138,7 +156,6 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-
 	online := s.nodes.OnlineUsers()
 	nodesUp := 0
 	for _, n := range nodes {
@@ -146,10 +163,10 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 			nodesUp++
 		}
 	}
-
-	// Per node, because a single total answers "how much" and nothing else. It
-	// cannot say which node is carrying the load, which one stopped carrying
-	// any, or which one is about to need a bigger plan.
+	// Per node, because a single total answers "how much" and
+	// nothing else. It cannot say which node is carrying the load,
+	// which one stopped carrying any, or which one is about to need
+	// a bigger plan.
 	byNode, err := s.svc.NodeTraffic(dashboardDays)
 	if err != nil {
 		s.fail(w, r, err)
@@ -162,33 +179,40 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 		total := u.Up + u.Down
 		ledgerTotal += total
 		rows = append(rows, nodeTrafficRow{
-			Node: n, Up: u.Up, Down: u.Down, Total: total, Recent: u.Recent,
+			Node:      n,
+			Up:        u.Up,
+			Down:      u.Down,
+			Total:     total,
+			Recent:    u.Recent,
 			Connected: s.nodes.Connected(n.ID),
 			Inbounds:  countInbounds(inbounds, n.ID),
 		})
 	}
-	// Busiest first: the interesting node is the one at the top, and with more
-	// than a handful of them alphabetical order buries it.
+	// Busiest first: the interesting node is the one at the top, and
+	// with more than a handful of them alphabetical order buries it.
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Total > rows[j].Total })
-
-	s.page(w, "dashboard", map[string]any{
-		"Users": len(users), "ActiveUsers": active, "OnlineUsers": len(online),
-		"Nodes": len(nodes), "NodesUp": nodesUp, "Inbounds": len(inbounds),
-		"Traffic": totalTraffic,
-		"Chart":   trafficChart(history),
-
-		"NodeTraffic": rows,
-		"Days":        dashboardDays,
-		// The per-node ledger and the per-user totals are counted separately —
-		// deleting a node drops its rows, deleting a user drops theirs — so
-		// they drift apart. Showing both and letting the difference be visible
-		// beats picking one and being quietly wrong.
+	s.page(w, r, "dashboard", map[string]any{
+		"Users":        len(users),
+		"ActiveUsers":  active,
+		"OnlineUsers":  len(online),
+		"Nodes":        len(nodes),
+		"NodesUp":      nodesUp,
+		"Inbounds":     len(inbounds),
+		"Traffic":      totalTraffic,
+		"Chart":        trafficChart(history),
+		"NodeTraffic":  rows,
+		"Days":         dashboardDays,
+		// The per-node ledger and the per-user totals are counted
+		// separately — deleting a node drops its rows, deleting a
+		// user drops theirs — so they drift apart. Showing both and
+		// letting the difference be visible beats picking one and
+		// being quietly wrong.
 		"LedgerTotal": ledgerTotal,
 	})
 }
 
-// dashboardDays is the window for the "recent" column, matching the chart above
-// it so the two are read together.
+// dashboardDays is the window for the "recent" column, matching the
+// chart above it so the two are read together.
 const dashboardDays = 14
 
 type nodeTrafficRow struct {

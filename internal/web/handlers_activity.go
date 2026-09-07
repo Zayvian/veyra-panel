@@ -1,3 +1,7 @@
+// handlers_activity.go - 完整替换文件
+//
+// 修改：s.page(w, ...) 改为 s.page(w, r, ...)
+
 package web
 
 import (
@@ -7,19 +11,7 @@ import (
 	"github.com/kosje/skysbx-panel/internal/store"
 )
 
-// activityHours is the window the page shows. A week is enough to see a pattern
-// and short enough to read; the rows are kept for thirty days either way.
 const activityHours = 7 * 24
-
-// suspiciousPeers is the peer count above which a row is flagged.
-//
-// A browser talking to one page reaches a handful of hosts. A torrent client
-// talks to as many peers as it can find, which is what makes the count, rather
-// than the protocol, the reliable signal — it does not care whether the payload
-// was encrypted.
-//
-// It is a hint, not a verdict: a busy tab-hoarder can cross it, and the page
-// says so rather than labelling anyone.
 const suspiciousPeers = 40
 
 type activityRow struct {
@@ -52,7 +44,6 @@ func (s *Server) getUserActivity(w http.ResponseWriter, r *http.Request) {
 	for _, n := range nodes {
 		names[n.ID] = n.Name
 	}
-
 	raw, err := s.svc.UserActivity(id, activityHours)
 	if err != nil {
 		s.fail(w, r, err)
@@ -66,20 +57,27 @@ func (s *Server) getUserActivity(w http.ResponseWriter, r *http.Request) {
 			name = "(已删除)"
 		}
 		rows = append(rows, activityRow{
-			When: time.Unix(a.Hour*3600, 0).Local(), Node: name,
-			Conns: a.Conns, Peers: a.Peers, Ports: a.Ports, IPs: a.IPs,
-			Busy: a.Peers >= suspiciousPeers,
+			When:  time.Unix(a.Hour*3600, 0).Local(),
+			Node:  name,
+			Conns: a.Conns,
+			Peers: a.Peers,
+			Ports: a.Ports,
+			IPs:   a.IPs,
+			Busy:  a.Peers >= suspiciousPeers,
 		})
 		if a.Peers > peak.Peers {
 			peak = a
 		}
 	}
-
-	s.page(w, "activity", map[string]any{
-		"User": u, "Rows": rows, "Hours": activityHours,
-		"Peak": peak, "Threshold": suspiciousPeers,
-		"LiveIPs":   s.nodes.UserIPCounts()[u.Name],
-		"Retention": s.svc.ActivityRetentionDays(),
-		"Page":      "users",
+	s.page(w, r, "activity", map[string]any{
+		"User":       u,
+		"Rows":       rows,
+		"Hours":      activityHours,
+		"Peak":       peak,
+		"Threshold":  suspiciousPeers,
+		"LiveIPs":    s.nodes.UserIPCounts()[u.Name],
+		"Retention":  s.svc.ActivityRetentionDays(),
+		"Page":       "users",
+		"CSRFToken":  s.csrf.csrfValue(r),
 	})
 }

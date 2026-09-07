@@ -641,6 +641,7 @@ detour 指到空的 direct 出站 —— 三条都让客户端起不来，而当
 | `Cache-Control: no-store` on `/sub/` | 订阅响应是一份写成文本的 bearer 凭据 |
 | `X-Content-Type-Options: nosniff` | — |
 | `Strict-Transport-Security`（仅 TLS 上，30 天） | 30 天而非一年：这是别人跑在自己域名上的软件，一个撤不掉的 max-age 是在面板早已下线之后仍然锁着那个域名 |
+| `Set-Cookie: skysbx_csrf=…; Path=/; Expires=…; Secure; SameSite=Lax` | 状态变更请求必带的 CSRF 令牌。**非 HttpOnly**，因为 htmx 需要从 JavaScript 读取并放进 `X-CSRF-Token` 头；它本身没有权限，必须与会话的用户名绑定才有效。24 小时窗口——长到能让编辑表单跨夜仍可用，短到令牌泄露有明确的有效期。HMAC 签名，密钥存在 `settings.web.csrf_key`。 |
 
 ### 11.4 节点是半可信的
 
@@ -668,9 +669,18 @@ detour 指到空的 direct 出站 —— 三条都让客户端起不来，而当
   `/setup` 归先到者所有。`/setup` 本身的写入是原子的（一个事务里检查加写入），所以
   两个请求同时到达不会有后来者顶掉先到者。
 - **没有 CSRF token。** 靠 `SameSite=Lax` 加「没有任何会改状态的 GET」来防 —— 现有的
-  GET 路由全是只读的。加了 CSRF token 会更稳妥。
+  GET 路由全是只读的。加了 CSRF token 会更稳妥。 ~~（已修复：见 §11.6）~~
 - **管理员可以让节点读任意文件当证书。** 证书路径由管理员填、原样下发给节点。这是这个
   功能本身的含义，不是越权。
+
+### 11.6 已修复的残留
+
+历史 §11.5 中提到的「没有 CSRF token」已修复：
+
+- **修复时间**：2026-09
+- **修复方法**：见 §11.3 关于 `skysbx_csrf` cookie 的说明，以及 `internal/web/csrf.go` 中的实现
+- **测试覆盖**：`internal/web/csrf_test.go`（12 个测试用例：未认证拒绝、缺令牌拒绝、接受合法令牌、用户绑定、签名防篡改、过期拒绝、TTL 边界、htmx header 优先、表单字段接受、清除 cookie、空用户名跳过、模板取值路径）
+- **剩余残留**：登出不失效 cookie（需要会话世代号）、`/setup` 开放窗口（自编译场景）仍待修复
 
 ## 12. 工程约束
 

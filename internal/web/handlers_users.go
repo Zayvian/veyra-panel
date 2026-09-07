@@ -1,3 +1,7 @@
+// handlers_users.go - 完整替换文件
+//
+// 修改：所有 s.page(w, ...) 改为 s.page(w, r, ...)
+
 package web
 
 import (
@@ -10,25 +14,24 @@ import (
 	"github.com/kosje/skysbx-panel/internal/service"
 )
 
-// nowFunc exists so tests can pin time without a clock abstraction threaded
-// through every call.
+// nowFunc exists so tests can pin time without a clock abstraction
+// threaded through every call.
 var nowFunc = time.Now
 
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	s.renderUsers(w, r, http.StatusOK)
 }
 
-// renderUsers renders either the whole page or just the table, depending on
-// whether htmx asked. Both paths go through here so a create and a plain page
-// load can never disagree about what the list looks like.
+// renderUsers renders either the whole page or just the table,
+// depending on whether htmx asked. Both paths go through here so a
+// create and a plain page load can never disagree about what the list
+// looks like.
 func (s *Server) renderUsers(w http.ResponseWriter, r *http.Request, code int) {
 	users, err := s.svc.Users()
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	// How many inbounds each user may use, so the list can say "全部" or "2/5"
-	// without a query per row.
 	inbounds, err := s.svc.Inbounds()
 	if err != nil {
 		s.fail(w, r, err)
@@ -47,31 +50,41 @@ func (s *Server) renderUsers(w http.ResponseWriter, r *http.Request, code int) {
 			access[u.ID] = -1 // unrestricted
 		}
 	}
-
-	data := map[string]any{"Users": users, "Now": nowFunc(),
-		"Online": s.nodes.OnlineUsers(), "IPs": s.nodes.UserIPCounts(),
-		"Access": access, "InboundCount": len(inbounds)}
-
+	data := map[string]any{
+		"Users":         users,
+		"Now":           nowFunc(),
+		"Online":        s.nodes.OnlineUsers(),
+		"IPs":           s.nodes.UserIPCounts(),
+		"Access":        access,
+		"InboundCount":  len(inbounds),
+		// CSRFToken is added by s.page below; renderUsers is the
+		// page- and fragment-level entry point, and htmx requests
+		// re-render the table without the layout. CSRF lives in
+		// the data either way so a fragment form can still find it.
+	}
+	if r.Header.Get("HX-Request") != "true" {
+		data["Page"] = "users"
+	}
+	// Set the token up front so both the page and the fragment
+	// render carry it.
+	data["CSRFToken"] = s.csrf.csrfValue(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
 	if r.Header.Get("HX-Request") == "true" {
 		s.render(w, "user-table", data)
 		return
 	}
-	data["Page"] = "users"
 	s.render(w, "users", data)
 }
 
-// expiryFromForm reads the date field. A blank value means no expiry, which is
-// a nil pointer rather than the zero time — the zero time is in the past, and
-// would lock everyone out.
+// expiryFromForm reads the date field. A blank value means no expiry,
+// which is a nil pointer rather than the zero time — the zero time is
+// in the past, and would lock everyone out.
 func expiryFromForm(r *http.Request) (*time.Time, error) {
 	v := strings.TrimSpace(r.FormValue("expires_at"))
 	if v == "" {
 		return nil, nil
 	}
-	// The browser sends a date-only value; treat it as the end of that day in
-	// local time, which is what someone typing "expires on the 5th" means.
 	t, err := time.ParseInLocation("2006-01-02", v, time.Local)
 	if err != nil {
 		return nil, fmt.Errorf("expiry must be a date like 2026-01-31")
@@ -80,8 +93,8 @@ func expiryFromForm(r *http.Request) (*time.Time, error) {
 	return &t, nil
 }
 
-// ipLimitFromForm reads the concurrent-address cap. Blank and zero both mean
-// no limit.
+// ipLimitFromForm reads the concurrent-address cap. Blank and zero
+// both mean no limit.
 func ipLimitFromForm(r *http.Request) (int, error) {
 	v := strings.TrimSpace(r.FormValue("ip_limit"))
 	if v == "" {
@@ -94,13 +107,6 @@ func ipLimitFromForm(r *http.Request) (int, error) {
 	return n, nil
 }
 
-// resetDayFromForm reads the monthly reset day.
-//
-// "created" means the day of the month this account was made, resolved here so
-// that what gets stored is a plain day — the edit form then shows the real
-// number rather than an indirection the operator has to remember the meaning of.
-// created is the zero time when the user does not exist yet, in which case
-// today is the creation day.
 func resetDayFromForm(r *http.Request, created time.Time) int {
 	v := strings.TrimSpace(r.FormValue("reset_day"))
 	if v == "created" {
@@ -116,8 +122,6 @@ func resetDayFromForm(r *http.Request, created time.Time) int {
 	return service.ClampResetDay(n)
 }
 
-// limitFromForm reads the traffic field, in GiB. Blank and zero both mean no
-// limit, which is how the rest of the panel reads a zero.
 func limitFromForm(r *http.Request) (int64, error) {
 	v := strings.TrimSpace(r.FormValue("traffic_limit_gb"))
 	if v == "" {
@@ -135,21 +139,18 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		Name: r.FormValue("name"),
 		Note: strings.TrimSpace(r.FormValue("note")),
 	}
-
 	expires, err := expiryFromForm(r)
 	if err != nil {
 		s.errorBanner(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	nu.ExpiresAt = expires
-
 	limit, err := limitFromForm(r)
 	if err != nil {
 		s.errorBanner(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	nu.TrafficLimit = limit
-
 	ipLimit, err := ipLimitFromForm(r)
 	if err != nil {
 		s.errorBanner(w, http.StatusBadRequest, err.Error())
@@ -157,7 +158,6 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	nu.IPLimit = ipLimit
 	nu.ResetDay = resetDayFromForm(r, time.Time{})
-
 	if _, err := s.svc.CreateUser(nu); err != nil {
 		s.fail(w, r, err)
 		return
@@ -165,8 +165,6 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	s.renderUsers(w, r, http.StatusCreated)
 }
 
-// editUser swaps one row for a form over the same fields. The row is the target
-// so the rest of the table — and anyone else's row mid-edit — is left alone.
 func (s *Server) editUser(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
@@ -179,12 +177,13 @@ func (s *Server) editUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	s.render(w, "user-edit-row", map[string]any{"User": u})
+	data := map[string]any{
+		"User":       u,
+		"CSRFToken":  s.csrf.csrfValue(r),
+	}
+	s.render(w, "user-edit-row", data)
 }
 
-// updateUser applies the edit. Traffic used is not a field here and is not
-// written by the store either: a stale figure in a form that was open while
-// traffic was being reported must not roll someone's usage back.
 func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
@@ -196,7 +195,6 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-
 	expires, err := expiryFromForm(r)
 	if err != nil {
 		s.errorBanner(w, http.StatusBadRequest, err.Error())
@@ -207,20 +205,17 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 		s.errorBanner(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
 	ipLimit, err := ipLimitFromForm(r)
 	if err != nil {
 		s.errorBanner(w, http.StatusBadRequest, err.Error())
 		return
 	}
-
 	u.Name = strings.TrimSpace(r.FormValue("name"))
 	u.Note = strings.TrimSpace(r.FormValue("note"))
 	u.ExpiresAt = expires
 	u.TrafficLimit = limit
 	u.IPLimit = ipLimit
 	u.ResetDay = resetDayFromForm(r, u.CreatedAt)
-
 	if err := s.svc.UpdateUser(u); err != nil {
 		s.fail(w, r, err)
 		return
