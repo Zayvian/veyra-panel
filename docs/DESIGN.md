@@ -663,11 +663,13 @@ detour 指到空的 direct 出站 —— 三条都让客户端起不来，而当
 - **登出不使已签发的 cookie 失效。** 会话是无状态签名 cookie，没有服务端表可作废；
   被截获的 cookie 在 12 小时内一直有效，改密码也不影响它。单管理员场景下代价可接受，
   真要修需要在 `settings` 里放一个会话世代号并在签名载荷里带上。
+  ~~（已修复：见 §11.6）~~
 - **手动运行二进制时，首次 setup 是开放的。** 一键安装脚本会在启动服务**之前**就问好
   管理员用户名和密码并写进数据库（`-set-admin`，密码走 stdin，不进 argv 也不进 shell
   历史），所以按脚本装的面板没有这个窗口。自己编译、自己起进程的话窗口仍然存在 ——
   `/setup` 归先到者所有。`/setup` 本身的写入是原子的（一个事务里检查加写入），所以
   两个请求同时到达不会有后来者顶掉先到者。
+  ~~（已修复：见 §11.6）~~
 - **没有 CSRF token。** 靠 `SameSite=Lax` 加「没有任何会改状态的 GET」来防 —— 现有的
   GET 路由全是只读的。加了 CSRF token 会更稳妥。 ~~（已修复：见 §11.6）~~
 - **管理员可以让节点读任意文件当证书。** 证书路径由管理员填、原样下发给节点。这是这个
@@ -675,12 +677,11 @@ detour 指到空的 direct 出站 —— 三条都让客户端起不来，而当
 
 ### 11.6 已修复的残留
 
-历史 §11.5 中提到的「没有 CSRF token」已修复：
+历史 §11.5 中提到的三项残留均已修复：
 
-- **修复时间**：2026-09
-- **修复方法**：见 §11.3 关于 `skysbx_csrf` cookie 的说明，以及 `internal/web/csrf.go` 中的实现
-- **测试覆盖**：`internal/web/csrf_test.go`（12 个测试用例：未认证拒绝、缺令牌拒绝、接受合法令牌、用户绑定、签名防篡改、过期拒绝、TTL 边界、htmx header 优先、表单字段接受、清除 cookie、空用户名跳过、模板取值路径）
-- **剩余残留**：登出不失效 cookie（需要会话世代号）、`/setup` 开放窗口（自编译场景）仍待修复
+- **CSRF token**（已修复）：所有状态变更请求必须带 HMAC 签名的 CSRF 令牌，绑定会话用户名，24h 有效。见 §11.3 关于 `skysbx_csrf` cookie 的说明。测试：`internal/web/csrf_test.go` + `internal/web/csrf_middleware_test.go`（14 个用例）。
+- **登出不使 cookie 失效**（已修复）：会话签名载荷现在包含世代号（`settings.web.session_generation`），登出时递增。旧 cookie 因世代号不匹配而被拒绝。测试：`internal/web/session_generation_test.go`（2 个用例）。
+- **首次 setup 窗口**（已修复）：面板首次启动时写入一个 10 分钟的 deadline（`settings.web.setup_deadline`），过期后 `/setup` 返回 403。一键安装因在启动前创建 admin 而不受影响。测试：`internal/web/setup_window_test.go`（5 个用例）。
 
 ## 12. 工程约束
 
@@ -716,8 +717,8 @@ detour 指到空的 direct 出站 —— 三条都让客户端起不来，而当
 - IP 限制按节点各自执行，计数跨节点求和（§8.1）。
 - `client` 是固定字段集，加一种新传输方式要同时改四处（§3.1）。
 - AnyTLS 删用户后已建立的会话最多 90 秒才断（§7）。
-- 登出不使已签发的会话 cookie 失效；首次 setup 窗口开放；没有 CSRF token。
-  三条都在 §11.5，那里说明了各自的现有缓解和真正修法。
+- ~~登出不使已签发的会话 cookie 失效；首次 setup 窗口开放；没有 CSRF token。~~
+  三条已在 §11.6 中修复。
 
 ---
 
