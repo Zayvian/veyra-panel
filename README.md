@@ -1,4 +1,4 @@
-# skysbx-panel · zayvian-lee 二次开发版
+# skysbx-panel 二次开发版
 
 基于 [kosje/skysbx-panel](https://github.com/kosje/skysbx-panel)，保留 AGPL-3.0 许可证与上游历史。
 
