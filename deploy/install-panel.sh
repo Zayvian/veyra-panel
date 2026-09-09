@@ -149,7 +149,7 @@ if [ "$ACTION" = upgrade ]; then
     elif [ -f /etc/systemd/system/skysbx-panel.service ]; then
         DOMAIN=${DOMAIN:-$(sed -n 's/.*--domain \([^ ]*\).*/\1/p' \
             /etc/systemd/system/skysbx-panel.service | head -1)}
-        EMAIL=${EMAIL:-$(sed -n 's/.*--acme-email \([^ ]*\).*/\1/p' \
+        EMAIL=${EMAIL:-$(sed -nE 's/.*--acme-email[= ]"?([^ "@]+@[^ "@]+)"?.*/\1/p' \
             /etc/systemd/system/skysbx-panel.service | head -1)}
     fi
     [ -n "$DOMAIN" ] || die "cannot tell which domain this panel serves; pass --domain"
@@ -176,6 +176,11 @@ fi
 if [ -z "$EMAIL" ] && [ -t 0 ]; then
     printf "  Let's Encrypt contact email [skip]: "
     read -r EMAIL
+fi
+# Reject a saved/entered flag in place of an email before writing a broken unit.
+if [ -n "$EMAIL" ]; then
+    [[ "$EMAIL" =~ ^[A-Za-z0-9._+-]+@[A-Za-z0-9.-]+$ ]] \
+        || die "invalid ACME email; pass --email with a valid address (check SKYSBX_ACME_EMAIL in $ROOT/panel.env)"
 fi
 
 # The administrator is set before the panel ever listens.
@@ -369,7 +374,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=${ROOT}
-ExecStart=${ROOT}/skysbx-panel --domain ${DOMAIN} --sub-domain "${SUB_DOMAIN}" --acme-email ${EMAIL} --db ${ROOT}/skysbx.db
+ExecStart=${ROOT}/skysbx-panel --domain ${DOMAIN} --sub-domain=${SUB_DOMAIN} --acme-email=${EMAIL} --db "${ROOT}/skysbx.db"
 Restart=always
 RestartSec=3
 
