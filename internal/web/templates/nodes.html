@@ -18,7 +18,7 @@
       地址是<strong>客户端</strong>连的目标，也是订阅里原样发出去的值。面板不需要能连到
       节点 —— 是节点主动连面板。<br>
       <strong>填域名而不是 IP</strong>：换服务器时改 DNS 就够了，不用重发订阅；
-      AnyTLS 的证书也只对域名有效。域名必须是 DNS-only（灰云），三个协议都不是 HTTP，套 CDN 会全失效。
+      AnyTLS、Hysteria2、TUIC 的证书需匹配域名。代理域名应为 DNS-only（灰云），不能使用 HTTP CDN 代理。
     </p>
   </div>
   {{template "node-table" .}}

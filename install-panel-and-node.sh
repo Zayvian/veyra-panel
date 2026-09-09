@@ -126,10 +126,16 @@ if [ "$ACTION" = install ]; then
 else
     set -- "--$ACTION"
 fi
+[ "$ACTION" != upgrade ] || [ -z "$DOMAIN" ] || set -- "$@" --domain "$DOMAIN"
 [ -n "$SUB_DOMAIN" ] && set -- "$@" --sub-domain "$SUB_DOMAIN"
 bash "$SRC/skysbx-panel/deploy/install-panel.sh" "$@"
 
 if [ "$ACTION" = install ] || [ "$ACTION" = upgrade ]; then
+# The child installer resolves upgrade defaults and persists the effective
+# domain. Read it back before finding the certificate, including old installs
+# whose domain originally came from their systemd unit.
+DOMAIN=$(sed -n 's/^SKYSBX_DOMAIN=//p' "$ROOT/panel.env")
+[ -n "$DOMAIN" ] || die "cannot read the installed panel domain from $ROOT/panel.env"
 # CertMagic keeps the panel certificate under its own storage tree, while the
 # node's default AnyTLS paths are /opt/skysbx/cert.pem and key.pem. Symlinking
 # them lets both services use one certificate and prevents the node installer

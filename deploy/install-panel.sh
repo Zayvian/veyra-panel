@@ -3,7 +3,7 @@
 #
 #   sudo ./install-panel.sh --domain panel.example.com --email you@example.com
 #
-# Re-running upgrades the binary in place; the database is never touched.
+# Upgrades replace the binary; startup migrates the existing database schema.
 set -euo pipefail
 
 ROOT=${SKYSBX_ROOT:-/opt/skysbx}
@@ -31,7 +31,7 @@ Actions (default: install)
   --version         What is installed.
   --upgrade         Rebuild from the current sources and restart. Reads the
                     domain back from the systemd unit, so it needs no
-                    arguments. The database is never touched.
+                    arguments. Existing data is kept; schema migrates at startup.
   --uninstall       Stop and remove the service and the binary. Keeps the
                     database, the certificates and the domain, so putting it
                     back is a no-argument --upgrade.

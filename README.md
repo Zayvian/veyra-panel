@@ -1,212 +1,299 @@
-# skysbx-panel · zayvian-lee 二次开发版
-
-基于 [kosje/skysbx-panel](https://github.com/kosje/skysbx-panel)，保留 AGPL-3.0 许可证与上游历史。
-
-新增 **节点流量倍率（含 0 倍率）、中文名称、简洁订阅名称、Shadowrocket GB 状态、独立 HTTPS 订阅域名、Hysteria2 端口跳跃、TUIC v5**。
-
-**安装与配置请先看 [二次开发版使用说明](docs/FORK.md)。** TUIC 当前为固定端口；旧版 Clash 不在兼容范围内。
-
-配套：[节点](https://github.com/zayvian-lee/skysbx-node) · [内核](https://github.com/zayvian-lee/skysbx-core)。请一起升级。
-
-以下为基础功能与安装参考；新增功能以以上说明为准。
-
----
-
 # skysbx-panel
 
-代理面板的控制端：用户、节点、入站、订阅、计费、用量控制。
+由 **zayvian-lee** 维护的代理管理面板：管理节点、用户、套餐额度、节点倍率与订阅。
 
-节点端是独立的 [`skysbx-node`](https://github.com/zayvian-lee/skysbx-node)，两者通过一条
-WebSocket 通信。设计见 [`docs/DESIGN.md`](docs/DESIGN.md)。
+[![Panel CI](https://github.com/zayvian-lee/skysbx-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/zayvian-lee/skysbx-panel/actions/workflows/ci.yml)
 
-```
-一个二进制 + 一个 SQLite 文件
-```
+| 组件 | 作用 | 安装位置 |
+| --- | --- | --- |
+| **本仓库：面板** | 管理用户、配置节点、生成订阅、计算扣量 | 面板服务器 |
+| [skysbx-node](https://github.com/zayvian-lee/skysbx-node) | 运行代理、接收配置、上报流量 | 每台代理服务器安装一份 |
+| [skysbx-core](https://github.com/zayvian-lee/skysbx-core) | 节点内置协议内核 | 不单独安装；随节点编译、更新 |
 
-TLS 由面板自己用 ACME 处理，不需要前置反向代理。备份就是拷一个文件。
+支持 VLESS Reality、AnyTLS、Shadowsocks 2022、Hysteria2、TUIC v5。Hysteria2 支持 UDP 端口跳跃，**TUIC 当前使用固定端口**。支持中文节点名称、0–100 倍流量计费和独立 HTTPS 订阅域名。
 
-## 功能
+## 阅读顺序
 
-**协议** —— VLESS + Reality + XTLS-Vision、AnyTLS、Shadowsocks 2022。面板直接存
-sing-box 原生配置，不做格式转译。密钥、short id、SS 服务端 PSK 全部自动生成。三个里
-只有 AnyTLS 需要证书，所以没证书的节点照样跑另外两个。
+1. [准备服务器和域名](#1-准备服务器和域名)
+2. [安装面板](#2-安装面板)
+3. [登记并安装节点](#3-登记并安装节点)
+4. [配置协议和端口](#4-配置协议和端口)
+5. [用户、倍率和订阅](#5-用户倍率和订阅)
+6. [面板与节点同机安装](#6-面板与节点同机安装)
+7. [更新与旧版迁移](#7-更新与旧版迁移)
+8. [日常检查和故障排查](#8-日常检查和故障排查)
 
-**用户** —— 到期时间、流量上限、同时在线 IP 上限、备注，全部可编辑。可以按用户指定
-能用哪些入站（不是把所有协议都发给所有人）。流量清零是单独的操作，编辑表单不会覆盖
-已用流量。
+## 1. 准备服务器和域名
 
-**每月流量重置** —— 月付套餐用的：选一个日子（或「按创建日」），到那天已用流量自动
-归零，不用每月手动清。短月自动落到月底，二月不会被跳过；面板在重置日当天没开机的话，
-下次启动补上而不是丢掉这个月。归零的只是计数器，历史曲线和按节点的流量账不受影响。
+安装脚本面向 **Debian / Ubuntu + systemd**。以下命令在服务器 SSH 终端执行，先运行 `sudo -i` 切换到 root。首次构建需要访问 GitHub、Go 依赖源、Docker 镜像源；脚本会安装构建依赖，服务运行本身不在 Docker 内。
 
-**订阅** —— 一个链接，按客户端自动给 sing-box JSON / Clash YAML / base64 分享链接，
-浏览器打开则是一个带用量和一键导入的页面。客户端服务器列表里显示的别名是
-`节点 | 用户名 | 已用/总量 | 到期`。
+本文默认面板、节点分开部署。同机部署请直接看第 6 节。下面的示例域名必须换成自己的真实域名：
 
-**节点** —— 节点主动外连面板，不需要开放控制端口，NAT 后面可用。接入 token 一次性
-显示、只存哈希、可随时更换。改节点名会自动同步该节点上所有入站的 tag。
+| 示例 | DNS 解析到哪里 | 用途 |
+| --- | --- | --- |
+| `panel.example.com` | 面板服务器 IP | 管理员登录、节点连接面板 |
+| `sub.example.com` | 面板服务器 IP | 可选的独立订阅域名 |
+| `hk.example.com` | 香港节点服务器 IP | 客户端连接节点、节点 TLS 证书 |
 
-**生效确认** —— 新建或改动入站后，页面自己轮询到节点确认为止，四种状态：已生效 /
-确认中 / 未生效（附节点报回的原始错误）/ 节点离线。节点拒绝一份配置时会自动回滚到
-上一份，不会因为一个打错的端口让整台机器下线。
+添加 DNS A 记录；仅当服务器 IPv6 确实可达时才添加 AAAA。本文采用直连方式，Cloudflare 设为 **DNS only / 灰云**。
 
-**中转** —— 两种。**外部中转**填一个面板管不到的中转机地址（realm、nginx stream 之
-类）。**站内中转**选一台面板已经管着的节点，面板自动在它上面开一个 L4 转发口，订阅
-地址随之改变；中转机只搬字节，协议仍在落地节点终结，所以按用户计流量、IP 限制、活动
-记录全部不受影响。
+| 服务器 | 需要的端口 | 说明 |
+| --- | --- | --- |
+| 面板 | TCP 80、443 | 自动证书、HTTPS 管理和订阅；安装前不能被其他程序占用 |
+| 节点 | TCP 80 | 默认 HTTP 证书验证使用；DNS 验证可不开放 |
+| 节点 | 配置的代理 TCP / UDP 端口 | 同时检查云安全组和本机防火墙，具体见第 4 节 |
 
-**用量控制** —— 每用户同时在线 IP 上限（在节点上执行，超出的地址直接断开，先连上的
-不受影响）；面板级路由策略：禁 BitTorrent、禁测速站、自定义域名黑名单。
-
-**监控** —— 概览页按节点分列流量和 14 天曲线；每个用户一个活动页，按小时记录连接数、
-对端数、端口数、来源地址数的峰值，保留 30 天。只记形状不记去处 —— 分辨滥用靠的是
-形状，而不是某个人访问了什么。
-
-## 安装
-
-### 面板
+节点主动连接面板的 HTTPS 地址，不需要额外开放节点控制端口。检查监听占用：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh | sudo sh
+ss -lntp | grep -E ':(80|443)\b'
 ```
 
-不带参数就是交互式，会问域名。带参数要加 `-s --`：
+已有 Nginx、Caddy 等占用端口时，先规划部署方式；默认安装脚本让面板直接使用 80 / 443。
+
+## 2. 安装面板
+
+**在面板服务器执行：**
 
 ```bash
-P=https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh
-
-wget -qO- $P | sh -s -- --domain panel.example.com --email you@example.com
-wget -qO- $P | sh -s -- --version      # 装的是哪个版本（也用来看 CDN 是否还在缓存旧版）
-wget -qO- $P | sh -s -- --upgrade      # 重新构建并重启，数据库不动
-wget -qO- $P | sh -s -- --uninstall    # 卸载服务，保留数据库和证书
-wget -qO- $P | sh -s -- --purge        # 连数据库和证书一起删，不可恢复
+apt-get update && apt-get install -y curl
+curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh -o /tmp/skysbx-panel-install.sh
+sh /tmp/skysbx-panel-install.sh \
+  --domain panel.example.com \
+  --sub-domain sub.example.com \
+  --email you@example.com
 ```
 
-等价的手动方式：
+不需要独立订阅域名时，删除 `--sub-domain sub.example.com` 这一行，订阅将使用面板域名。
+
+安装过程提示创建管理员账号、密码，随后编译程序、申请证书、启动服务。管理员在服务开放前创建；更新不会重新创建管理员。首次构建可能需要数分钟，取决于服务器和下载速度。
+
+完成后访问 `https://panel.example.com/login`，使用刚创建的账号登录。检查：
 
 ```bash
-git clone https://github.com/zayvian-lee/skysbx-panel.git
-cd skysbx-panel
-sudo ./deploy/install-panel.sh --domain panel.example.com --email you@example.com
+systemctl is-active skysbx-panel
+curl -I https://panel.example.com/login
+journalctl -u skysbx-panel -n 50 --no-pager
 ```
 
-需要 `80` 和 `443` 空闲 —— 面板自己终止 TLS、自己应答 ACME 挑战，**没有反向代理要装、
-要配、要保持同步**。域名必须已解析到本机且未套 CDN（HTTP-01 挑战要直连）。
+服务应为 `active`，浏览器证书应有效。独立订阅域名的 `/login` 返回 404 是正常行为，它只开放 `/sub/`；完整订阅链接在创建用户后获得。
 
-**管理员在安装时就问，是必填项。** 脚本在启动服务之前把它写进数据库，所以面板从第一
-秒起就是有主的 —— 不存在「装完到建管理员之间谁先打开谁就是管理员」的窗口。密码走
-stdin 交给二进制，不会出现在进程列表或 shell 历史里。装完直接
-`https://panel.example.com/login` 登录。
+## 3. 登记并安装节点
 
-没有终端可问的话（CI、`wget | sh` 且没有 tty），用环境变量代替，脚本不会静默跳过：
+### 3.1 在面板里登记
+
+进入「节点」，新建记录，例如：
+
+| 字段 | 示例 |
+| --- | --- |
+| 名称 | 香港无限流量 |
+| 客户端连接地址 | `hk.example.com`，不带 `https://` |
+| 国家 | `HK` |
+| 流量倍率 | 普通节点填 `1`，免扣套餐节点填 `0` |
+
+保存后复制 **接入 token**，它只显示一次。不要把 token 放进公开仓库或截图；丢失时在节点列表「换 token」，再更新服务器配置。每台节点使用独立 token。
+
+### 3.2 在对应节点服务器安装
+
+下面的 `hk.example.com` 应解析到**这台节点服务器**。token 由安装程序交互提示输入，粘贴上一步的值：
 
 ```bash
-SKYSBX_ADMIN_USER=admin SKYSBX_ADMIN_PASSWORD='...' \
-  ./deploy/install-panel.sh --domain panel.example.com
+apt-get update && apt-get install -y curl
+curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh -o /tmp/skysbx-node-install.sh
+sh /tmp/skysbx-node-install.sh \
+  --panel https://panel.example.com \
+  --domain hk.example.com \
+  --email you@example.com
 ```
 
-忘了密码：
+安装会拉取节点和配套内核源码、编译程序、申请节点证书并启动 `skysbx-node`。**AnyTLS、Hysteria2、TUIC 都需要节点证书**。只用 Reality 或 Shadowsocks 时可省略 `--domain`，在域名提示处回车。
+
+回到面板确认节点显示「在线」，并检查：
 
 ```bash
-/opt/skysbx/skysbx-panel -db /opt/skysbx/skysbx.db -set-admin <用户名>
-# 然后输入新密码（从 stdin 读，不回显也不进 argv）
+systemctl is-active skysbx-node
+journalctl -u skysbx-node -n 50 --no-pager
+ls -l /opt/skysbx/cert.pem /opt/skysbx/key.pem
 ```
 
-升级不需要停机以外的动作，数据库迁移在启动时自动跑，也不会再问管理员。
+最后一条仅对使用 TLS 证书的节点适用。**在线不代表代理已可用**：还需添加入站。证书申请失败时节点服务可能仍在线，必须修复证书后再使用 TLS 协议。
 
-### 节点
+无法用 TCP 80 申请证书或已有自己的证书时，见 [节点证书选项](https://github.com/zayvian-lee/skysbx-node#证书选项)。
 
-在面板里 **节点 → 新增**，复制那个只显示一次的接入 token，然后在新服务器上：
+## 4. 配置协议和端口
+
+在节点列表点击「入站」，按需添加协议。**每个入站对应客户端中的一个代理条目**。
+
+| 协议 | 示例端口 | 防火墙放行 | 主要设置 |
+| --- | --- | --- | --- |
+| VLESS Reality | `443` | TCP 443 | Reality 握手站点，先保留面板默认值 |
+| AnyTLS | `8443` | TCP 8443 | 证书、私钥、SNI |
+| Shadowsocks 2022 | `8388` | TCP 和 UDP 8388 | 密钥自动生成 |
+| Hysteria2 | `8443` | UDP 8443 | 证书、SNI，可选跳端口范围 |
+| TUIC v5 | `9443` | UDP 9443 | 证书、SNI；当前固定端口 |
+
+按实际配置放行，表中只是示例。同一 TCP 端口不能被两个监听服务占用。同机面板已经占用 TCP 443 时，Reality 可以改成 TCP 10443。不要关闭整个防火墙来代替放行所需端口。
+
+- **tag / 入站名称**：填客户端要显示的名称，例如 `香港下载 01`，支持中文，不追加用户名和流量；同一面板内名称必须唯一。
+- **证书、私钥路径**：默认是节点上的 `/opt/skysbx/cert.pem`、`/opt/skysbx/key.pem`，通常留空使用默认值。
+- **SNI**：与节点证书匹配，如 `hk.example.com`，与订阅域名无关。
+- **站内中转、外部中转地址**：普通直连节点保持为空，不要填写订阅域名。
+
+### Hysteria2 跳端口
+
+示例：监听 `8443`，范围 `20000-30000`，间隔 `30s`。
+
+1. 节点为 Linux，已安装 `nftables`，systemd 服务具有 `CAP_NET_ADMIN`；安装脚本会配置这些依赖。
+2. 云安全组放行 UDP 8443、UDP 20000–30000；本机 INPUT 防火墙允许实际监听 UDP 8443。
+3. 保存后，节点把跳跃范围重定向到监听端口。规则只负责重定向，不代替安全组或防火墙放行。
+4. 客户端刷新订阅。Mihomo / sing-box 完整配置包含间隔；URI 分享链接导入使用客户端支持的间隔设置。
+
+范围可写 `20000-30000,40000`，不能重叠或与其他入站、中转端口冲突。清空范围关闭跳端口。**当前仅支持直连，不与中转同时使用**；每台主机运行一个受面板管理的节点实例。
+
+保存后检查入站是否生效。「未生效」时先查看错误和节点日志。修改端口、证书、跳跃范围等会重建节点配置，现有连接可能中断。
+
+## 5. 用户、倍率和订阅
+
+进入「用户」新建用户。用户名使用英文字母、数字等界面允许的字符；**中文支持针对节点和入站名称，用户名称规则未改动**。
+
+1. 填到期日、流量上限、同时在线 IP 限制；空额度或 `0` 表示不限流量。
+2. 套餐 200 G，在「流量上限 GiB」填 `200`。本项目一个套餐单位按 1024³ 字节计算，订阅 GB 状态使用相同换算。
+3. 月度套餐选择流量重置日；不重置表示持续累计。重置不会延长到期时间。
+4. 在用户的入站分配功能中选择可用入站。**未选择任何限制代表允许所有入站**，不是禁止所有节点。
+5. 复制该用户订阅链接，导入客户端并刷新。
+
+### 倍率扣量
+
+在「节点 → 编辑」设置，对该节点全部用户和入站生效：
+
+| 倍率 | 实际上传 + 下载共 100 GB，套餐扣多少 |
+| --- | --- |
+| `1` | 100 GB |
+| `0.1` | 10 GB |
+| `0` | 0 GB |
+| `2` | 200 GB |
+
+支持 0–100，最多三位小数。实际流量仍写入历史；用户额度、超额停用、订阅用量使用计费流量。修改倍率从新收到的上报开始生效，不重算历史，不重启节点。
+
+**0 倍率只是不扣额度**：用户已停用、到期或在其他节点耗尽套餐，仍不能连接。中转使用最终认证用户的落地节点倍率。月度/手动重置一起清除当前周期计费上传、下载和小数余额。
+
+### 客户端格式
+
+| 客户端 | 如何导入 |
+| --- | --- |
+| v2rayN | 新建订阅分组，粘贴链接并更新；可指定 `?format=base64` |
+| Clash Party / Mihomo | 导入远程订阅；可指定 `?format=clash` |
+| Shadowrocket | 添加 Subscribe，粘贴链接并更新；隐藏 User-Agent 时指定 `?format=shadowrocket` |
+| sing-box | 远程配置使用 `?format=singbox` |
+| 浏览器 | 打开订阅网页；必要时指定 `?format=html` |
+
+已有查询参数时使用 `&format=...`，否则使用 `?format=...`。客户端内核需支持所选协议，原版旧 Clash 不在兼容范围内。
+
+导出只显示入站名称。Shadowrocket 专用格式显示「上传：1.00 GB | 下载：2.00 GB | 总量：200.00 GB」，无限套餐显示「不限」。其他格式保留标准字节响应头，由客户端决定显示单位。具体 iOS 版本效果需在设备刷新验证。
+
+## 6. 面板与节点同机安装
+
+**选择同机方案时，用本节代替第 2、3 节的安装命令。** 面板和可选订阅域名解析到同一台服务器：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh | sh
+apt-get update && apt-get install -y curl
+curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh -o /tmp/skysbx-all-install.sh
+sh /tmp/skysbx-all-install.sh \
+  --domain panel.example.com \
+  --sub-domain sub.example.com \
+  --email you@example.com
 ```
 
-它会问面板地址和 token。带参数同样加 `-s --`：
+流程：创建管理员 → 面板上线 → 浏览器登录并新建节点 → 回终端粘贴 token → 节点安装完成。
+
+节点连接地址、TLS 入站 SNI 都填 `panel.example.com`。同机脚本让节点复用面板证书，不再单独申请；**不要传另一个节点域名或让 certbot 抢占 TCP 80**。代理 TCP 端口避开面板的 80 / 443，例如 Reality 10443、AnyTLS 8443。
+
+同机证书使用文件链接。面板续签后确认节点加载了有效证书，必要时执行 `systemctl restart skysbx-node`，会短暂中断连接。
+
+## 7. 更新与旧版迁移
+
+**更新前先按 [备份与恢复](docs/BACKUP.md) 备份**。包括数据库、配置、证书和当前程序；不要在数据库运行时只复制主文件、遗漏 WAL。
+
+| 当前情况 | 更新方式 |
+| --- | --- |
+| 本项目普通面板功能更新 | 根据提交/发布说明只更新面板 |
+| 旧版没有 HY2 / TUIC 或跳端口支持 | 先更新面板，再更新每台节点，最后新增协议 |
+| 通过本项目同机脚本安装 | 可用同机更新命令更新两个服务 |
+| 同一项目的旧仓库版本、默认目录和服务 | 备份后执行本项目更新命令，切换源码来源 |
+| 自定义路径、容器安装或其他面板 | 不直接套用，先看 [迁移说明](docs/UPGRADE.md) |
+
+### 更新面板：在面板服务器执行
 
 ```bash
-N=https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh
-
-wget -qO- $N | sh -s -- --panel https://panel.example.com --token <token>
-wget -qO- $N | sh -s -- --version      # 节点版本 + 内嵌的 sing-box 版本
-wget -qO- $N | sh -s -- --upgrade      # 重新构建并重启，含 sing-box 核心升级
-wget -qO- $N | sh -s -- --uninstall    # 卸载服务，保留证书和 node.env
-wget -qO- $N | sh -s -- --purge        # 连证书、构建缓存、脚本装的 Docker 一起清掉
+curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh -o /tmp/skysbx-panel-install.sh
+sh /tmp/skysbx-panel-install.sh --upgrade
 ```
 
-**sing-box 核心怎么升级：** 节点把 sing-box 编进自己二进制里，所以 `--upgrade` 重新
-构建一次就是升级 —— 它会重新拉 [`skysbx-core`](https://github.com/zayvian-lee/skysbx-core)
-再编。没有单独的核心版本要管，也没有第二个进程要重启。
+脚本读取 `/opt/skysbx/panel.env` 的域名，更早版本可从 systemd unit 读取。读取失败时显式补上 `--domain panel.example.com --email you@example.com`。
 
-节点**主动连面板**，所以它不需要开放任何控制端口、不需要面板能路由到它，NAT 后面也
-能用。
-
-`--domain` 是可选的：只有 AnyTLS 需要证书。给了域名脚本就用 certbot 签
-（`--cf-token` 可走 DNS-01）；不给就只跑另外两个协议。
-
-> 节点域名必须是 **DNS-only（灰云）**。三个协议都不是 HTTP，套 CDN 会全部失效。
-
-### 同机安装面板和节点
-
-一台服务器同时跑面板和节点时，使用下面的一键命令。它会先安装面板；面板上线后，在网页的
-**节点 → 新增**创建节点并复制一次性接入 token，回到终端粘贴即可继续安装节点：
+增加独立订阅域名：先配置 DNS，再执行：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh | \
-  sudo sh -s -- --domain panel.example.com --email you@example.com
+sh /tmp/skysbx-panel-install.sh --upgrade --sub-domain sub.example.com
 ```
 
-非交互环境可直接提供 token。`--panel` 默认是 `https://<面板域名>`；只有该节点要使用
-AnyTLS 时才需要 `--node-domain`（以及可选的 `--cf-token`）：
+原 token 保留，旧面板域名的订阅路径继续可用。复制的新链接使用订阅域名；客户端已有旧 URL 不会自动改变，需手动替换才能切换域名。
+
+### 更新节点：在每台节点服务器执行
 
 ```bash
-I=https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh
-wget -qO- "$I" | sudo sh -s -- \
-  --domain panel.example.com --token '<node-token>' \
-  --node-domain node.example.com
+curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh -o /tmp/skysbx-node-install.sh
+sh /tmp/skysbx-node-install.sh --upgrade
 ```
 
-同机运行时，面板占用 `80` 和 `443`；为该节点新建 Reality 入站时请选择其他端口。节点仍然
-通过 WebSocket 主动连接面板，不会额外开放控制端口。
+读取 `/opt/skysbx/node.env` 的面板地址和 token，不必删除重建节点。**更新节点会同时编译配套内核**，不单独安装 core。节点会重启，造成短暂断连。
 
-### 离线 / 自建镜像
-
-`--src`（面板或节点源码）和 `--fork`（打过补丁的 sing-box）可以指向本机已有的检出，
-完全不联网安装。仓库设为私有的话，`export GITHUB_TOKEN=...` 后再跑；token 走
-per-command header，不会落到 `.git/config` 里。
-
-单组件一键脚本认这几个环境变量：`SKYSBX_REPO`、`SKYSBX_FORK`、`SKYSBX_REF`。同机脚本
-还可用 `SKYSBX_NODE_REPO` 和 `SKYSBX_NODE_REF` 分别指定节点源码和分支。
-
-## 开发
+### 同机更新
 
 ```bash
-go test ./...
-go build ./cmd/panel
+curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh -o /tmp/skysbx-all-install.sh
+sh /tmp/skysbx-all-install.sh --upgrade
 ```
 
-需要 Go 1.27+。节点那边锁 Go 1.26.x（sing-box 的 `go:linkname` 在 1.27 下链接失败），
-面板不受这个限制。
+依次更新面板和节点、重新连接共享证书。只有面板变化时可只运行面板更新。
 
+### 旧版数据如何处理
+
+新版启动自动迁移数据库，保留管理员、用户、节点、凭据、订阅 token 和已用额度。旧节点默认 `1 倍率`。**不要通过删除节点、重装系统或 `--purge` 来升级**。
+
+旧版只有当前周期流量合计，迁移时延续旧订阅口径计入下载；升级后分别累计，下一次重置后完全按新口径显示。不要为了改变显示而重置用户套餐额度。
+
+升级后检查服务 `active`、节点在线、原用户与额度、入站生效状态；刷新订阅并实测连接。出现问题保留日志，按 [迁移与回退说明](docs/UPGRADE.md) 操作。回退数据库版本时不能只替换旧二进制。
+
+## 8. 日常检查和故障排查
+
+在安装了对应组件的服务器上执行：
+
+```bash
+/opt/skysbx/skysbx-panel --version
+/opt/skysbx/skysbx-node --version
+systemctl status skysbx-panel --no-pager
+systemctl status skysbx-node --no-pager
+journalctl -u skysbx-panel -n 100 --no-pager
+journalctl -u skysbx-node -n 100 --no-pager
 ```
-cmd/panel/          入口
-internal/
-  store/            SQLite：schema、迁移、全部查询   ← 上面没有任何地方写 SQL
-  service/          业务逻辑，不知道 HTTP 的存在     ← 换 UI 时的切换点
-  hub/              WebSocket 集线器
-  sub/              订阅生成
-  singbox/          sing-box 配置的 Go 结构体
-  web/              htmx handler + 模板
-docs/DESIGN.md      协议、数据模型、订阅、计费、中转、已知限制
-```
 
-`service/` 刻意不感知 HTTP：以后若要把 htmx 换成 SPA，只需在同一套 service 上加一层
-JSON API，数据模型、协议、订阅、计费都不用动。
+| 现象 | 先检查 |
+| --- | --- |
+| 面板打不开、证书失败 | DNS A/AAAA、TCP 80/443 放行及占用、面板日志 |
+| 订阅域名首页 404 | 正常，使用用户的完整 `/sub/token` 链接 |
+| 节点离线 | 节点能否访问面板 HTTPS、token、节点日志 |
+| 在线但入站未生效 | 证书路径/SNI、端口冲突、节点和内核版本 |
+| HY2 / TUIC 无法连接 | UDP 防火墙、证书、客户端内核；HY2 再看跳跃范围 |
+| 订阅没有可用节点 | 用户停用/到期/超额、入站分配、节点或入站停用 |
+| 改名后仍是旧名 | 刷新订阅，检查是否使用静态导入条目 |
+| 小火箭显示原始字节 | 升级面板，使用 `?format=shadowrocket` 并更新订阅 |
+| 构建下载失败 | 检查失败的 GitHub / Go 模块 / Docker 源；不要删除数据库 |
 
-面板生成 sing-box 配置，但 `internal/singbox/` 里只有 JSON 结构体定义，**不 import
-sing-box 本体**。代价是面板没法用 sing-box 的 schema 校验自己的输出 —— 真正的验证得
-拿真的 sing-box 跑一遍，那一步在部署验证里做。
+管理员密码恢复、token 替换、自定义路径、卸载与重装见 [维护说明](docs/UPGRADE.md)。备份含敏感凭据，不要提交到 GitHub。
 
-## 许可
+## 项目维护
 
-**AGPL-3.0**，见 [`LICENSE`](LICENSE)。节点仓库是 GPL-3.0。
+问题与建议提交到 [本项目 Issues](https://github.com/zayvian-lee/skysbx-panel/issues)，附版本、部署方式和脱敏日志。自动检查覆盖测试、并发检测、脚本语法和 Linux 构建；真实 DNS、证书、防火墙和客户端仍需部署验收。
+
+许可证见 [LICENSE](LICENSE)，代码来源与致谢见 [NOTICE.md](NOTICE.md)。
