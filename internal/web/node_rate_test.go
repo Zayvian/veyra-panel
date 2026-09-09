@@ -70,7 +70,11 @@ func TestRateFormsAndSubscriptionStatus(t *testing.T) {
 		if rec.Code != 200 {
 			t.Fatalf("subscription status %d", rec.Code)
 		}
-		if rec.Header().Get("Subscription-Userinfo") != "upload=1073741824; download=2147483648; total=214748364800" {
+		wantHeader := "upload=1073741824; download=2147483648; total=214748364800"
+		if tc.status {
+			wantHeader = ""
+		}
+		if rec.Header().Get("Subscription-Userinfo") != wantHeader {
 			t.Fatal(rec.Header())
 		}
 		raw, err := base64.StdEncoding.DecodeString(rec.Body.String())

@@ -29,7 +29,7 @@
 
 Shadowrocket 订阅自动添加 GB 状态文字，例如「上传：1.00 GB | 下载：2.00 GB | 总量：200.00 GB」，无限套餐显示「总量：不限」。隐藏客户端 User-Agent 时，请在订阅链接后加 `?format=shadowrocket`（已有查询参数时用 `&format=shadowrocket`）。订阅网页也使用 GB。与套餐输入保持一致，显示的 GB 按 1024³ 字节换算。
 
-标准 `Subscription-Userinfo` 响应头仍使用整数**字节**，并分别下发计费上传和下载；其他客户端如何显示单位由客户端控制。Shadowrocket 状态采用 Base64 内容内的 `STATUS=` 行，格式参考 [Xboard 的 Shadowrocket 实现](https://github.com/cedar2025/Xboard/blob/master/app/Protocols/Shadowrocket.php)。实际 iOS 客户端显示仍需刷新订阅验证。
+其他格式的标准 `Subscription-Userinfo` 响应头仍使用整数**字节**，并分别下发计费上传和下载；其他客户端如何显示单位由客户端控制。Shadowrocket 格式只使用 Base64 内容内的 `STATUS=` 行显示 GB，不同时发送可能覆盖该文字的原始字节响应头，格式参考 [Xboard 的 Shadowrocket 实现](https://github.com/cedar2025/Xboard/blob/master/app/Protocols/Shadowrocket.php)。实际 iOS 客户端显示仍需刷新订阅验证。
 
 本次只需升级面板；数据库自动迁移，原订阅 token 和已用额度保留。旧版只保存当前周期合计，因此升级时历史已用量延续旧订阅口径计入下载；升级后的流量分别累计，下一次重置后完全按新口径显示。
 

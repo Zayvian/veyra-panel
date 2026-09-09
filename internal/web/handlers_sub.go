@@ -69,6 +69,9 @@ func (s *Server) getSubscription(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		if strings.Contains(strings.ToLower(r.UserAgent()), "shadowrocket") || strings.EqualFold(r.URL.Query().Get("format"), "shadowrocket") {
+			// Use a single display source for Shadowrocket: STATUS supplies GB
+			// text, while a competing raw-byte header can override that text.
+			w.Header().Del("Subscription-Userinfo")
 			w.Write([]byte(sub.ShadowrocketBase64(entries, sb.User)))
 		} else {
 			w.Write([]byte(sub.Base64(entries)))
