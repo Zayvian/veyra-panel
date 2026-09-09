@@ -45,8 +45,10 @@ button:hover{border-color:var(--accent);color:var(--accent)}
   {{end}}
 
   <div class="stats">
-    <span>已用 <b>{{bytes .Used}}</b></span>
-    {{if .Limit}}<span>限额 <b>{{bytes .Limit}}</b></span>{{else}}<span>限额 <b>不限</b></span>{{end}}
+    <span>计费上传 <b>{{.UploadGB}}</b></span>
+    <span>计费下载 <b>{{.DownloadGB}}</b></span>
+    <span>已扣套餐 <b>{{.UsedGB}}</b></span>
+    {{if .Limit}}<span>限额 <b>{{.LimitGB}}</b></span>{{else}}<span>限额 <b>不限</b></span>{{end}}
     {{if .Expires}}<span>到期 <b>{{.Expires}}</b></span>{{else}}<span>到期 <b>永不</b></span>{{end}}
     <span>节点 <b>{{len .Entries}}</b></span>
   </div>
@@ -70,7 +72,7 @@ button:hover{border-color:var(--accent);color:var(--accent)}
     把上面的订阅链接粘贴进 sing-box、mihomo/Clash 或 v2rayNG 即可 ——
     面板会按客户端自动返回对应格式。
     也可以直接取指定格式：
-    <code>?format=singbox</code>、<code>?format=clash</code>、<code>?format=base64</code>。
+    <code>?format=singbox</code>、<code>?format=clash</code>、<code>?format=base64</code>、<code>?format=shadowrocket</code>。
   </p>
 </main>
 <script>

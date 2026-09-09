@@ -21,9 +21,7 @@ import (
 // on one node.
 type Entry struct {
 	Name string // the inbound tag: unique, stable, and what proxies are named
-	// Label is what a client's server list shows: the tag plus whose account
-	// this is and what is left of it. Only the link-list format uses it; see
-	// label() for why the other two keep the tag.
+	// Label is the configured inbound name, without account or quota suffixes.
 	Label       string
 	Protocol    string
 	Address     string // the node's client-facing address
@@ -105,7 +103,7 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 
 		e := Entry{
 			Name:        in.Tag,
-			Label:       label(in.Tag, u, nowFunc()),
+			Label:       in.Tag,
 			Protocol:    in.Protocol,
 			Address:     address,
 			Port:        port,

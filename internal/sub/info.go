@@ -3,59 +3,7 @@ package sub
 import (
 	"encoding/base64"
 	"fmt"
-	"strings"
-	"time"
-
-	"github.com/kosje/skysbx-panel/internal/store"
 )
-
-// The Subscription-Userinfo header is the correct way to tell a client about
-// usage and expiry, and the major clients read it. But each one shows it in a
-// different corner and some show it nowhere until the profile is opened, so the
-// numbers also go where every client puts them in front of the user: the name
-// of each server in the list.
-//
-// An earlier attempt added them as separate unreachable entries, the way most
-// panels do. They read as broken servers.
-
-// label is what a client shows for one entry: which server it is, whose account
-// it is, and what is left of that account.
-//
-// Only the link-list format uses it. sing-box and Clash name proxies with the
-// stable tag instead: their names are also group members and rule targets, and
-// a usage figure baked into one changes on every fetch — the client then sees a
-// different set of servers each time and loses whatever the user had selected.
-// The tag alone identifies the server: it is derived from the protocol and the
-// node name, and re-derived whenever the node is renamed, so "ss-tokyo" says
-// both things a list spanning several nodes needs. Repeating the node name in
-// front of it was a workaround for tags that could drift out of step, and it
-// read as a stutter once they could not.
-func label(tag string, u *store.User, now time.Time) string {
-	parts := []string{tag, u.Name}
-
-	if u.TrafficLimit > 0 {
-		parts = append(parts, fmt.Sprintf("%s/%s",
-			humanBytes(u.TrafficUsed), humanBytes(u.TrafficLimit)))
-	} else {
-		parts = append(parts, fmt.Sprintf("%s/不限", humanBytes(u.TrafficUsed)))
-	}
-
-	if u.ExpiresAt != nil {
-		// Local, like every date the panel shows. An expiry is stored as the
-		// last second of a day in the operator's timezone, so formatting it in
-		// UTC reads as the day after.
-		day := u.ExpiresAt.Local().Format("2006-01-02")
-		if days := int(u.ExpiresAt.Sub(now).Hours() / 24); days >= 0 {
-			parts = append(parts, fmt.Sprintf("%s 到期", day))
-		} else {
-			parts = append(parts, fmt.Sprintf("%s 已过期", day))
-		}
-	} else {
-		parts = append(parts, "长期")
-	}
-
-	return strings.Join(parts, " | ")
-}
 
 // humanBytes formats to two significant places, the way a client shows a quota.
 func humanBytes(n int64) string {

@@ -52,7 +52,7 @@ func (s *Service) RecordTraffic(nodeID int64, usage map[string]Usage) error {
 		// moves under 400 GiB in that time, so anything past this is not a
 		// measurement — and unlike a wrong small number, a wrong enormous one
 		// permanently revokes an account that nothing will restore.
-		if u.Up > maxReportedDelta || u.Down > maxReportedDelta {
+		if u.Up < 0 || u.Down < 0 || u.Up > maxReportedDelta || u.Down > maxReportedDelta {
 			continue
 		}
 		deltas[id] = Usage{Up: u.Up, Down: u.Down}

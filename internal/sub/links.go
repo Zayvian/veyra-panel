@@ -113,11 +113,9 @@ func frag(s string) string {
 
 // UserInfoHeader is the Subscription-Userinfo header every major client reads
 // to show usage and expiry without opening a page.
-func UserInfoHeader(used, total int64, expiresUnix int64) string {
-	// upload is reported as 0 and everything as download: the panel keeps one
-	// total per user, and splitting it arbitrarily would be a lie in a field
-	// clients render to the user.
-	s := fmt.Sprintf("upload=0; download=%d; total=%d", used, total)
+func UserInfoHeader(upload, download, total int64, expiresUnix int64) string {
+	// This interoperable header uses bytes; human-readable GB goes in STATUS.
+	s := fmt.Sprintf("upload=%d; download=%d; total=%d", upload, download, total)
 	if expiresUnix > 0 {
 		s += fmt.Sprintf("; expire=%d", expiresUnix)
 	}

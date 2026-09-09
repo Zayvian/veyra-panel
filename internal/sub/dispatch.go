@@ -58,7 +58,7 @@ func Detect(r *http.Request) Format {
 			return FormatSingBox
 		case "clash", "mihomo":
 			return FormatClash
-		case "base64", "v2ray":
+		case "base64", "v2ray", "shadowrocket":
 			return FormatBase64
 		case "html", "page":
 			return FormatHTML

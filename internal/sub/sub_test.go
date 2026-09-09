@@ -232,42 +232,30 @@ func TestBase64Decodes(t *testing.T) {
 	}
 }
 
-// What a client's server list shows has to identify the server and the account
-// in one line, because that column is the only thing some clients ever show.
-func TestShareLinkNameCarriesTheAccount(t *testing.T) {
+// Every export preserves the configured Chinese name without account metadata.
+func TestShareLinkNameIsOnlyConfiguredName(t *testing.T) {
 	u, nodes, inbounds := fixture(t)
-	// Stored the way the panel stores an expiry: the last second of a day in
-	// the operator's own timezone. Formatting it in UTC would show the day
-	// after, and the panel's own list would disagree with the client.
-	expires := time.Date(2026, 12, 31, 23, 59, 59, 0, time.Local)
-	u.ExpiresAt = &expires
+	inbounds[0].Tag = "香港无限流量 01"
 	u.TrafficUsed = 3 << 30
 	u.TrafficLimit = 10 << 30
-
-	entries, _ := Build(u, nodes, inbounds, nil)
-	if len(entries) == 0 {
-		t.Fatal("no entries")
+	entries, err := Build(u, nodes, inbounds, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 	for _, e := range entries {
-		for _, want := range []string{e.Name, u.Name, "3.00 GiB", "10.00 GiB", "2026-12-31"} {
-			if !strings.Contains(e.Label, want) {
-				t.Errorf("label %q does not mention %q", e.Label, want)
-			}
+		if e.Label != e.Name {
+			t.Fatalf("name changed: %q", e.Label)
 		}
 	}
-
-	// The tag already carries the node name — it is derived from it, and
-	// re-derived on every rename — so repeating it would read as a stutter.
-	if got := label("ss-tokyo", u, time.Now()); !strings.HasPrefix(got, "ss-tokyo |") {
-		t.Errorf("label is %q, want it to start with the tag alone", got)
+	for i, link := range ShareLinks(entries) {
+		parsed, err := url.Parse(link)
+		if err != nil || parsed.Fragment != entries[i].Name {
+			t.Fatalf("wrong fragment: %s", link)
+		}
 	}
-
 	raw, err := base64.StdEncoding.DecodeString(Base64(entries))
-	if err != nil {
-		t.Fatalf("not valid base64: %v", err)
-	}
-	if !strings.Contains(string(raw), frag(entries[0].Label)) {
-		t.Error("the link fragment is not the label")
+	if err != nil || strings.Contains(string(raw), frag(" | ")) {
+		t.Fatal("account suffix remains")
 	}
 }
 
@@ -494,11 +482,11 @@ func TestUserAgentBeatsAcceptHTML(t *testing.T) {
 }
 
 func TestUserInfoHeader(t *testing.T) {
-	got := UserInfoHeader(1024, 2048, 0)
-	if got != "upload=0; download=1024; total=2048" {
+	got := UserInfoHeader(128, 896, 2048, 0)
+	if got != "upload=128; download=896; total=2048" {
 		t.Errorf("header = %q", got)
 	}
-	if got := UserInfoHeader(1, 2, 1700000000); !strings.HasSuffix(got, "; expire=1700000000") {
+	if got := UserInfoHeader(0, 1, 2, 1700000000); !strings.HasSuffix(got, "; expire=1700000000") {
 		t.Errorf("expiry missing: %q", got)
 	}
 }

@@ -5,14 +5,16 @@
   <h1>节点</h1>
   <div class="card">
     <form class="row" hx-post="/nodes" hx-target="#nodes" hx-swap="outerHTML">
-      <label>名称<input name="name" required placeholder="tokyo"
-             pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}"></label>
+      <label>名称<input name="name" required placeholder="香港无限流量"
+             maxlength="64"></label>
       <label>客户端连接地址<input name="address" required placeholder="jp.example.com"
              style="min-width:14rem"></label>
       <label>国家<input name="country" maxlength="2" placeholder="JP" style="min-width:5rem"></label>
+      <label>流量倍率<input name="traffic_rate" type="number" min="0" max="100" step="0.001" value="1" required style="width:7rem"></label>
       <button>新建</button>
     </form>
     <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
+      倍率决定套餐扣量：1 为正常，0.1 为十分之一，0 不扣套餐；实际流量仍记录。修改后仅影响新上报流量。<br>
       地址是<strong>客户端</strong>连的目标，也是订阅里原样发出去的值。面板不需要能连到
       节点 —— 是节点主动连面板。<br>
       <strong>填域名而不是 IP</strong>：换服务器时改 DNS 就够了，不用重发订阅；
@@ -49,7 +51,7 @@
     {{else}}
     <table>
       <thead><tr>
-        <th>名称</th><th>地址</th><th>状态</th><th>入站</th><th>版本</th><th></th>
+        <th>名称</th><th>倍率</th><th>地址</th><th>状态</th><th>入站</th><th>版本</th><th></th>
       </tr></thead>
       <tbody>
       {{range .Nodes}}
@@ -58,15 +60,16 @@
              clients dial, and getting it wrong is invisible in the panel
              because the node connects outward regardless. */}}
         <tr>
-          <td colspan="6">
+          <td colspan="7">
             <form class="row" hx-post="/nodes/{{.ID}}"
                   hx-target="#nodes" hx-swap="outerHTML" style="align-items:flex-end">
               <label>名称<input name="name" required value="{{.Name}}"
-                     pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}"></label>
+                     maxlength="64"></label>
               <label>客户端连接地址<input name="address" required value="{{.Address}}"
                      style="min-width:16rem"></label>
               <label>国家<input name="country" maxlength="2" value="{{.Country}}"
                      style="min-width:5rem"></label>
+              <label>流量倍率<input name="traffic_rate" type="number" min="0" max="100" step="0.001" value="{{.RateText}}" required style="width:7rem"></label>
               <button>保存</button>
               <button type="button" class="ghost" hx-get="/nodes"
                       hx-target="#nodes" hx-swap="outerHTML">取消</button>
@@ -83,6 +86,7 @@
         {{else}}
         <tr>
           <td>{{.Name}} <span class="dim">{{.Country}}</span></td>
+          <td>{{.RateText}}×{{if eq .RateMilli 0}} <span class="dim">不扣套餐</span>{{end}}</td>
           <td class="dim">
             {{.Address}}
             {{/* This value is what every subscription hands to a client. */}}

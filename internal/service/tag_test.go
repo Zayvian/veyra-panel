@@ -107,7 +107,7 @@ func TestDeriveInboundTagIsTotal(t *testing.T) {
 	svc, _ := newSvc(t)
 	cases := []struct{ name, want string }{
 		{"Tokyo #2", "vless-tokyo2"},
-		{"东京", "vless-node"}, // nothing tag-safe survives
+		{"东京", "vless-东京"}, // Chinese survives tag derivation.
 		{"", "vless-node"},
 	}
 	for _, c := range cases {

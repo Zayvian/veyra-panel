@@ -7,7 +7,7 @@ import (
 )
 
 const nodeCols = `id, name, token_hash, token_sha, address, country, enabled,
-	last_seen_at, version, created_at`
+	last_seen_at, version, created_at, rate_milli`
 
 func scanNode(sc interface{ Scan(...any) error }) (*Node, error) {
 	var n Node
@@ -15,7 +15,7 @@ func scanNode(sc interface{ Scan(...any) error }) (*Node, error) {
 	var tokenSHA sql.NullString
 	var created int64
 	if err := sc.Scan(&n.ID, &n.Name, &n.TokenHash, &tokenSHA, &n.Address, &n.Country,
-		&n.Enabled, &lastSeen, &n.Version, &created); err != nil {
+		&n.Enabled, &lastSeen, &n.Version, &created, &n.RateMilli); err != nil {
 		return nil, err
 	}
 	n.TokenSHA = tokenSHA.String
@@ -27,11 +27,16 @@ func scanNode(sc interface{ Scan(...any) error }) (*Node, error) {
 	return &n, nil
 }
 
-func (s *Store) CreateNode(n *Node) error {
+// CreateNode defaults to 1x unless a rate in thousandths is supplied.
+func (s *Store) CreateNode(n *Node, rate ...int64) error {
+	n.RateMilli = 1000
+	if len(rate) > 0 {
+		n.RateMilli = rate[0]
+	}
 	res, err := s.db.Exec(`INSERT INTO nodes
-		(name, token_hash, token_sha, address, country, enabled, version, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, '', unixepoch())`,
-		n.Name, n.TokenHash, nullString(n.TokenSHA), n.Address, n.Country, n.Enabled)
+		(name, token_hash, token_sha, address, country, enabled, version, created_at, rate_milli)
+		VALUES (?, ?, ?, ?, ?, ?, '', unixepoch(), ?)`,
+		n.Name, n.TokenHash, nullString(n.TokenSHA), n.Address, n.Country, n.Enabled, n.RateMilli)
 	if err != nil {
 		return asConflict(fmt.Errorf("create node %q: %w", n.Name, err))
 	}
@@ -86,8 +91,8 @@ func (s *Store) EnabledNodes() ([]*Node, error) {
 
 func (s *Store) UpdateNode(n *Node) error {
 	res, err := s.db.Exec(`UPDATE nodes SET
-		name = ?, address = ?, country = ?, enabled = ? WHERE id = ?`,
-		n.Name, n.Address, n.Country, n.Enabled, n.ID)
+		name = ?, address = ?, country = ?, enabled = ?, rate_milli = ? WHERE id = ?`,
+		n.Name, n.Address, n.Country, n.Enabled, n.RateMilli, n.ID)
 	if err != nil {
 		return asConflict(fmt.Errorf("update node %d: %w", n.ID, err))
 	}

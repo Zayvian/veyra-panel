@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/kosje/skysbx-panel/internal/service"
 	"github.com/kosje/skysbx-panel/internal/store"
@@ -39,7 +40,7 @@ func (s *Server) getSubscription(w http.ResponseWriter, r *http.Request) {
 		expires = sb.User.ExpiresAt.Unix()
 	}
 	w.Header().Set("Subscription-Userinfo",
-		sub.UserInfoHeader(sb.User.TrafficUsed, sb.User.TrafficLimit, expires))
+		sub.UserInfoHeader(sb.User.TrafficUp, sb.User.TrafficDown, sb.User.TrafficLimit, expires))
 	// Announce where to refresh from, and how often, in the two headers the
 	// major clients honour.
 	w.Header().Set("Profile-Update-Interval", "12")
@@ -67,7 +68,11 @@ func (s *Server) getSubscription(w http.ResponseWriter, r *http.Request) {
 		w.Write(data)
 
 	default:
-		w.Write([]byte(sub.Base64(entries)))
+		if strings.Contains(strings.ToLower(r.UserAgent()), "shadowrocket") || strings.EqualFold(r.URL.Query().Get("format"), "shadowrocket") {
+			w.Write([]byte(sub.ShadowrocketBase64(entries, sb.User)))
+		} else {
+			w.Write([]byte(sub.Base64(entries)))
+		}
 	}
 }
 
@@ -90,14 +95,18 @@ func (s *Server) subscriptionPage(w http.ResponseWriter, r *http.Request,
 	}
 
 	s.render(w, "subscription", map[string]any{
-		"User":     sb.User,
-		"Entries":  rows,
-		"Expires":  expires,
-		"Used":     sb.User.TrafficUsed,
-		"Limit":    sb.User.TrafficLimit,
-		"SubURL":   s.subscriptionOrigin(r) + r.URL.Path,
-		"Base64":   sub.Base64(entries),
-		"Inactive": len(entries) == 0,
+		"User":       sb.User,
+		"Entries":    rows,
+		"Expires":    expires,
+		"Used":       sb.User.TrafficUsed,
+		"UploadGB":   sub.GB(sb.User.TrafficUp),
+		"DownloadGB": sub.GB(sb.User.TrafficDown),
+		"UsedGB":     sub.GB(sb.User.TrafficUsed),
+		"LimitGB":    sub.GB(sb.User.TrafficLimit),
+		"Limit":      sb.User.TrafficLimit,
+		"SubURL":     s.subscriptionOrigin(r) + r.URL.Path,
+		"Base64":     sub.Base64(entries),
+		"Inactive":   len(entries) == 0,
 	})
 }
 

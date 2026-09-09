@@ -79,10 +79,15 @@ func (s *Server) renderNodesFull(w http.ResponseWriter, r *http.Request, code in
 }
 
 func (s *Server) createNode(w http.ResponseWriter, r *http.Request) {
+	rate, err := service.ParseNodeRate(r.FormValue("traffic_rate"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	_, token, err := s.svc.CreateNode(
 		r.FormValue("name"),
 		r.FormValue("address"),
-		r.FormValue("country"))
+		r.FormValue("country"), rate)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -113,6 +118,14 @@ func (s *Server) updateNode(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if value := r.FormValue("traffic_rate"); value != "" {
+		rate, err := service.ParseNodeRate(value)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		n.RateMilli = rate
 	}
 	n.Name = strings.TrimSpace(r.FormValue("name"))
 	n.Address = strings.TrimSpace(r.FormValue("address"))

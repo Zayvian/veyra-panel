@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"strconv"
+	"time"
+)
 
 // Protocol values stored in inbounds.protocol. They match sing-box's own
 // inbound type names, because the config column is sing-box JSON.
@@ -27,6 +30,8 @@ type User struct {
 	ExpiresAt    *time.Time // nil = never expires
 	TrafficLimit int64      // bytes, 0 = unlimited
 	TrafficUsed  int64
+	TrafficUp    int64 // billed bytes in the current quota period
+	TrafficDown  int64
 
 	// IPLimit caps how many distinct source addresses this user may have
 	// connected at once, per node. Zero is no limit.
@@ -69,8 +74,9 @@ func (u *User) Active(now time.Time) bool {
 }
 
 type Node struct {
-	ID   int64
-	Name string
+	RateMilli int64 // 1000 = 1x; 0 does not consume quota
+	ID        int64
+	Name      string
 
 	// TokenHash is bcrypt of the join token, kept for nodes created before
 	// TokenSHA existed. TokenSHA is SHA-256 of the same token, hex, and is what
@@ -92,6 +98,8 @@ type Node struct {
 	Version    string
 	CreatedAt  time.Time
 }
+
+func (n *Node) RateText() string { return strconv.FormatFloat(float64(n.RateMilli)/1000, 'f', -1, 64) }
 
 type Inbound struct {
 	ID       int64

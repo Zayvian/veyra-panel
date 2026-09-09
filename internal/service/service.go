@@ -210,10 +210,17 @@ func (s *Service) ResetUserTraffic(id int64) error {
 
 // CreateNode returns the node and its join token. The token is shown once and
 // only its hash is stored, so this return value is the only chance to record it.
-func (s *Service) CreateNode(name, address, country string) (*store.Node, string, error) {
+func (s *Service) CreateNode(name, address, country string, rate ...int64) (*store.Node, string, error) {
+	rateMilli := int64(1000)
+	if len(rate) > 0 {
+		rateMilli = rate[0]
+	}
+	if err := checkRate(rateMilli); err != nil {
+		return nil, "", err
+	}
 	name = strings.TrimSpace(name)
 	address = strings.TrimSpace(address)
-	if err := checkName("node name", name); err != nil {
+	if err := checkDisplayName("node name", name); err != nil {
 		return nil, "", err
 	}
 	if address == "" {
@@ -234,7 +241,7 @@ func (s *Service) CreateNode(name, address, country string) (*store.Node, string
 	}
 	n := &store.Node{Name: name, TokenHash: hash, TokenSHA: TokenSHA(token),
 		Address: address, Country: country, Enabled: true}
-	if err := s.st.CreateNode(n); err != nil {
+	if err := s.st.CreateNode(n, rateMilli); err != nil {
 		return nil, "", err
 	}
 	return n, token, nil
@@ -245,8 +252,11 @@ func (s *Service) Nodes() ([]*store.Node, error) { return s.st.Nodes() }
 func (s *Service) Node(id int64) (*store.Node, error) { return s.st.Node(id) }
 
 func (s *Service) UpdateNode(n *store.Node) error {
+	if err := checkRate(n.RateMilli); err != nil {
+		return err
+	}
 	n.Name = strings.TrimSpace(n.Name)
-	if err := checkName("node name", n.Name); err != nil {
+	if err := checkDisplayName("node name", n.Name); err != nil {
 		return err
 	}
 	if strings.TrimSpace(n.Address) == "" {
@@ -360,7 +370,7 @@ func (s *Service) CreateInbound(nodeID int64, spec InboundSpec) (*store.Inbound,
 	if spec.Tag == "" {
 		spec.Tag = s.deriveInboundTag(spec.Protocol, node.Name)
 	}
-	if err := checkName("inbound tag", spec.Tag); err != nil {
+	if err := checkDisplayName("inbound tag", spec.Tag); err != nil {
 		return nil, err
 	}
 	// Reserved for the listener a relay node runs on another node's behalf.

@@ -11,7 +11,7 @@ var ErrNotFound = errors.New("not found")
 
 const userCols = `id, name, vless_uuid, password, ss_password, sub_token,
 	enabled, expires_at, traffic_limit, traffic_used, ip_limit,
-	reset_day, last_reset_at, note, created_at`
+	reset_day, last_reset_at, note, created_at, traffic_up, traffic_down`
 
 func scanUser(sc interface{ Scan(...any) error }) (*User, error) {
 	var u User
@@ -19,7 +19,7 @@ func scanUser(sc interface{ Scan(...any) error }) (*User, error) {
 	var created int64
 	if err := sc.Scan(&u.ID, &u.Name, &u.VlessUUID, &u.Password, &u.SSPassword,
 		&u.SubToken, &u.Enabled, &expires, &u.TrafficLimit, &u.TrafficUsed,
-		&u.IPLimit, &u.ResetDay, &lastReset, &u.Note, &created); err != nil {
+		&u.IPLimit, &u.ResetDay, &lastReset, &u.Note, &created, &u.TrafficUp, &u.TrafficDown); err != nil {
 		return nil, err
 	}
 	if expires.Valid {
@@ -135,7 +135,7 @@ func (s *Store) DeleteUser(id int64) error {
 // stamp is what says "this cycle is already done".
 func (s *Store) ResetUserTraffic(id int64) error {
 	_, err := s.db.Exec(
-		`UPDATE users SET traffic_used = 0, last_reset_at = unixepoch() WHERE id = ?`, id)
+		`UPDATE users SET traffic_used = 0, traffic_up = 0, traffic_down = 0, traffic_up_remainder = 0, traffic_down_remainder = 0, last_reset_at = unixepoch() WHERE id = ?`, id)
 	return err
 }
 

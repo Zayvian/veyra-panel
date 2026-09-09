@@ -2,7 +2,7 @@
 
 基于 [kosje/skysbx-panel](https://github.com/kosje/skysbx-panel)，保留 AGPL-3.0 许可证与上游历史。
 
-新增 **独立 HTTPS 订阅域名、Hysteria2 端口跳跃、TUIC v5**，并保持用户热更新、流量归属及订阅输出一致。
+新增 **节点流量倍率（含 0 倍率）、中文名称、简洁订阅名称、Shadowrocket GB 状态、独立 HTTPS 订阅域名、Hysteria2 端口跳跃、TUIC v5**。
 
 **安装与配置请先看 [二次开发版使用说明](docs/FORK.md)。** TUIC 当前为固定端口；旧版 Clash 不在兼容范围内。
 

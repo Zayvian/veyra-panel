@@ -1,7 +1,10 @@
 package store
 
+import "fmt"
+
 // AddTraffic folds one reporting interval into both the daily rollup and each
-// user's running total, in a single transaction.
+// user's billed running total, in a single transaction. Daily rows retain raw
+// traffic; quota counters use the node's rate at the time the report arrives.
 //
 // deltas maps user id to {up, down}. Both are added, never assigned: reports
 // are deltas precisely so that a node restart cannot make a total go backwards.
@@ -15,8 +18,22 @@ func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) error {
 	}
 	defer tx.Rollback()
 
+	var rate int64
+	if err := tx.QueryRow(`SELECT rate_milli FROM nodes WHERE id = ?`, nodeID).Scan(&rate); err != nil {
+		return err
+	}
 	for userID, d := range deltas {
 		up, down := d[0], d[1]
+		// Bounds also protect fixed-point multiplication from integer overflow.
+		if up < 0 || down < 0 || up > 1<<40 || down > 1<<40 {
+			return fmt.Errorf("invalid traffic delta")
+		}
+		var remUp, remDown int64
+		if err := tx.QueryRow(`SELECT traffic_up_remainder, traffic_down_remainder FROM users WHERE id = ?`, userID).Scan(&remUp, &remDown); err != nil {
+			return err
+		}
+		scaledUp, scaledDown := up*rate+remUp, down*rate+remDown
+		billedUp, billedDown := scaledUp/1000, scaledDown/1000
 		if _, err := tx.Exec(`
 			INSERT INTO traffic (user_id, node_id, day, up, down)
 			VALUES (?, ?, ?, ?, ?)
@@ -25,12 +42,12 @@ func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) error {
 			userID, nodeID, day, up, down); err != nil {
 			return err
 		}
-		// users.traffic_used is the denormalised total the limit check reads on
-		// every push. Keeping it here rather than summing the traffic table
-		// keeps that check O(1) as history grows.
+		// Quota checks use billed totals, not the raw daily rollup. Remainders
+		// persist across reports and rate changes so small reports aren't free.
 		if _, err := tx.Exec(
-			`UPDATE users SET traffic_used = traffic_used + ? WHERE id = ?`,
-			up+down, userID); err != nil {
+			`UPDATE users SET traffic_used = traffic_used + ?, traffic_up = traffic_up + ?, traffic_down = traffic_down + ?,
+     traffic_up_remainder = ?, traffic_down_remainder = ? WHERE id = ?`,
+			billedUp+billedDown, billedUp, billedDown, scaledUp%1000, scaledDown%1000, userID); err != nil {
 			return err
 		}
 	}

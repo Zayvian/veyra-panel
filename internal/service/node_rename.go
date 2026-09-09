@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/kosje/skysbx-panel/internal/store"
 )
@@ -93,8 +94,8 @@ func protoSlug(protocol string) string {
 func nodeSlug(name string) string {
 	slug := strings.Map(func(r rune) rune {
 		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
-			return r
+		case unicode.IsLetter(r), unicode.IsNumber(r), r == '-', r == '_':
+			return unicode.ToLower(r)
 		case r >= 'A' && r <= 'Z':
 			return r + ('a' - 'A')
 		default:
