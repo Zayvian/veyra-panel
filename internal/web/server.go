@@ -281,10 +281,13 @@ func (s *Server) Handler() http.Handler {
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
-		if s.subscriptionDomain != "" && strings.EqualFold(host, s.subscriptionDomain) &&
-			!strings.HasPrefix(r.URL.Path, "/sub/") {
-			http.NotFound(w, r)
-			return
+		if s.subscriptionDomain != "" {
+			isSubscriptionHost := strings.EqualFold(host, s.subscriptionDomain)
+			isSubscriptionPath := strings.HasPrefix(r.URL.Path, "/sub/")
+			if isSubscriptionHost != isSubscriptionPath {
+				http.NotFound(w, r)
+				return
+			}
 		}
 		mux.ServeHTTP(w, r)
 	}))

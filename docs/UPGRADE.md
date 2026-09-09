@@ -127,6 +127,8 @@ sh /tmp/skysbx-node-install.sh --uninstall
 
 ## 七、独立订阅域名与反向代理
 
+配置了独立订阅域名的安装，升级后只允许该域名访问 `/sub/`。旧面板域名的订阅请求返回 404，不会自动跳转；用户 token 和面板管理入口保留。请把客户端订阅地址换成面板重新复制的新链接。未配置独立订阅域名的安装不受影响。已经导入客户端的节点配置不会因旧订阅入口关闭而自动失效。
+
 默认安装使用内置 HTTPS。已有自管反向代理时，二进制支持 `--addr 127.0.0.1:8080 --sub-domain sub.example.com --db ...`；由代理终止 TLS、提供证书，保留 Host 并设置正确的 `X-Forwarded-Proto`，此模式不启用 `--domain` 自动证书。需维护自己的 unit，默认安装器不会保留自定义 unit 配置。
 
 要关闭已配置的独立订阅域名，需要一致修改 `/opt/skysbx/panel.env` 的 `SKYSBX_SUB_DOMAIN=` 和 unit 中 `--sub-domain` 的值，重载 systemd 后重启面板；只传空参数不会覆盖升级脚本回读的旧值。修改前备份，已有订阅 URL 仍需迁移。

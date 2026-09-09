@@ -237,7 +237,7 @@ sh /tmp/skysbx-panel-install.sh --upgrade
 sh /tmp/skysbx-panel-install.sh --upgrade --sub-domain sub.example.com
 ```
 
-原 token 保留，旧面板域名的订阅路径继续可用。复制的新链接使用订阅域名；客户端已有旧 URL 不会自动改变，需手动替换才能切换域名。
+原 token 保留。配置独立订阅域名后，只有该域名能访问订阅，旧面板域名及其他域名的订阅路径返回 404；面板管理功能照常使用。复制的新链接使用订阅域名；客户端已有旧 URL 不会自动改变，必须手动替换后才能更新订阅。未配置独立订阅域名时，仍使用面板域名订阅。
 
 ### 更新节点：在每台节点服务器执行
 

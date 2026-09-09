@@ -34,12 +34,31 @@ func TestSubscriptionDomain(t *testing.T) {
 			t.Fatalf("subscription host exposes %s: %d", path, rec.Code)
 		}
 	}
-	for _, host := range []string{"panel.example.com", "sub.example.com"} {
+	for _, host := range []string{"sub.example.com", "SUB.EXAMPLE.COM", "sub.example.com:443"} {
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "https://"+host+"/sub/"+user.SubToken+"?format=html", nil))
 		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "https://sub.example.com/sub/"+user.SubToken) {
 			t.Fatalf("wrong subscription URL: %s", rec.Body)
 		}
+	}
+	for _, host := range []string{"panel.example.com", "panel.example.com:443", "old-sub.example.com", "127.0.0.1", "sub.example.com.evil.test"} {
+		for _, format := range []string{"", "?format=html", "?format=clash", "?format=shadowrocket"} {
+			for _, method := range []string{http.MethodGet, http.MethodHead} {
+				req := httptest.NewRequest(method, "https://"+host+"/sub/"+user.SubToken+format, nil)
+				req.Header.Set("X-Forwarded-Host", "sub.example.com")
+				rec := httptest.NewRecorder()
+				srv.Handler().ServeHTTP(rec, req)
+				if rec.Code != http.StatusNotFound || rec.Header().Get("Location") != "" {
+					t.Fatalf("old subscription entry still accessible: %s %s%s: %d", method, host, format, rec.Code)
+				}
+			}
+		}
+	}
+	// The panel login remains reachable on its own host.
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "https://panel.example.com/login", nil))
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/setup" {
+		t.Fatalf("panel login routing changed: %d %s", rec.Code, rec.Header().Get("Location"))
 	}
 	for _, fragment := range []bool{false, true} {
 		req := httptest.NewRequest("GET", "https://panel.example.com/users", nil)
@@ -51,6 +70,13 @@ func TestSubscriptionDomain(t *testing.T) {
 		if !strings.Contains(rec.Body.String(), `data-sub-url="https://sub.example.com/sub/`+user.SubToken) {
 			t.Fatalf("wrong copy URL in fragment=%v", fragment)
 		}
+	}
+	// Installations without a separate subscription domain retain same-host access.
+	srv.SetSubscriptionDomain("")
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "https://panel.example.com/sub/"+user.SubToken+"?format=html", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "https://panel.example.com/sub/"+user.SubToken) {
+		t.Fatalf("same-host subscription broken: %d %s", rec.Code, rec.Body)
 	}
 }
 
