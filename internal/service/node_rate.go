@@ -4,15 +4,22 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Names used in JSON/YAML and URI fragments can safely contain Chinese.
 // Keep control characters, invisible format characters and delimiters out.
-var displayNameRE = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N}\p{M} ._()（）-]{0,63}$`)
+var displayNameRE = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N}\p{M} ._()（）-]*$`)
+var nodeRateRE = regexp.MustCompile(`^[0-9]+(?:\.[0-9]{1,3})?$`)
 
 func checkDisplayName(kind, name string) error {
-	if !displayNameRE.MatchString(name) {
-		return invalid("%s must be 1-64 characters: Chinese/letters, numbers, spaces, dot, dash, underscore or parentheses", kind)
+	limit := 64
+	if kind == "inbound tag" {
+		// Auto-generated tags also contain the protocol and a collision suffix.
+		limit = 128
+	}
+	if !displayNameRE.MatchString(name) || utf8.RuneCountInString(name) > limit {
+		return invalid("%s must be 1-%d characters: Chinese/letters, numbers, spaces, dot, dash, underscore or parentheses", kind, limit)
 	}
 	return nil
 }
@@ -29,7 +36,7 @@ func ParseNodeRate(value string) (int64, error) {
 	if value == "" {
 		return 1000, nil
 	}
-	if !regexp.MustCompile(`^[0-9]+(?:\.[0-9]{1,3})?$`).MatchString(value) {
+	if !nodeRateRE.MatchString(value) {
 		return 0, invalid("流量倍率必须在 0 到 100 之间，最多三位小数")
 	}
 	whole, fraction, _ := strings.Cut(value, ".")

@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/kosje/skysbx-panel/internal/store"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +72,21 @@ func TestChineseNamesAndNodeRates(t *testing.T) {
 	renamed, _ := svc.Store().Inbound(in.ID)
 	if renamed.Tag != "ss-日本无限流量" {
 		t.Fatal(renamed.Tag)
+	}
+}
+
+func TestLongChineseNodeCanCreateAutomaticInbound(t *testing.T) {
+	svc := newTestService(t)
+	n, _, err := svc.CreateNode(strings.Repeat("港", 64), "hk.example.com", "HK")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CreateInbound(n.ID, InboundSpec{Protocol: store.ProtoShadowsocks, Port: 8388}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"香港\n伪造", "香港\u202e", "<script>", strings.Repeat("港", 65)} {
+		if err := checkDisplayName("node name", name); err == nil {
+			t.Errorf("accepted %q", name)
+		}
 	}
 }
