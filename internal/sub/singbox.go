@@ -3,6 +3,7 @@ package sub
 import (
 	"encoding/json"
 	"net"
+	"strings"
 
 	"github.com/kosje/skysbx-panel/internal/singbox"
 	"github.com/kosje/skysbx-panel/internal/store"
@@ -49,6 +50,19 @@ func SingBox(entries []Entry) ([]byte, error) {
 				Enabled:    true,
 				ServerName: e.SNI,
 				UTLS:       &singbox.UTLS{Enabled: true, Fingerprint: fpOr(e.FP)},
+			}
+		case store.ProtoHysteria2, store.ProtoTUIC:
+			ob.Type = e.Protocol
+			ob.Password = e.Password
+			ob.TLS = &singbox.ClientTLS{Enabled: true, ServerName: e.SNI, ALPN: []string{"h3"}}
+			if e.Protocol == store.ProtoTUIC {
+				ob.UUID = e.UUID
+				ob.CongestionControl = "bbr"
+			}
+			if e.Protocol == store.ProtoHysteria2 && e.HopPorts != "" {
+				ob.ServerPort = 0
+				ob.ServerPorts = strings.Split(strings.ReplaceAll(e.HopPorts, "-", ":"), ",")
+				ob.HopInterval = e.HopInterval
 			}
 		case store.ProtoShadowsocks:
 			ob.Type = "shadowsocks"

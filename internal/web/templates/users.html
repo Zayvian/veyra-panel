@@ -101,9 +101,9 @@
           {{.Name}}{{if .Note}}<div class="dim" style="font-size:.8rem">{{.Note}}</div>{{end}}
           <div style="font-size:.75rem;margin-top:.2rem">
             <a href="/users/{{.ID}}/activity">活动</a>
-            <a class="dim" href="/sub/{{.SubToken}}" target="_blank" rel="noopener">订阅页</a>
+            <a class="dim" href="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" target="_blank" rel="noopener">订阅页</a>
             <button class="ghost" style="font-size:.7rem;padding:.1rem .35rem"
-                    onclick="copySub(this,'{{.SubToken}}')">复制链接</button>
+                    data-sub-url="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" onclick="copySub(this)">复制链接</button>
           </div>
         </td>
         <td>
@@ -164,11 +164,9 @@
   {{end}}
 </div>
 <script>
-// The absolute URL is built here rather than server-side: the panel is reached
-// under whatever host the operator uses, and hard-coding one would hand out
-// links that work from the browser but nowhere else.
-function copySub(btn, token) {
-  const url = location.origin + '/sub/' + token;
+// The server supplies the configured subscription origin for pages and fragments.
+function copySub(btn) {
+  const url = new URL(btn.dataset.subUrl, location.origin).href;
   navigator.clipboard.writeText(url).then(() => {
     const t = btn.textContent;
     btn.textContent = '已复制';

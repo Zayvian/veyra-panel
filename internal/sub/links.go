@@ -74,6 +74,18 @@ func shareLink(e Entry) string {
 		return "anytls://" + url.QueryEscape(e.Password) + "@" + host +
 			"?" + q.Encode() + "#" + frag(e.display())
 
+	case store.ProtoHysteria2, store.ProtoTUIC:
+		q := url.Values{}
+		q.Set("sni", e.SNI)
+		q.Set("alpn", "h3")
+		userinfo := url.User(e.Password).String()
+		if e.Protocol == store.ProtoTUIC {
+			userinfo = url.UserPassword(e.UUID, e.Password).String()
+			q.Set("congestion_control", "bbr")
+		} else if e.HopPorts != "" {
+			q.Set("mport", e.HopPorts)
+		}
+		return e.Protocol + "://" + userinfo + "@" + host + "/?" + q.Encode() + "#" + frag(e.display())
 	case store.ProtoShadowsocks:
 		// SIP002: the userinfo is websafe-base64 of "method:password". Padding
 		// is omitted because it is not URL-safe — several clients pass the

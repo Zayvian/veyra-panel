@@ -53,11 +53,17 @@
       <label id="f-sni" hidden>SNI
         <input name="server_name" placeholder="{{.Node.Address}}"></label>
 
+      <label id="f-hop" hidden>跳跃端口范围（可选）
+        <input name="hop_ports" placeholder="20000-30000"></label>
+      <label id="f-hop-interval" hidden>跳跃间隔
+        <input name="hop_interval" value="30s" placeholder="30s"></label>
       <button>新建</button>
     </form>
     <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
+      Hysteria2 跳端口仅支持直连 Linux 节点，需要放行对应 UDP 端口范围。
+      TUIC 当前使用固定端口。跳跃间隔仅在 sing-box / Mihomo 配置中下发，分享链接导入使用客户端自身间隔。<br>
       密钥、short id、Shadowsocks 的服务端 PSK 都是自动生成的。
-      三个协议里只有 <strong>AnyTLS 需要证书</strong> ——
+      <strong>AnyTLS、Hysteria2、TUIC 需要证书</strong> ——
       Reality 用自己的密钥对认证，Shadowsocks 没有 TLS 层。
       证书路径留空就用安装脚本写入的位置（<code>{{.DefaultCertPath}}</code>）。<br>
       <strong>站内中转</strong>是让另一台节点开一个 L4 转发口把流量原样搬过来 ——
@@ -77,11 +83,13 @@
 function onProto(v) {
   var show = function (id, on) { document.getElementById(id).hidden = !on; };
   show('f-handshake', v === 'vless');
-  show('f-cert', v === 'anytls');
-  show('f-key',  v === 'anytls');
-  show('f-sni',  v === 'anytls');
+  var tls = ['anytls', 'hysteria2', 'tuic'].includes(v);
+  show('f-cert', tls); show('f-key', tls); show('f-sni', tls);
+  show('f-hop', v === 'hysteria2'); show('f-hop-interval', v === 'hysteria2');
+  document.querySelector('input[name=hop_ports]').disabled = v !== 'hysteria2';
+  document.querySelector('input[name=hop_interval]').disabled = v !== 'hysteria2';
   var port = document.querySelector('input[name=port]');
-  port.value = v === 'vless' ? 443 : (v === 'anytls' ? 8443 : 8388);
+  port.value = ({vless:443,anytls:8443,shadowsocks:8388,hysteria2:8443,tuic:9443})[v];
 }
 // The two relay fields are alternatives, so picking one takes the other away
 // rather than leaving a form that can be filled in contradictorily and only
@@ -173,6 +181,10 @@ onRelay();
               <label>SNI<input name="server_name" required value="{{$.SNI}}"></label>
               <label>证书路径（节点上）<input name="cert_path" value="{{$.CertPath}}"></label>
               <label>私钥路径（节点上）<input name="key_path" value="{{$.KeyPath}}"></label>
+            {{end}}
+            {{if $.EditHopping}}
+            <label>跳跃端口范围<input name="hop_ports" value="{{$.HopPorts}}" placeholder="20000-30000"></label>
+            <label>跳跃间隔<input name="hop_interval" value="{{$.HopInterval}}" placeholder="30s"></label>
             {{end}}
             <button>保存</button>
             <button type="button" class="ghost" hx-get="/nodes/{{$.Node.ID}}/inbounds"

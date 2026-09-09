@@ -1,18 +1,19 @@
 #!/bin/sh
 # Install skysbx-panel and skysbx-node on this host.
 #
-#   wget -qO- https://raw.githubusercontent.com/kosje/skysbx-panel/main/install-panel-and-node.sh | sh
+#   wget -qO- https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh | sh
 #
 # The node must have a join token.  Create a node in the panel after the panel
 # installer finishes, then paste that one-time token when this script asks.
 set -eu
 
-PANEL_REPO=${SKYSBX_REPO:-https://github.com/kosje/skysbx-panel.git}
+PANEL_REPO=${SKYSBX_REPO:-https://github.com/zayvian-lee/skysbx-panel.git}
 PANEL_REF=${SKYSBX_REF:-main}
-NODE_REPO=${SKYSBX_NODE_REPO:-https://github.com/kosje/skysbx-node.git}
+NODE_REPO=${SKYSBX_NODE_REPO:-https://github.com/zayvian-lee/skysbx-node.git}
 NODE_REF=${SKYSBX_NODE_REF:-main}
 ROOT=${SKYSBX_ROOT:-/opt/skysbx}
 DOMAIN=""
+SUB_DOMAIN=""
 EMAIL=""
 PANEL_URL=""
 TOKEN=""
@@ -32,6 +33,7 @@ After the panel is online, create a node in its web UI and paste the one-time
 join token when prompted (or provide it with --token).
 
   --domain <fqdn>       Panel domain (prompts when omitted; must resolve here).
+  --sub-domain <fqdn>   Separate HTTPS subscription domain.
   --email <addr>        Let's Encrypt contact email for the panel.
   --panel <url>         Panel URL for the node (default: https://<panel-fqdn>).
   --token <token>       Node join token created in the panel UI.
@@ -53,6 +55,7 @@ EOF
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --domain) DOMAIN=${2-}; shift 2 ;;
+        --sub-domain) SUB_DOMAIN=${2-}; shift 2 ;;
         --email) EMAIL=${2-}; shift 2 ;;
         --panel) PANEL_URL=${2-}; shift 2 ;;
         --token) TOKEN=${2-}; shift 2 ;;
@@ -123,6 +126,7 @@ if [ "$ACTION" = install ]; then
 else
     set -- "--$ACTION"
 fi
+[ -n "$SUB_DOMAIN" ] && set -- "$@" --sub-domain "$SUB_DOMAIN"
 bash "$SRC/skysbx-panel/deploy/install-panel.sh" "$@"
 
 if [ "$ACTION" = install ] || [ "$ACTION" = upgrade ]; then

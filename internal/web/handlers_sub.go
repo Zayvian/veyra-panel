@@ -95,7 +95,7 @@ func (s *Server) subscriptionPage(w http.ResponseWriter, r *http.Request,
 		"Expires":  expires,
 		"Used":     sb.User.TrafficUsed,
 		"Limit":    sb.User.TrafficLimit,
-		"SubURL":   subURL(r),
+		"SubURL":   s.subscriptionOrigin(r) + r.URL.Path,
 		"Base64":   sub.Base64(entries),
 		"Inactive": len(entries) == 0,
 	})

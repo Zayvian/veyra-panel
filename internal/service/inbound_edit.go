@@ -16,7 +16,9 @@ import (
 // protocol decides which credential each user authenticates with — changing
 // either is not an edit, it is a different inbound.
 type InboundEdit struct {
-	Port int
+	Port        int
+	HopPorts    string
+	HopInterval string
 
 	// Address overrides what subscriptions point at for this inbound. Blank
 	// means the node's own address.
@@ -68,6 +70,12 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		return nil, err
 	}
 
+	hopPorts, hopInterval, err := ValidateHopping(in.Protocol, e.HopPorts, e.HopInterval, e.Address, e.RelayNodeID)
+	if err != nil {
+		return nil, err
+	}
+	sb.HopPorts = hopPorts
+	client.HopPorts, client.HopInterval = hopPorts, hopInterval
 	sb.ListenPort = e.Port
 
 	switch in.Protocol {
@@ -83,9 +91,9 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		sb.TLS.Reality.Handshake.ServerPort = port
 		client.SNI = host
 
-	case store.ProtoAnyTLS:
+	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC:
 		if e.ServerName == "" {
-			return nil, invalid("anytls needs a server name")
+			return nil, invalid("%s needs a server name", in.Protocol)
 		}
 		if e.CertPath == "" {
 			e.CertPath = DefaultCertPath
@@ -135,6 +143,9 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 	in.RelayNodeID = relay.nodeID
 	in.RelayPort = relay.port
 
+	if err := s.checkHopConflicts(in); err != nil {
+		return nil, err
+	}
 	if err := s.st.UpdateInbound(in); err != nil {
 		return nil, err
 	}
@@ -188,7 +199,7 @@ func InboundEditFields(protocol string) (handshake, tls bool) {
 	switch strings.TrimSpace(protocol) {
 	case store.ProtoVLESS:
 		return true, false
-	case store.ProtoAnyTLS:
+	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC:
 		return false, true
 	default:
 		return false, false

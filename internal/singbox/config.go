@@ -67,10 +67,12 @@ type Log struct {
 }
 
 type Inbound struct {
-	Type       string `json:"type"`
-	Tag        string `json:"tag"`
-	Listen     string `json:"listen"`
-	ListenPort int    `json:"listen_port"`
+	Type              string `json:"type"`
+	Tag               string `json:"tag"`
+	Listen            string `json:"listen"`
+	ListenPort        int    `json:"listen_port"`
+	HopPorts          string `json:"skysbx_hop_ports,omitempty"`
+	CongestionControl string `json:"congestion_control,omitempty"`
 
 	// Users is empty in a stored inbound and in the config message. The node
 	// merges the authoritative list from a separate `users` message, which is

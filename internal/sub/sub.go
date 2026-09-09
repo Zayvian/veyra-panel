@@ -24,10 +24,12 @@ type Entry struct {
 	// Label is what a client's server list shows: the tag plus whose account
 	// this is and what is left of it. Only the link-list format uses it; see
 	// label() for why the other two keep the tag.
-	Label    string
-	Protocol string
-	Address  string // the node's client-facing address
-	Port     int
+	Label       string
+	Protocol    string
+	Address     string // the node's client-facing address
+	Port        int
+	HopPorts    string
+	HopInterval string
 
 	// Credentials, already resolved for this protocol.
 	UUID     string // VLESS
@@ -102,22 +104,27 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 		}
 
 		e := Entry{
-			Name:     in.Tag,
-			Label:    label(in.Tag, u, nowFunc()),
-			Protocol: in.Protocol,
-			Address:  address,
-			Port:     port,
-			SNI:      client.SNI,
-			FP:       client.FP,
-			PBK:      client.PBK,
-			SID:      client.SID,
+			Name:        in.Tag,
+			Label:       label(in.Tag, u, nowFunc()),
+			Protocol:    in.Protocol,
+			Address:     address,
+			Port:        port,
+			SNI:         client.SNI,
+			HopPorts:    client.HopPorts,
+			HopInterval: client.HopInterval,
+			FP:          client.FP,
+			PBK:         client.PBK,
+			SID:         client.SID,
 		}
 
 		switch in.Protocol {
 		case store.ProtoVLESS:
 			e.UUID = u.VlessUUID
 			e.Flow = client.Flow
-		case store.ProtoAnyTLS:
+		case store.ProtoTUIC:
+			e.UUID = u.VlessUUID
+			e.Password = u.Password
+		case store.ProtoAnyTLS, store.ProtoHysteria2:
 			e.Password = u.Password
 		case store.ProtoShadowsocks:
 			e.Method = client.Method

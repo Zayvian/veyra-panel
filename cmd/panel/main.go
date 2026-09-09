@@ -38,6 +38,7 @@ func main() {
 		domain = flag.String("domain", "",
 			"serve HTTPS for this domain, obtaining a certificate over ACME. "+
 				"Needs ports 80 and 443, and the domain must already resolve here")
+		subDomain = flag.String("sub-domain", "", "separate HTTPS subscription domain; serves /sub/ only")
 		acmeEmail = flag.String("acme-email", "",
 			"contact address for the certificate authority (recommended)")
 		showVersion = flag.Bool("version", false, "print the version and exit")
@@ -53,6 +54,16 @@ func main() {
 	}
 
 	log := newLogger(*logLevel)
+	normalizedSubDomain, err := web.NormalizeDomain(*subDomain)
+	if err != nil {
+		log.Error("subscription domain", "error", err)
+		os.Exit(1)
+	}
+	*subDomain = normalizedSubDomain
+	if *subDomain != "" && strings.EqualFold(*subDomain, *domain) {
+		log.Error("subscription domain must differ from panel domain")
+		os.Exit(1)
+	}
 
 	st, err := store.Open(*dbPath)
 	if err != nil {
@@ -105,6 +116,7 @@ func main() {
 			"url", "http://"+*addr+"/setup")
 	}
 
+	srv.SetSubscriptionDomain(*subDomain)
 	listenAddr := *addr
 	if *domain != "" {
 		listenAddr = ":443"
@@ -121,7 +133,7 @@ func main() {
 
 	var redirectSrv *http.Server
 	if *domain != "" {
-		autoTLS, err := web.NewAutoTLS(*domain, *acmeEmail, filepath.Dir(*dbPath))
+		autoTLS, err := web.NewAutoTLS(*domain, *acmeEmail, filepath.Dir(*dbPath), *subDomain)
 		if err != nil {
 			log.Error("automatic TLS", "domain", *domain, "error", err)
 			os.Exit(1)

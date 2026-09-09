@@ -2,6 +2,7 @@ package sub
 
 import (
 	"gopkg.in/yaml.v3"
+	"time"
 
 	"github.com/kosje/skysbx-panel/internal/store"
 )
@@ -14,11 +15,15 @@ import (
 // '=' — characters that a hand-rolled emitter gets wrong exactly often enough
 // to be hard to notice.
 type clashProxy struct {
-	Name   string `yaml:"name"`
-	Type   string `yaml:"type"`
-	Server string `yaml:"server"`
-	Port   int    `yaml:"port"`
-	UDP    bool   `yaml:"udp"`
+	Name              string   `yaml:"name"`
+	Type              string   `yaml:"type"`
+	Server            string   `yaml:"server"`
+	Port              int      `yaml:"port"`
+	UDP               bool     `yaml:"udp"`
+	Ports             string   `yaml:"ports,omitempty"`
+	HopInterval       int      `yaml:"hop-interval,omitempty"`
+	ALPN              []string `yaml:"alpn,omitempty"`
+	CongestionControl string   `yaml:"congestion-controller,omitempty"`
 
 	UUID    string `yaml:"uuid,omitempty"`
 	Flow    string `yaml:"flow,omitempty"`
@@ -84,6 +89,19 @@ func Clash(entries []Entry) ([]byte, error) {
 			p.Type = "anytls"
 			p.Password = e.Password
 			p.AnyTLSSNI = e.SNI
+		case store.ProtoHysteria2, store.ProtoTUIC:
+			p.Type, p.Password, p.AnyTLSSNI = e.Protocol, e.Password, e.SNI
+			p.ClientFingerprint = ""
+			p.ALPN = []string{"h3"}
+			if e.Protocol == store.ProtoTUIC {
+				p.UUID = e.UUID
+				p.CongestionControl = "bbr"
+			}
+			if e.Protocol == store.ProtoHysteria2 && e.HopPorts != "" {
+				p.Ports = e.HopPorts
+				d, _ := time.ParseDuration(e.HopInterval)
+				p.HopInterval = int(d / time.Second)
+			}
 		case store.ProtoShadowsocks:
 			p.Type = "ss"
 			p.Cipher = e.Method

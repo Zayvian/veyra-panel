@@ -386,6 +386,9 @@ func (s *Service) CreateInbound(nodeID int64, spec InboundSpec) (*store.Inbound,
 	}
 	in.Address, in.RelayNodeID, in.RelayPort = relay.address, relay.nodeID, relay.port
 
+	if err := s.checkHopConflicts(in); err != nil {
+		return nil, err
+	}
 	if err := s.st.CreateInbound(in); err != nil {
 		return nil, err
 	}

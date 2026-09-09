@@ -5,6 +5,8 @@ import "time"
 // Protocol values stored in inbounds.protocol. They match sing-box's own
 // inbound type names, because the config column is sing-box JSON.
 const (
+	ProtoHysteria2   = "hysteria2"
+	ProtoTUIC        = "tuic"
 	ProtoVLESS       = "vless"
 	ProtoAnyTLS      = "anytls"
 	ProtoShadowsocks = "shadowsocks"

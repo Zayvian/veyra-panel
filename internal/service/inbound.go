@@ -18,9 +18,11 @@ import (
 // server PSKs — is derived, because there is no reason to make a human type a
 // 32-byte key correctly.
 type InboundSpec struct {
-	Protocol string
-	Tag      string
-	Port     int
+	Protocol    string
+	Tag         string
+	Port        int
+	HopPorts    string
+	HopInterval string
 
 	// VLESS+Reality: the site whose TLS handshake is borrowed. "host" or
 	// "host:port"; the port defaults to 443. It must speak TLS 1.3 and HTTP/2.
@@ -54,11 +56,13 @@ type InboundSpec struct {
 // public key in particular is a scalar multiplication we would otherwise repeat
 // for every user, on every request.
 type ClientParams struct {
-	SNI  string `json:"sni,omitempty"`
-	PBK  string `json:"pbk,omitempty"` // Reality public key, base64url unpadded
-	SID  string `json:"sid,omitempty"` // Reality short id
-	FP   string `json:"fp,omitempty"`  // uTLS fingerprint
-	Flow string `json:"flow,omitempty"`
+	HopPorts    string `json:"hop_ports,omitempty"`
+	HopInterval string `json:"hop_interval,omitempty"`
+	SNI         string `json:"sni,omitempty"`
+	PBK         string `json:"pbk,omitempty"` // Reality public key, base64url unpadded
+	SID         string `json:"sid,omitempty"` // Reality short id
+	FP          string `json:"fp,omitempty"`  // uTLS fingerprint
+	Flow        string `json:"flow,omitempty"`
 
 	Method    string `json:"method,omitempty"`     // Shadowsocks
 	ServerPSK string `json:"server_psk,omitempty"` // Shadowsocks, server half of the key pair
@@ -100,6 +104,10 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 	// "::" listens on both stacks. A node that only has IPv4 still binds.
 	in := singbox.Inbound{Tag: spec.Tag, Listen: "::", ListenPort: spec.Port}
 	var client ClientParams
+	hopPorts, hopInterval, err := ValidateHopping(spec.Protocol, spec.HopPorts, spec.HopInterval, spec.Address, spec.RelayNodeID)
+	if err != nil {
+		return nil, err
+	}
 
 	switch spec.Protocol {
 	case store.ProtoVLESS:
@@ -127,7 +135,7 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 		client = ClientParams{SNI: host, PBK: pub, SID: shortID, FP: "chrome",
 			Flow: FlowVision}
 
-	case store.ProtoAnyTLS:
+	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC:
 		// Blank means "wherever the installer put it". Refusing instead would
 		// make the field look mandatory when the answer is the same on every
 		// node the installer touched.
@@ -138,9 +146,9 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 			spec.KeyPath = DefaultKeyPath
 		}
 		if spec.ServerName == "" {
-			return nil, invalid("anytls needs a server name")
+			return nil, invalid("%s needs a server name", spec.Protocol)
 		}
-		in.Type = "anytls"
+		in.Type = spec.Protocol
 		in.TLS = &singbox.TLS{
 			Enabled:         true,
 			ServerName:      spec.ServerName,
@@ -150,6 +158,18 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 		// No multiplex block: AnyTLS multiplexes on its own, and configuring
 		// smux on top of it breaks the connection.
 		client = ClientParams{SNI: spec.ServerName, FP: "chrome"}
+		if spec.Protocol != store.ProtoAnyTLS {
+			client.FP = ""
+			in.TLS.ALPN = []string{"h3"}
+		}
+		if spec.Protocol == store.ProtoTUIC {
+			in.CongestionControl = "bbr"
+		}
+		if hopPorts != "" {
+			in.HopPorts = hopPorts
+			client.HopPorts = hopPorts
+			client.HopInterval = hopInterval
+		}
 
 	case store.ProtoShadowsocks:
 		psk := NewSSPassword()

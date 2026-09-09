@@ -59,14 +59,14 @@ func (s *Server) renderNodesFull(w http.ResponseWriter, r *http.Request, code in
 		bareIP[n.ID] = net.ParseIP(strings.TrimSpace(n.Address)) != nil
 	}
 	data := map[string]any{
-		"Nodes":        nodes,
+		"Nodes":         nodes,
 		"InboundCounts": counts,
-		"Connected":    connected,
-		"Rejected":     rejected,
-		"NewToken":     newToken,
-		"EditID":       editID,
-		"BareIP":       bareIP,
-		"CSRFToken":    s.csrf.csrfValue(r),
+		"Connected":     connected,
+		"Rejected":      rejected,
+		"NewToken":      newToken,
+		"EditID":        editID,
+		"BareIP":        bareIP,
+		"CSRFToken":     s.csrf.csrfValue(r),
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
@@ -225,23 +225,23 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		}
 	}
 	data := map[string]any{
-		"Node":              node,
-		"Inbounds":          inbounds,
-		"RelayNodes":        relayNodes,
-		"Carried":           carried,
-		"NodeNames":         nodeNames,
-		"RelayPrefix":       service.RelayTagPrefix,
-		"EditRelayNodeID":   int64(0),
-		"Protocols":         []string{store.ProtoVLESS, store.ProtoAnyTLS, store.ProtoShadowsocks},
-		"DefaultHandshake":  service.DefaultHandshake,
-		"DefaultCertPath":   service.DefaultCertPath,
-		"DefaultKeyPath":    service.DefaultKeyPath,
-		"StateKnown":        known,
-		"Live":              live,
-		"NodeError":         applyErr,
-		"Settle":            settle,
-		"EditID":            editID,
-		"CSRFToken":         s.csrf.csrfValue(r),
+		"Node":             node,
+		"Inbounds":         inbounds,
+		"RelayNodes":       relayNodes,
+		"Carried":          carried,
+		"NodeNames":        nodeNames,
+		"RelayPrefix":      service.RelayTagPrefix,
+		"EditRelayNodeID":  int64(0),
+		"Protocols":        []string{store.ProtoVLESS, store.ProtoAnyTLS, store.ProtoShadowsocks, store.ProtoHysteria2, store.ProtoTUIC},
+		"DefaultHandshake": service.DefaultHandshake,
+		"DefaultCertPath":  service.DefaultCertPath,
+		"DefaultKeyPath":   service.DefaultKeyPath,
+		"StateKnown":       known,
+		"Live":             live,
+		"NodeError":        applyErr,
+		"Settle":           settle,
+		"EditID":           editID,
+		"CSRFToken":        s.csrf.csrfValue(r),
 	}
 	if editID != 0 {
 		if err := s.inboundEditFields(data, inbounds, editID); err != nil {
@@ -305,8 +305,10 @@ func (s *Server) createInbound(w http.ResponseWriter, r *http.Request) {
 		CertPath:    strings.TrimSpace(r.FormValue("cert_path")),
 		KeyPath:     strings.TrimSpace(r.FormValue("key_path")),
 		ServerName:  strings.TrimSpace(r.FormValue("server_name")),
+		HopPorts:    strings.TrimSpace(r.FormValue("hop_ports")),
+		HopInterval: strings.TrimSpace(r.FormValue("hop_interval")),
 	}
-	if spec.Protocol == store.ProtoAnyTLS && spec.ServerName == "" {
+	if (spec.Protocol == store.ProtoAnyTLS || spec.Protocol == store.ProtoHysteria2 || spec.Protocol == store.ProtoTUIC) && spec.ServerName == "" {
 		if n, err := s.svc.Node(nodeID); err == nil {
 			spec.ServerName = n.Address
 		}
@@ -340,6 +342,9 @@ func (s *Server) inboundEditFields(data map[string]any, inbounds []*store.Inboun
 	handshake, tls := service.InboundEditFields(in.Protocol)
 	data["EditHandshake"] = handshake
 	data["EditTLS"] = tls
+	data["EditHopping"] = in.Protocol == store.ProtoHysteria2
+	data["HopPorts"] = client.HopPorts
+	data["HopInterval"] = client.HopInterval
 	data["SNI"] = client.SNI
 	data["EditRelayNodeID"] = in.RelayNodeID
 	if sb.TLS != nil {
@@ -387,6 +392,8 @@ func (s *Server) updateInbound(w http.ResponseWriter, r *http.Request) {
 		CertPath:    strings.TrimSpace(r.FormValue("cert_path")),
 		KeyPath:     strings.TrimSpace(r.FormValue("key_path")),
 		ServerName:  strings.TrimSpace(r.FormValue("server_name")),
+		HopPorts:    strings.TrimSpace(r.FormValue("hop_ports")),
+		HopInterval: strings.TrimSpace(r.FormValue("hop_interval")),
 	})
 	if err != nil {
 		s.fail(w, r, err)

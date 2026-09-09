@@ -15,6 +15,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -30,9 +31,9 @@ var assets embed.FS
 
 const (
 	settingSessionKey    = "web.session_key"
-	settingCSRFKey        = "web.csrf_key"
-	settingSessionGen     = "web.session_generation"
-	settingSetupDeadline  = "web.setup_deadline"
+	settingCSRFKey       = "web.csrf_key"
+	settingSessionGen    = "web.session_generation"
+	settingSetupDeadline = "web.setup_deadline"
 )
 
 // setupWindow is how long the first-run setup form stays open after the
@@ -116,15 +117,16 @@ func (s *Server) setupOpen(now time.Time) (bool, error) {
 }
 
 type Server struct {
-	svc     *service.Service
-	log     *slog.Logger
-	tpl     *template.Template
-	sess    *sessions
-	csrf    *csrfToken
-	nodes   NodeChannel
-	logins  *ratelimit.Limiter
-	secureCookies bool
-	sessionGen    int64 // current session generation, cached to avoid a DB read per request
+	subscriptionDomain string
+	svc                *service.Service
+	log                *slog.Logger
+	tpl                *template.Template
+	sess               *sessions
+	csrf               *csrfToken
+	nodes              NodeChannel
+	logins             *ratelimit.Limiter
+	secureCookies      bool
+	sessionGen         int64 // current session generation, cached to avoid a DB read per request
 }
 
 // NodeChannel is the node control channel, mounted by the router. It is an
@@ -274,7 +276,18 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /inbounds/{id}/toggle", s.auth(s.requireCSRF(http.HandlerFunc(s.toggleInbound))))
 	mux.Handle("DELETE /inbounds/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deleteInbound))))
 
-	return harden(mux)
+	return harden(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		if s.subscriptionDomain != "" && strings.EqualFold(host, s.subscriptionDomain) &&
+			!strings.HasPrefix(r.URL.Path, "/sub/") {
+			http.NotFound(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	}))
 }
 
 // maxBody caps a request body. Every form here is a handful of short

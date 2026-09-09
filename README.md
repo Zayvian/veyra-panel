@@ -1,8 +1,22 @@
+# skysbx-panel · zayvian-lee 二次开发版
+
+基于 [kosje/skysbx-panel](https://github.com/kosje/skysbx-panel)，保留 AGPL-3.0 许可证与上游历史。
+
+新增 **独立 HTTPS 订阅域名、Hysteria2 端口跳跃、TUIC v5**，并保持用户热更新、流量归属及订阅输出一致。
+
+**安装与配置请先看 [二次开发版使用说明](docs/FORK.md)。** TUIC 当前为固定端口；旧版 Clash 不在兼容范围内。
+
+配套：[节点](https://github.com/zayvian-lee/skysbx-node) · [内核](https://github.com/zayvian-lee/skysbx-core)。请一起升级。
+
+以下为基础功能与安装参考；新增功能以以上说明为准。
+
+---
+
 # skysbx-panel
 
 代理面板的控制端：用户、节点、入站、订阅、计费、用量控制。
 
-节点端是独立的 [`skysbx-node`](https://github.com/kosje/skysbx-node)，两者通过一条
+节点端是独立的 [`skysbx-node`](https://github.com/zayvian-lee/skysbx-node)，两者通过一条
 WebSocket 通信。设计见 [`docs/DESIGN.md`](docs/DESIGN.md)。
 
 ```
@@ -53,13 +67,13 @@ sing-box 原生配置，不做格式转译。密钥、short id、SS 服务端 PS
 ### 面板
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/kosje/skysbx-panel/main/install.sh | sudo sh
+wget -qO- https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh | sudo sh
 ```
 
 不带参数就是交互式，会问域名。带参数要加 `-s --`：
 
 ```bash
-P=https://raw.githubusercontent.com/kosje/skysbx-panel/main/install.sh
+P=https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh
 
 wget -qO- $P | sh -s -- --domain panel.example.com --email you@example.com
 wget -qO- $P | sh -s -- --version      # 装的是哪个版本（也用来看 CDN 是否还在缓存旧版）
@@ -71,7 +85,7 @@ wget -qO- $P | sh -s -- --purge        # 连数据库和证书一起删，不可
 等价的手动方式：
 
 ```bash
-git clone https://github.com/kosje/skysbx-panel.git
+git clone https://github.com/zayvian-lee/skysbx-panel.git
 cd skysbx-panel
 sudo ./deploy/install-panel.sh --domain panel.example.com --email you@example.com
 ```
@@ -105,13 +119,13 @@ SKYSBX_ADMIN_USER=admin SKYSBX_ADMIN_PASSWORD='...' \
 在面板里 **节点 → 新增**，复制那个只显示一次的接入 token，然后在新服务器上：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/kosje/skysbx-node/main/install.sh | sh
+wget -qO- https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh | sh
 ```
 
 它会问面板地址和 token。带参数同样加 `-s --`：
 
 ```bash
-N=https://raw.githubusercontent.com/kosje/skysbx-node/main/install.sh
+N=https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh
 
 wget -qO- $N | sh -s -- --panel https://panel.example.com --token <token>
 wget -qO- $N | sh -s -- --version      # 节点版本 + 内嵌的 sing-box 版本
@@ -121,7 +135,7 @@ wget -qO- $N | sh -s -- --purge        # 连证书、构建缓存、脚本装的
 ```
 
 **sing-box 核心怎么升级：** 节点把 sing-box 编进自己二进制里，所以 `--upgrade` 重新
-构建一次就是升级 —— 它会重新拉 [`skysbx-core`](https://github.com/kosje/skysbx-core)
+构建一次就是升级 —— 它会重新拉 [`skysbx-core`](https://github.com/zayvian-lee/skysbx-core)
 再编。没有单独的核心版本要管，也没有第二个进程要重启。
 
 节点**主动连面板**，所以它不需要开放任何控制端口、不需要面板能路由到它，NAT 后面也
@@ -138,7 +152,7 @@ wget -qO- $N | sh -s -- --purge        # 连证书、构建缓存、脚本装的
 **节点 → 新增**创建节点并复制一次性接入 token，回到终端粘贴即可继续安装节点：
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/kosje/skysbx-panel/main/install-panel-and-node.sh | \
+wget -qO- https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh | \
   sudo sh -s -- --domain panel.example.com --email you@example.com
 ```
 
@@ -146,7 +160,7 @@ wget -qO- https://raw.githubusercontent.com/kosje/skysbx-panel/main/install-pane
 AnyTLS 时才需要 `--node-domain`（以及可选的 `--cf-token`）：
 
 ```bash
-I=https://raw.githubusercontent.com/kosje/skysbx-panel/main/install-panel-and-node.sh
+I=https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh
 wget -qO- "$I" | sudo sh -s -- \
   --domain panel.example.com --token '<node-token>' \
   --node-domain node.example.com

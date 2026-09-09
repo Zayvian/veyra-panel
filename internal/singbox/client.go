@@ -25,8 +25,11 @@ type ClientOutbound struct {
 	Type string `json:"type"`
 	Tag  string `json:"tag"`
 
-	Server     string `json:"server,omitempty"`
-	ServerPort int    `json:"server_port,omitempty"`
+	Server            string   `json:"server,omitempty"`
+	ServerPort        int      `json:"server_port,omitempty"`
+	ServerPorts       []string `json:"server_ports,omitempty"`
+	HopInterval       string   `json:"hop_interval,omitempty"`
+	CongestionControl string   `json:"congestion_control,omitempty"`
 
 	UUID string `json:"uuid,omitempty"` // VLESS
 	Flow string `json:"flow,omitempty"` // VLESS
@@ -44,6 +47,7 @@ type ClientOutbound struct {
 }
 
 type ClientTLS struct {
+	ALPN       []string       `json:"alpn,omitempty"`
 	Enabled    bool           `json:"enabled"`
 	ServerName string         `json:"server_name,omitempty"`
 	UTLS       *UTLS          `json:"utls,omitempty"`

@@ -1,0 +1,19 @@
+name: Panel CI
+on:
+  push:
+    branches: [main, 'codex/**']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+      - run: go test -race ./...
+      - run: bash -n deploy/install-panel.sh && sh -n install.sh && sh -n install-panel-and-node.sh
+      - run: CGO_ENABLED=0 go build -trimpath -o dist/skysbx-panel ./cmd/panel

@@ -8,10 +8,11 @@ set -euo pipefail
 
 ROOT=${SKYSBX_ROOT:-/opt/skysbx}
 DOMAIN=""
+SUB_DOMAIN=""
 EMAIL=""
 SRC_DIR=""
 GH_TOKEN=${GITHUB_TOKEN:-}
-GH_OWNER=${SKYSBX_GH_OWNER:-kosje}
+GH_OWNER=${SKYSBX_GH_OWNER:-zayvian-lee}
 REF=${SKYSBX_REF:-main}
 
 RED=$'\e[31m'; GRN=$'\e[32m'; YLW=$'\e[33m'; BLD=$'\e[1m'; RST=$'\e[0m'
@@ -40,6 +41,7 @@ Actions (default: install)
 
 Install options
   --domain <fqdn>   Panel domain. Must already resolve to this server.
+  --sub-domain <fqdn> Separate HTTPS subscription domain (optional).
   --email <addr>    Contact address for Let's Encrypt (recommended).
   --src <dir>       Build from a checkout already on disk instead of cloning.
   -h, --help        This text.
@@ -56,6 +58,7 @@ while [ $# -gt 0 ]; do
         --uninstall) ACTION=uninstall; shift ;;
         --purge)     ACTION=purge; shift ;;
         --domain)    DOMAIN=$2; shift 2 ;;
+        --sub-domain) SUB_DOMAIN=$2; shift 2 ;;
         --email)     EMAIL=$2; shift 2 ;;
         --src)       SRC_DIR=$2; shift 2 ;;
         -h|--help)   usage; exit 0 ;;
@@ -141,6 +144,7 @@ if [ "$ACTION" = upgrade ]; then
     # before panel.env existed.
     if [ -f "$ROOT/panel.env" ]; then
         DOMAIN=${DOMAIN:-$(sed -n 's/^SKYSBX_DOMAIN=//p' "$ROOT/panel.env")}
+        SUB_DOMAIN=${SUB_DOMAIN:-$(sed -n 's/^SKYSBX_SUB_DOMAIN=//p' "$ROOT/panel.env")}
         EMAIL=${EMAIL:-$(sed -n 's/^SKYSBX_ACME_EMAIL=//p' "$ROOT/panel.env")}
     elif [ -f /etc/systemd/system/skysbx-panel.service ]; then
         DOMAIN=${DOMAIN:-$(sed -n 's/.*--domain \([^ ]*\).*/\1/p' \
@@ -163,6 +167,11 @@ if [ -z "$DOMAIN" ]; then
         read -r DOMAIN
     fi
     [ -n "$DOMAIN" ] || { usage; die "--domain is required"; }
+fi
+if [ -n "$SUB_DOMAIN" ]; then
+    SUB_DOMAIN=$(printf '%s' "$SUB_DOMAIN" | tr '[:upper:]' '[:lower:]')
+    [[ "$SUB_DOMAIN" =~ ^[a-z0-9][a-z0-9.-]*\.[a-z0-9-]+$ ]] || die "--sub-domain must be a DNS hostname, without scheme or port"
+    [ "$SUB_DOMAIN" != "$DOMAIN" ] || die "subscription domain must differ from panel domain"
 fi
 if [ -z "$EMAIL" ] && [ -t 0 ]; then
     printf "  Let's Encrypt contact email [skip]: "
@@ -346,6 +355,7 @@ say "service"
 # reinstalling would mean remembering and retyping what the panel already knew.
 cat > "$ROOT/panel.env" <<EOF
 SKYSBX_DOMAIN=${DOMAIN}
+SKYSBX_SUB_DOMAIN=${SUB_DOMAIN}
 SKYSBX_ACME_EMAIL=${EMAIL}
 EOF
 chmod 600 "$ROOT/panel.env"
@@ -359,7 +369,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=${ROOT}
-ExecStart=${ROOT}/skysbx-panel --domain ${DOMAIN} --acme-email ${EMAIL} --db ${ROOT}/skysbx.db
+ExecStart=${ROOT}/skysbx-panel --domain ${DOMAIN} --sub-domain "${SUB_DOMAIN}" --acme-email ${EMAIL} --db ${ROOT}/skysbx.db
 Restart=always
 RestartSec=3
 

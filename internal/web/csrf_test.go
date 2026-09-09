@@ -94,7 +94,11 @@ func TestCSRF_RejectsTamperedSignature(t *testing.T) {
 	if !ok {
 		t.Fatal("malformed token")
 	}
-	tampered := encoded + "." + mac[:len(mac)-1] + "A"
+	replacement := "A"
+	if strings.HasPrefix(mac, replacement) {
+		replacement = "B"
+	}
+	tampered := encoded + "." + replacement + mac[1:]
 	if tampered == token {
 		t.Fatal("the test did not change the MAC")
 	}

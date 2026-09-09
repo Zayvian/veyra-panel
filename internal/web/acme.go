@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/caddyserver/certmagic"
 )
@@ -22,18 +24,29 @@ import (
 // back out when the ACME server comes knocking on port 80. A handler built from
 // a second, unrelated issuer answers 404 to every challenge it is given.
 type AutoTLS struct {
-	domain string
-	cfg    *certmagic.Config
-	issuer *certmagic.ACMEIssuer
+	domain  string
+	domains []string
+	cfg     *certmagic.Config
+	issuer  *certmagic.ACMEIssuer
 }
 
 // NewAutoTLS prepares ACME for domain but does not talk to the CA yet — call
 // Obtain for that, after the challenge handler is already listening.
-func NewAutoTLS(domain, email, dataDir string) (*AutoTLS, error) {
+func NewAutoTLS(domain, email, dataDir string, extraDomains ...string) (*AutoTLS, error) {
 	if domain == "" {
 		return nil, fmt.Errorf("a domain is required for automatic TLS")
 	}
 
+	domains := []string{domain}
+	for _, extra := range extraDomains {
+		normalized, err := NormalizeDomain(extra)
+		if err != nil {
+			return nil, err
+		}
+		if normalized != "" && normalized != domain {
+			domains = append(domains, normalized)
+		}
+	}
 	var cfg *certmagic.Config
 	cache := certmagic.NewCache(certmagic.CacheOptions{
 		GetConfigForCert: func(certmagic.Certificate) (*certmagic.Config, error) {
@@ -57,7 +70,7 @@ func NewAutoTLS(domain, email, dataDir string) (*AutoTLS, error) {
 	})
 	cfg.Issuers = []certmagic.Issuer{issuer}
 
-	return &AutoTLS{domain: domain, cfg: cfg, issuer: issuer}, nil
+	return &AutoTLS{domain: domain, domains: domains, cfg: cfg, issuer: issuer}, nil
 }
 
 // ChallengeAndRedirect is the port 80 handler: it answers the ACME HTTP-01
@@ -72,7 +85,18 @@ func NewAutoTLS(domain, email, dataDir string) (*AutoTLS, error) {
 func (a *AutoTLS) ChallengeAndRedirect() http.Handler {
 	return a.issuer.HTTPChallengeHandler(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			target := "https://" + a.domain + r.URL.RequestURI()
+			host := a.domain
+			requested := r.Host
+			if h, _, err := net.SplitHostPort(requested); err == nil {
+				requested = h
+			}
+			for _, d := range a.domains {
+				if strings.EqualFold(requested, d) {
+					host = d
+					break
+				}
+			}
+			target := "https://" + host + r.URL.RequestURI()
 			http.Redirect(w, r, target, http.StatusMovedPermanently)
 		}))
 }
@@ -85,8 +109,8 @@ func (a *AutoTLS) ChallengeAndRedirect() http.Handler {
 // failures, and burning the hour's budget is a worse state to be in than being
 // down while someone reads the log.
 func (a *AutoTLS) Obtain(ctx context.Context) error {
-	if err := a.cfg.ManageSync(ctx, []string{a.domain}); err != nil {
-		if aerr := a.cfg.ManageAsync(context.WithoutCancel(ctx), []string{a.domain}); aerr != nil {
+	if err := a.cfg.ManageSync(ctx, a.domains); err != nil {
+		if aerr := a.cfg.ManageAsync(context.WithoutCancel(ctx), a.domains); aerr != nil {
 			return fmt.Errorf("obtain certificate for %s: %w", a.domain, err)
 		}
 		return fmt.Errorf("obtain certificate for %s (retrying in the background): %w",

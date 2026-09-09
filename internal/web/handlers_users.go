@@ -51,12 +51,13 @@ func (s *Server) renderUsers(w http.ResponseWriter, r *http.Request, code int) {
 		}
 	}
 	data := map[string]any{
-		"Users":         users,
-		"Now":           nowFunc(),
-		"Online":        s.nodes.OnlineUsers(),
-		"IPs":           s.nodes.UserIPCounts(),
-		"Access":        access,
-		"InboundCount":  len(inbounds),
+		"Users":              users,
+		"SubscriptionOrigin": s.subscriptionOrigin(r),
+		"Now":                nowFunc(),
+		"Online":             s.nodes.OnlineUsers(),
+		"IPs":                s.nodes.UserIPCounts(),
+		"Access":             access,
+		"InboundCount":       len(inbounds),
 		// CSRFToken is added by s.page below; renderUsers is the
 		// page- and fragment-level entry point, and htmx requests
 		// re-render the table without the layout. CSRF lives in
@@ -178,8 +179,8 @@ func (s *Server) editUser(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	data := map[string]any{
-		"User":       u,
-		"CSRFToken":  s.csrf.csrfValue(r),
+		"User":      u,
+		"CSRFToken": s.csrf.csrfValue(r),
 	}
 	s.render(w, "user-edit-row", data)
 }
