@@ -10,6 +10,8 @@ ROOT=${SKYSBX_ROOT:-/opt/skysbx}
 DOMAIN=""
 SUB_DOMAIN=""
 EMAIL=""
+SUB_DOMAIN_SET=0
+EMAIL_SET=0
 SRC_DIR=""
 GH_TOKEN=${GITHUB_TOKEN:-}
 GH_OWNER=${SKYSBX_GH_OWNER:-zayvian-lee}
@@ -26,6 +28,8 @@ ACTION=install
 usage() {
     cat <<EOF
 Usage: sudo ./install-panel.sh [--domain <fqdn>] [options]
+
+Run it with no install options in a terminal for the guided setup.
 
 Actions (default: install)
   --version         What is installed.
@@ -58,8 +62,8 @@ while [ $# -gt 0 ]; do
         --uninstall) ACTION=uninstall; shift ;;
         --purge)     ACTION=purge; shift ;;
         --domain)    DOMAIN=$2; shift 2 ;;
-        --sub-domain) SUB_DOMAIN=$2; shift 2 ;;
-        --email)     EMAIL=$2; shift 2 ;;
+        --sub-domain) SUB_DOMAIN=$2; SUB_DOMAIN_SET=1; shift 2 ;;
+        --email)     EMAIL=$2; EMAIL_SET=1; shift 2 ;;
         --src)       SRC_DIR=$2; shift 2 ;;
         -h|--help)   usage; exit 0 ;;
         *) die "unknown option: $1 (try --help)" ;;
@@ -168,12 +172,20 @@ if [ -z "$DOMAIN" ]; then
     fi
     [ -n "$DOMAIN" ] || { usage; die "--domain is required"; }
 fi
+# A separate HTTPS endpoint is optional, but it is the only setting that
+# cannot be inferred from the main panel domain. Ask during a normal guided
+# install, while allowing automation to make an explicit blank choice with
+# --sub-domain "".
+if [ "$ACTION" = install ] && [ "$SUB_DOMAIN_SET" = 0 ] && [ -t 0 ]; then
+    printf '  Subscription domain [leave blank to use the panel domain]: '
+    read -r SUB_DOMAIN
+fi
 if [ -n "$SUB_DOMAIN" ]; then
     SUB_DOMAIN=$(printf '%s' "$SUB_DOMAIN" | tr '[:upper:]' '[:lower:]')
     [[ "$SUB_DOMAIN" =~ ^[a-z0-9][a-z0-9.-]*\.[a-z0-9-]+$ ]] || die "--sub-domain must be a DNS hostname, without scheme or port"
     [ "$SUB_DOMAIN" != "$DOMAIN" ] || die "subscription domain must differ from panel domain"
 fi
-if [ -z "$EMAIL" ] && [ -t 0 ]; then
+if [ -z "$EMAIL" ] && [ "$EMAIL_SET" = 0 ] && [ -t 0 ]; then
     printf "  Let's Encrypt contact email [skip]: "
     read -r EMAIL
 fi

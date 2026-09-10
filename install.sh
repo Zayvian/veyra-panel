@@ -1,9 +1,13 @@
 #!/bin/sh
 # One-line installer for the Install skysbx-panel and skysbx-node.
 #
-#   wget -qO- https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh | bash
 #
-# Arguments go through to deploy/install-panel.sh after `-s --`:
+# With no arguments the installer opens a guided setup: panel domain,
+# optional subscription domain, ACME email and the first administrator.
+#
+# Arguments go through to deploy/install-panel.sh after `-s --`; use them for
+# unattended installation or maintenance:
 #
 #   ... | sh -s -- --domain panel.example.com --email you@example.com
 #   ... | sh -s -- --version      what is installed

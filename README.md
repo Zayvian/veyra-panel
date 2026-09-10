@@ -57,16 +57,12 @@ ss -lntp | grep -E ':(80|443)\b'
 
 ```bash
 apt-get update && apt-get install -y curl
-curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh -o /tmp/skysbx-panel-install.sh
-sh /tmp/skysbx-panel-install.sh \
-  --domain panel.example.com \
-  --sub-domain sub.example.com \
-  --email you@example.com
+curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh | bash
 ```
 
-不需要独立订阅域名时，删除 `--sub-domain sub.example.com` 这一行，订阅将使用面板域名。
+命令执行后按提示填写：面板域名、可选的独立订阅域名、Let's Encrypt 邮箱和首个管理员账号。订阅域名直接回车即可使用面板域名；它必须是已解析到这台服务器的 HTTPS 域名。管理员密码不会显示在终端中。
 
-安装过程提示创建管理员账号、密码，随后编译程序、申请证书、启动服务。管理员在服务开放前创建；更新不会重新创建管理员。首次构建可能需要数分钟，取决于服务器和下载速度。
+填写完毕后脚本编译程序、申请证书并启动服务。管理员在服务开放前创建；更新不会重新创建管理员。首次构建可能需要数分钟，取决于服务器和下载速度。
 
 完成后访问 `https://panel.example.com/login`，使用刚创建的账号登录。检查：
 
@@ -95,18 +91,14 @@ journalctl -u skysbx-panel -n 50 --no-pager
 
 ### 3.2 在对应节点服务器安装
 
-下面的 `hk.example.com` 应解析到**这台节点服务器**。token 由安装程序交互提示输入，粘贴上一步的值：
+下面的 `hk.example.com` 应解析到**这台节点服务器**。在节点机执行这一条命令：
 
 ```bash
 apt-get update && apt-get install -y curl
-curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh -o /tmp/skysbx-node-install.sh
-sh /tmp/skysbx-node-install.sh \
-  --panel https://panel.example.com \
-  --domain hk.example.com \
-  --email you@example.com
+curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh | bash
 ```
 
-安装会拉取节点和配套内核源码、编译程序、申请节点证书并启动 `skysbx-node`。**AnyTLS、Hysteria2、TUIC 都需要节点证书**。只用 Reality 或 Shadowsocks 时可省略 `--domain`，在域名提示处回车。
+按顺序填写面板地址、刚复制的接入 token（输入不回显）、节点域名和证书邮箱。输入完成后才会下载配套内核并编译。**AnyTLS、Hysteria2、TUIC 都需要节点证书**；只用 Reality 或 Shadowsocks 时在节点域名处直接回车。
 
 回到面板确认节点显示「在线」，并检查：
 
@@ -228,8 +220,7 @@ sh /tmp/skysbx-all-install.sh \
 ### 更新面板：在面板服务器执行
 
 ```bash
-curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh -o /tmp/skysbx-panel-install.sh
-sh /tmp/skysbx-panel-install.sh --upgrade
+curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh | bash -s -- --upgrade
 ```
 
 脚本读取 `/opt/skysbx/panel.env` 的域名，更早版本可从 systemd unit 读取。读取失败时显式补上 `--domain panel.example.com --email you@example.com`。
@@ -237,7 +228,7 @@ sh /tmp/skysbx-panel-install.sh --upgrade
 增加独立订阅域名：先配置 DNS，再执行：
 
 ```bash
-sh /tmp/skysbx-panel-install.sh --upgrade --sub-domain sub.example.com
+curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh | bash -s -- --upgrade --sub-domain sub.example.com
 ```
 
 原 token 保留。配置独立订阅域名后，只有该域名能访问订阅，旧面板域名及其他域名的订阅路径返回 404；面板管理功能照常使用。复制的新链接使用订阅域名；客户端已有旧 URL 不会自动改变，必须手动替换后才能更新订阅。未配置独立订阅域名时，仍使用面板域名订阅。
@@ -245,8 +236,7 @@ sh /tmp/skysbx-panel-install.sh --upgrade --sub-domain sub.example.com
 ### 更新节点：在每台节点服务器执行
 
 ```bash
-curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh -o /tmp/skysbx-node-install.sh
-sh /tmp/skysbx-node-install.sh --upgrade
+curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh | bash -s -- --upgrade
 ```
 
 读取 `/opt/skysbx/node.env` 的面板地址和 token，不必删除重建节点。**更新节点会同时编译配套内核**，不单独安装 core。节点会重启，造成短暂断连。
