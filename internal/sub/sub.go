@@ -10,6 +10,7 @@ package sub
 import (
 	"fmt"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -62,8 +63,31 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 		}
 	}
 
+	// All export formats share this order; never mutate the caller's config.
+	// Zero defaults retain the previous node ID/tag order.
+	ordered := append([]*store.Inbound(nil), inbounds...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		a, b := ordered[i], ordered[j]
+		na, nb := byNode[a.NodeID], byNode[b.NodeID]
+		if na == nil || nb == nil {
+			return na != nil
+		}
+		if na.SortOrder != nb.SortOrder {
+			return na.SortOrder < nb.SortOrder
+		}
+		if a.NodeID != b.NodeID {
+			return a.NodeID < b.NodeID
+		}
+		if a.SortOrder != b.SortOrder {
+			return a.SortOrder < b.SortOrder
+		}
+		if a.Tag != b.Tag {
+			return a.Tag < b.Tag
+		}
+		return a.ID < b.ID
+	})
 	var out []Entry
-	for _, in := range inbounds {
+	for _, in := range ordered {
 		if !in.Enabled {
 			continue
 		}

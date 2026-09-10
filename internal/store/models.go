@@ -74,6 +74,7 @@ func (u *User) Active(now time.Time) bool {
 }
 
 type Node struct {
+	SortOrder int   // subscription group order, smaller values come first
 	RateMilli int64 // 1000 = 1x; 0 does not consume quota
 	ID        int64
 	Name      string
@@ -102,11 +103,12 @@ type Node struct {
 func (n *Node) RateText() string { return strconv.FormatFloat(float64(n.RateMilli)/1000, 'f', -1, 64) }
 
 type Inbound struct {
-	ID       int64
-	NodeID   int64
-	Tag      string
-	Protocol string
-	Port     int
+	SortOrder int // order within the node's subscription group
+	ID        int64
+	NodeID    int64
+	Tag       string
+	Protocol  string
+	Port      int
 
 	// Address is where clients should be told to connect for this inbound, when
 	// that is not the node's own address. The case it exists for is a relay:

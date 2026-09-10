@@ -142,6 +142,7 @@ onRelay();
           <form class="row" hx-post="/inbounds/{{.ID}}"
                 hx-target="#inbounds" hx-swap="outerHTML" style="align-items:flex-end">
             <label>入站名称<input name="tag" value="{{.Tag}}" required maxlength="128"></label>
+            <label>节点内排序<input name="sort_order" type="number" min="0" max="999999" step="1" value="{{.SortOrder}}" required style="width:7rem"></label>
             <label>端口<input name="port" type="number" min="1" max="65535" required
                    value="{{.Port}}" style="min-width:6rem"></label>
             {{/* Shown even with no candidates, disabled and saying why — see
@@ -189,6 +190,7 @@ onRelay();
           </form>
           <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
             Reality 密钥对、short id、Shadowsocks 服务端 PSK 都会原样保留，
+            排序数字越小越靠前，同值按名称排序；仅改排序不会重建监听。
             已发出去的订阅不会失效。名称支持中文，客户端更新订阅后显示新名称。
             改名称或端口会重建监听，该节点上所有连接会断一次；
             <strong>只改连接地址不会</strong> —— 本节点根本看不到这个字段，它只决定订阅里
@@ -207,7 +209,7 @@ onRelay();
       </tr>
       {{else}}
       <tr>
-        <td>{{.Tag}}</td>
+        <td>{{.Tag}}<div class="dim" style="font-size:.75rem">排序 {{.SortOrder}}</div></td>
         <td class="dim">{{.Protocol}}</td>
         <td class="num">{{.Port}}</td>
         {{/* What a client is told to dial, which is not always where the node

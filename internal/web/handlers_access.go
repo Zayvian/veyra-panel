@@ -106,16 +106,35 @@ func (s *Server) setUserAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	picked := make([]int64, 0, len(r.Form["inbound"]))
+	mode := r.FormValue("access_mode")
+	if mode == "" {
+		mode = "selected"
+	} // older forms still submit explicit choices
+	if mode != "all" && mode != "selected" {
+		s.errorBanner(w, http.StatusBadRequest, "请选择全部入站或仅允许勾选项")
+		return
+	}
+	valid := make(map[int64]bool, len(inbounds))
+	for _, in := range inbounds {
+		valid[in.ID] = true
+	}
+	seen := make(map[int64]bool)
 	for _, v := range r.Form["inbound"] {
 		n, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
+		if err != nil || !valid[n] {
 			s.errorBanner(w, http.StatusBadRequest, "bad inbound id")
 			return
 		}
-		picked = append(picked, n)
+		if !seen[n] {
+			picked = append(picked, n)
+			seen[n] = true
+		}
 	}
-	if len(picked) == len(inbounds) {
+	if mode == "all" {
 		picked = nil
+	} else if len(picked) == 0 {
+		s.errorBanner(w, http.StatusBadRequest, "请至少勾选一个入站；清空只用于重新选择。如需禁止该用户连接，请在用户列表停用该用户。")
+		return
 	}
 	if err := s.svc.SetUserInbounds(id, picked); err != nil {
 		s.fail(w, r, err)

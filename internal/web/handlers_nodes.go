@@ -127,6 +127,14 @@ func (s *Server) updateNode(w http.ResponseWriter, r *http.Request) {
 		}
 		n.RateMilli = rate
 	}
+	if r.Form.Has("sort_order") {
+		order, err := service.ParseSortOrder(r.FormValue("sort_order"))
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		n.SortOrder = order
+	}
 	n.Name = strings.TrimSpace(r.FormValue("name"))
 	n.Address = strings.TrimSpace(r.FormValue("address"))
 	n.Country = strings.TrimSpace(r.FormValue("country"))
@@ -397,11 +405,21 @@ func (s *Server) updateInbound(w http.ResponseWriter, r *http.Request) {
 	}
 	relayNodeID, relayPort := relayForm(r)
 	var tag *string
+	var sortOrder *int
+	if r.Form.Has("sort_order") {
+		order, err := service.ParseSortOrder(r.FormValue("sort_order"))
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		sortOrder = &order
+	}
 	if r.Form.Has("tag") {
 		value := r.FormValue("tag")
 		tag = &value
 	}
 	in, err := s.svc.EditInbound(id, service.InboundEdit{
+		SortOrder:   sortOrder,
 		Tag:         tag,
 		Port:        port,
 		Address:     strings.TrimSpace(r.FormValue("address")),

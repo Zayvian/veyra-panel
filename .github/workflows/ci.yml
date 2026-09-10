@@ -18,4 +18,5 @@ jobs:
       - run: bash -n deploy/install-panel.sh && sh -n install.sh && sh -n install-panel-and-node.sh
       - run: python3 tests/test_same_host_upgrade.py
       - run: python3 tests/test_panel_unit_args.py
+      - run: node --check internal/web/static/access.js
       - run: CGO_ENABLED=0 go build -trimpath -o dist/skysbx-panel ./cmd/panel

@@ -15,6 +15,7 @@ import (
 // A tag rename updates both the stored row and the node configuration; user
 // lists and any relay listener must then follow the new tag.
 type InboundEdit struct {
+	SortOrder   *int    // nil leaves subscription ordering unchanged
 	Tag         *string // nil preserves the name for callers that do not edit it
 	Port        int
 	HopPorts    string
@@ -53,6 +54,12 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		return nil, err
 	}
 	tag := in.Tag
+	if e.SortOrder != nil {
+		if err := checkSortOrder(*e.SortOrder); err != nil {
+			return nil, err
+		}
+		in.SortOrder = *e.SortOrder
+	}
 	if e.Tag != nil {
 		tag = strings.TrimSpace(*e.Tag)
 		if err := checkDisplayName("inbound tag", tag); err != nil {

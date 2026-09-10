@@ -7,7 +7,7 @@ import (
 )
 
 const nodeCols = `id, name, token_hash, token_sha, address, country, enabled,
-	last_seen_at, version, created_at, rate_milli`
+	last_seen_at, version, created_at, rate_milli, sort_order`
 
 func scanNode(sc interface{ Scan(...any) error }) (*Node, error) {
 	var n Node
@@ -15,7 +15,7 @@ func scanNode(sc interface{ Scan(...any) error }) (*Node, error) {
 	var tokenSHA sql.NullString
 	var created int64
 	if err := sc.Scan(&n.ID, &n.Name, &n.TokenHash, &tokenSHA, &n.Address, &n.Country,
-		&n.Enabled, &lastSeen, &n.Version, &created, &n.RateMilli); err != nil {
+		&n.Enabled, &lastSeen, &n.Version, &created, &n.RateMilli, &n.SortOrder); err != nil {
 		return nil, err
 	}
 	n.TokenSHA = tokenSHA.String
@@ -54,7 +54,7 @@ func (s *Store) Node(id int64) (*Node, error) {
 }
 
 func (s *Store) Nodes() ([]*Node, error) {
-	rows, err := s.db.Query(`SELECT ` + nodeCols + ` FROM nodes ORDER BY name`)
+	rows, err := s.db.Query(`SELECT ` + nodeCols + ` FROM nodes ORDER BY sort_order, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (s *Store) Nodes() ([]*Node, error) {
 // EnabledNodes is what the subscription generator iterates: a disabled node
 // must not appear in anyone's subscription.
 func (s *Store) EnabledNodes() ([]*Node, error) {
-	rows, err := s.db.Query(`SELECT ` + nodeCols + ` FROM nodes WHERE enabled = 1 ORDER BY name`)
+	rows, err := s.db.Query(`SELECT ` + nodeCols + ` FROM nodes WHERE enabled = 1 ORDER BY sort_order, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -91,8 +91,8 @@ func (s *Store) EnabledNodes() ([]*Node, error) {
 
 func (s *Store) UpdateNode(n *Node) error {
 	res, err := s.db.Exec(`UPDATE nodes SET
-		name = ?, address = ?, country = ?, enabled = ?, rate_milli = ? WHERE id = ?`,
-		n.Name, n.Address, n.Country, n.Enabled, n.RateMilli, n.ID)
+		name = ?, address = ?, country = ?, enabled = ?, rate_milli = ?, sort_order = ? WHERE id = ?`,
+		n.Name, n.Address, n.Country, n.Enabled, n.RateMilli, n.SortOrder, n.ID)
 	if err != nil {
 		return asConflict(fmt.Errorf("update node %d: %w", n.ID, err))
 	}

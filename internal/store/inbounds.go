@@ -6,7 +6,7 @@ import (
 )
 
 const inboundCols = `id, node_id, tag, protocol, port, address, ` +
-	`relay_node_id, relay_port, config, client, enabled`
+	`relay_node_id, relay_port, config, client, enabled, sort_order`
 
 func scanInbound(sc interface{ Scan(...any) error }) (*Inbound, error) {
 	var in Inbound
@@ -15,7 +15,7 @@ func scanInbound(sc interface{ Scan(...any) error }) (*Inbound, error) {
 	var relayNode sql.NullInt64
 	if err := sc.Scan(&in.ID, &in.NodeID, &in.Tag, &in.Protocol, &in.Port,
 		&in.Address, &relayNode, &in.RelayPort,
-		&in.Config, &in.Client, &in.Enabled); err != nil {
+		&in.Config, &in.Client, &in.Enabled, &in.SortOrder); err != nil {
 		return nil, err
 	}
 	in.RelayNodeID = relayNode.Int64
@@ -63,7 +63,7 @@ func (s *Store) InboundByTag(tag string) (*Inbound, error) {
 }
 
 func (s *Store) Inbounds() ([]*Inbound, error) {
-	return s.queryInbounds(`SELECT ` + inboundCols + ` FROM inbounds ORDER BY node_id, tag`)
+	return s.queryInbounds(`SELECT ` + inboundCols + ` FROM inbounds ORDER BY node_id, sort_order, tag`)
 }
 
 // NodeInbounds returns every inbound configured for a node, enabled or not.
@@ -71,7 +71,7 @@ func (s *Store) Inbounds() ([]*Inbound, error) {
 // removed from the node's running config rather than silently left behind.
 func (s *Store) NodeInbounds(nodeID int64) ([]*Inbound, error) {
 	return s.queryInbounds(
-		`SELECT `+inboundCols+` FROM inbounds WHERE node_id = ? ORDER BY tag`, nodeID)
+		`SELECT `+inboundCols+` FROM inbounds WHERE node_id = ? ORDER BY sort_order, tag`, nodeID)
 }
 
 // InboundsRelayedVia returns the inbounds — on other nodes — whose traffic this
@@ -79,12 +79,12 @@ func (s *Store) NodeInbounds(nodeID int64) ([]*Inbound, error) {
 // its own list, but each one becomes a listener in its configuration.
 func (s *Store) InboundsRelayedVia(nodeID int64) ([]*Inbound, error) {
 	return s.queryInbounds(
-		`SELECT `+inboundCols+` FROM inbounds WHERE relay_node_id = ? ORDER BY tag`, nodeID)
+		`SELECT `+inboundCols+` FROM inbounds WHERE relay_node_id = ? ORDER BY sort_order, tag`, nodeID)
 }
 
 func (s *Store) EnabledInbounds() ([]*Inbound, error) {
 	return s.queryInbounds(
-		`SELECT ` + inboundCols + ` FROM inbounds WHERE enabled = 1 ORDER BY node_id, tag`)
+		`SELECT ` + inboundCols + ` FROM inbounds WHERE enabled = 1 ORDER BY node_id, sort_order, tag`)
 }
 
 func (s *Store) queryInbounds(q string, args ...any) ([]*Inbound, error) {
@@ -160,11 +160,11 @@ func (s *Store) NodeInboundsByID(nodeID int64) ([]*Inbound, error) {
 func (s *Store) UpdateInbound(in *Inbound) error {
 	res, err := s.db.Exec(`UPDATE inbounds SET
 		tag = ?, protocol = ?, port = ?, address = ?,
-		relay_node_id = ?, relay_port = ?, config = ?, client = ?, enabled = ?
+		relay_node_id = ?, relay_port = ?, config = ?, client = ?, enabled = ?, sort_order = ?
 		WHERE id = ?`,
 		in.Tag, in.Protocol, in.Port, in.Address,
 		relayNodeValue(in.RelayNodeID), in.RelayPort,
-		in.Config, in.Client, in.Enabled, in.ID)
+		in.Config, in.Client, in.Enabled, in.SortOrder, in.ID)
 	if err != nil {
 		return asConflict(fmt.Errorf("update inbound %d: %w", in.ID, err))
 	}

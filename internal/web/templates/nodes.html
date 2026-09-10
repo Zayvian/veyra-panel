@@ -65,6 +65,7 @@
                   hx-target="#nodes" hx-swap="outerHTML" style="align-items:flex-end">
               <label>名称<input name="name" required value="{{.Name}}"
                      maxlength="64"></label>
+              <label>订阅排序<input name="sort_order" type="number" min="0" max="999999" step="1" value="{{.SortOrder}}" required style="width:7rem"></label>
               <label>客户端连接地址<input name="address" required value="{{.Address}}"
                      style="min-width:16rem"></label>
               <label>国家<input name="country" maxlength="2" value="{{.Country}}"
@@ -75,6 +76,7 @@
                       hx-target="#nodes" hx-swap="outerHTML">取消</button>
             </form>
             <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
+              订阅排序数字越小越靠前；同值按节点创建顺序。仅修改排序不会重启节点，客户端更新订阅后生效。<br>
               地址建议填<strong>域名</strong>而不是 IP —— 订阅里发给客户端的就是这个值，
               换服务器时改 DNS 就够了，不用重发订阅；AnyTLS 的证书也只对域名有效。
               改名会<strong>重新生成该节点所有入站的 tag</strong>（含手工取过名的），
@@ -85,7 +87,7 @@
         </tr>
         {{else}}
         <tr>
-          <td>{{.Name}} <span class="dim">{{.Country}}</span></td>
+          <td>{{.Name}} <span class="dim">{{.Country}}</span><div class="dim" style="font-size:.75rem">排序 {{.SortOrder}}</div></td>
           <td>{{.RateText}}×{{if eq .RateMilli 0}} <span class="dim">不扣套餐</span>{{end}}</td>
           <td class="dim">
             {{.Address}}

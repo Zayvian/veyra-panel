@@ -62,8 +62,8 @@ func TestRenameThroughAdminForms(t *testing.T) {
 		form        url.Values
 	}{
 		{fmt.Sprintf("/users/%d", user.ID), "name", url.Values{"name": {"alice-new"}, "traffic_limit_gb": {"200"}}},
-		{fmt.Sprintf("/nodes/%d", node.ID), "name", url.Values{"name": {"香港新名称"}, "address": {node.Address}, "country": {"HK"}, "traffic_rate": {"0.1"}}},
-		{fmt.Sprintf("/inbounds/%d", in.ID), "tag", url.Values{"tag": {"香港下载 01"}, "port": {"8388"}}},
+		{fmt.Sprintf("/nodes/%d", node.ID), "name", url.Values{"name": {"香港新名称"}, "address": {node.Address}, "country": {"HK"}, "traffic_rate": {"0.1"}, "sort_order": {"10"}}},
+		{fmt.Sprintf("/inbounds/%d", in.ID), "tag", url.Values{"tag": {"香港下载 01"}, "port": {"8388"}, "sort_order": {"20"}}},
 	} {
 		rec := request(http.MethodGet, tc.path+"/edit", nil)
 		if rec.Code != http.StatusOK {
@@ -97,7 +97,7 @@ func TestRenameThroughAdminForms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updatedNode.Name != "香港新名称" || updatedNode.TokenSHA != service.TokenSHA(token) || updatedNode.RateMilli != 100 {
+	if updatedNode.Name != "香港新名称" || updatedNode.TokenSHA != service.TokenSHA(token) || updatedNode.RateMilli != 100 || updatedNode.SortOrder != 10 {
 		t.Fatal("node name not saved or token/rate changed")
 	}
 	rec := request(http.MethodGet, "/sub/"+user.SubToken+"?format=clash", nil)
@@ -109,7 +109,7 @@ func TestRenameThroughAdminForms(t *testing.T) {
 		t.Fatalf("empty name accepted: %d", rec.Code)
 	}
 	stored, err := svc.Store().Inbound(in.ID)
-	if err != nil || stored.Tag != "香港下载 01" {
+	if err != nil || stored.Tag != "香港下载 01" || stored.SortOrder != 20 {
 		t.Fatal("invalid edit changed the name")
 	}
 }

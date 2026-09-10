@@ -9,19 +9,33 @@
 {{end}}
 
 {{define "access-form"}}
-<form hx-post="/users/{{.User.ID}}/access" hx-target="#access" hx-swap="innerHTML">
+<form data-access-form hx-post="/users/{{.User.ID}}/access" hx-target="#access" hx-swap="innerHTML">
+  <div class="card">
+    <div class="row" style="display:flex;gap:.8rem;align-items:flex-end;flex-wrap:wrap">
+      <label>开放范围<select name="access_mode">
+        <option value="all" {{if .Unrestricted}}selected{{end}}>全部入站（含以后新建）</option>
+        <option value="selected" {{if not .Unrestricted}}selected{{end}}>仅允许勾选项</option>
+      </select></label>
+      <button type="button" class="ghost" data-access-action="all">全选当前入站</button>
+      <button type="button" class="ghost" data-access-action="clear">清空勾选</button>
+    </div>
+    <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">只开放一台服务器：在对应服务器点击「仅选此节点」，再保存。清空勾选后请重新选择，空选项不能保存。</p>
+  </div>
   {{if not .Groups}}
     <div class="card"><p class="dim" style="margin:.5rem">
       还没有任何入站。先到<a href="/nodes">节点</a>里建几个。
     </p></div>
   {{else}}
     {{range .Groups}}
-    <div class="card">
-      <div style="display:flex;align-items:baseline;gap:.6rem;margin-bottom:.6rem">
+    <div class="card" data-access-group>
+      <div style="display:flex;align-items:baseline;gap:.6rem;margin-bottom:.6rem;flex-wrap:wrap">
         <strong>{{.Node.Name}}</strong>
         <span class="dim" style="font-size:.8rem">{{.Node.Address}}</span>
-        <span class="dim" style="font-size:.8rem;margin-left:auto">
+        <span data-access-count class="dim" style="font-size:.8rem;margin-left:auto" aria-live="polite">
           已选 {{.Chosen}} / {{len .Rows}}</span>
+        <button type="button" class="ghost" data-access-action="group-all">全选</button>
+        <button type="button" class="ghost" data-access-action="group-clear">取消</button>
+        <button type="button" class="ghost" data-access-action="only">仅选此节点</button>
       </div>
       <table>
         <tbody>
@@ -46,15 +60,15 @@
     {{end}}
     <div class="card">
       <div style="display:flex;align-items:center;gap:1rem">
-        <button>保存</button>
-        <span class="dim" style="font-size:.85rem">
+        <button style="flex-shrink:0;white-space:nowrap">保存</button>
+        <span data-access-summary class="dim" style="font-size:.85rem" aria-live="polite">
           {{if .Unrestricted}}当前是<strong>全部可用</strong>：以后新建的入站会自动对该用户开放。
           {{else}}当前是<strong>按勾选限制</strong>：以后新建的入站默认<strong>不</strong>对该用户开放。
           {{end}}
         </span>
       </div>
       <p class="dim" style="margin:.8rem 0 0;font-size:.8rem">
-        全部勾选＝不加限制，改动几秒内推到节点，不会断开其它入站上的连接。
+        「全选当前入站」只包含当前列表；要自动开放以后新建的入站，请选择「全部入站（含以后新建）」。点击保存后才生效。
       </p>
     </div>
   {{end}}

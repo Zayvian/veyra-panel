@@ -252,6 +252,9 @@ func (s *Service) Nodes() ([]*store.Node, error) { return s.st.Nodes() }
 func (s *Service) Node(id int64) (*store.Node, error) { return s.st.Node(id) }
 
 func (s *Service) UpdateNode(n *store.Node) error {
+	if err := checkSortOrder(n.SortOrder); err != nil {
+		return err
+	}
 	if err := checkRate(n.RateMilli); err != nil {
 		return err
 	}
