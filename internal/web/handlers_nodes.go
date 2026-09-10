@@ -396,7 +396,13 @@ func (s *Server) updateInbound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	relayNodeID, relayPort := relayForm(r)
+	var tag *string
+	if r.Form.Has("tag") {
+		value := r.FormValue("tag")
+		tag = &value
+	}
 	in, err := s.svc.EditInbound(id, service.InboundEdit{
+		Tag:         tag,
 		Port:        port,
 		Address:     strings.TrimSpace(r.FormValue("address")),
 		RelayNodeID: relayNodeID,

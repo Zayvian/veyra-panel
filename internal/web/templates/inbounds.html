@@ -135,16 +135,13 @@ onRelay();
     <tbody>
     {{range .Inbounds}}
       {{if eq $.EditID .ID}}
-      {{/* Protocol and tag are missing on purpose: the tag addresses this
-           inbound in the node's config and in every user list keyed by it, and
-           the protocol decides which credential a user authenticates with.
-           Changing either is a different inbound, not an edit. The generated
-           keys are carried over, so existing subscriptions keep working. */}}
+      {{/* Protocol stays fixed. A name edit preserves generated keys and
+           updates the tag in both node config and user lists. */}}
       <tr>
         <td colspan="6">
           <form class="row" hx-post="/inbounds/{{.ID}}"
                 hx-target="#inbounds" hx-swap="outerHTML" style="align-items:flex-end">
-            <label>tag<input value="{{.Tag}}" disabled style="opacity:.5"></label>
+            <label>入站名称<input name="tag" value="{{.Tag}}" required maxlength="128"></label>
             <label>端口<input name="port" type="number" min="1" max="65535" required
                    value="{{.Port}}" style="min-width:6rem"></label>
             {{/* Shown even with no candidates, disabled and saying why — see
@@ -192,7 +189,8 @@ onRelay();
           </form>
           <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
             Reality 密钥对、short id、Shadowsocks 服务端 PSK 都会原样保留，
-            已发出去的订阅不会失效。改端口会重建监听，该节点上所有连接会断一次；
+            已发出去的订阅不会失效。名称支持中文，客户端更新订阅后显示新名称。
+            改名称或端口会重建监听，该节点上所有连接会断一次；
             <strong>只改连接地址不会</strong> —— 本节点根本看不到这个字段，它只决定订阅里
             让客户端连哪里。<br>
             <strong>站内中转</strong>：选一台节点，面板会在它上面自动开一个 L4 转发口

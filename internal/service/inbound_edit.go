@@ -11,11 +11,11 @@ import (
 
 // InboundEdit is the subset of an inbound that can be changed after it exists.
 //
-// The protocol and the tag are not in it. The tag addresses this inbound in the
-// configuration pushed to the node and in every user list keyed by it, and the
-// protocol decides which credential each user authenticates with — changing
-// either is not an edit, it is a different inbound.
+// The protocol stays fixed because it decides which credentials users need.
+// A tag rename updates both the stored row and the node configuration; user
+// lists and any relay listener must then follow the new tag.
 type InboundEdit struct {
+	Tag         *string // nil preserves the name for callers that do not edit it
 	Port        int
 	HopPorts    string
 	HopInterval string
@@ -52,6 +52,16 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 	if err != nil {
 		return nil, err
 	}
+	tag := in.Tag
+	if e.Tag != nil {
+		tag = strings.TrimSpace(*e.Tag)
+		if err := checkDisplayName("inbound tag", tag); err != nil {
+			return nil, err
+		}
+		if strings.HasPrefix(tag, RelayTagPrefix) {
+			return nil, invalid("inbound tag cannot start with %q; that prefix names relay listeners", RelayTagPrefix)
+		}
+	}
 	if e.Port < 1 || e.Port > 65535 {
 		return nil, invalid("port %d out of range", e.Port)
 	}
@@ -77,6 +87,7 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 	sb.HopPorts = hopPorts
 	client.HopPorts, client.HopInterval = hopPorts, hopInterval
 	sb.ListenPort = e.Port
+	sb.Tag = tag
 
 	switch in.Protocol {
 	case store.ProtoVLESS:
@@ -134,8 +145,9 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 	// means the node losing it has to be told as well as the node gaining it.
 	previousRelay := in.RelayNodeID
 	relayChange := in.RelayNodeID != relay.nodeID || in.RelayPort != relay.port ||
-		(relay.nodeID != 0 && in.Port != e.Port)
+		(relay.nodeID != 0 && (in.Port != e.Port || in.Tag != tag))
 
+	in.Tag = tag
 	in.Port = e.Port
 	in.Config = string(cfg)
 	in.Client = string(cl)
