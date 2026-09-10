@@ -1,6 +1,6 @@
 # skysbx-panel
 
-由 **zayvian-lee** 维护的代理管理面板：管理节点、用户、套餐额度、节点倍率与订阅。
+由 **kosje** 开发，我二次开发的代理管理面板：管理节点、用户、套餐额度、节点倍率与订阅。
 
 [![Panel CI](https://github.com/zayvian-lee/skysbx-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/zayvian-lee/skysbx-panel/actions/workflows/ci.yml)
 
