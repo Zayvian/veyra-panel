@@ -73,6 +73,12 @@ func (n *fakeNode) send(t string, id uint64, data any) {
 // await waits for the next frame of the given type, ignoring others (a ping can
 // arrive at any moment and must not fail an unrelated assertion).
 func (n *fakeNode) await(msgType string, within time.Duration) Envelope {
+	return n.awaitMatching(msgType, within, func(Envelope) bool { return true })
+}
+
+// A previously scheduled push can arrive after a state-changing action. Keep
+// the same deadline while waiting for the state that the test actually needs.
+func (n *fakeNode) awaitMatching(msgType string, within time.Duration, matches func(Envelope) bool) Envelope {
 	n.t.Helper()
 	deadline := time.After(within)
 	for {
@@ -81,7 +87,7 @@ func (n *fakeNode) await(msgType string, within time.Duration) Envelope {
 			if !ok {
 				n.t.Fatalf("connection closed while waiting for %q", msgType)
 			}
-			if env.Type == msgType {
+			if env.Type == msgType && matches(env) {
 				return env
 			}
 		case <-deadline:
@@ -275,17 +281,22 @@ func TestUserChangePushesToConnectedNode(t *testing.T) {
 	n.send(TypeHello, 1, Hello{Version: "0.1.0"})
 	n.await(TypeUsers, 3*time.Second) // the initial push
 
-	if _, err := h.svc.CreateUser(service.NewUser{Name: "bob"}); err != nil {
+	bob, err := h.svc.CreateUser(service.NewUser{Name: "bob"})
+	if err != nil {
 		t.Fatalf("create user: %v", err)
 	}
 
-	var users UsersData
-	if err := json.Unmarshal(n.await(TypeUsers, 3*time.Second).Data, &users); err != nil {
-		t.Fatalf("users payload: %v", err)
-	}
-	if len(users.ByTag["vless-tokyo"]) != 1 {
-		t.Fatalf("expected bob to be pushed, got %+v", users.ByTag["vless-tokyo"])
-	}
+	// Adding the initial inbounds schedules a coalesced push in addition to
+	// hello's initial push. Under -race that empty snapshot may still be queued
+	// when bob is created; the next frame is not necessarily the new state.
+	n.awaitMatching(TypeUsers, 3*time.Second, func(env Envelope) bool {
+		var users UsersData
+		if err := json.Unmarshal(env.Data, &users); err != nil {
+			t.Fatalf("users payload: %v", err)
+		}
+		list := users.ByTag["vless-tokyo"]
+		return len(list) == 1 && list[0].Name == "bob" && list[0].UUID == bob.VlessUUID
+	})
 }
 
 // Access is revoked by omission rather than by a disable command, so a disabled
