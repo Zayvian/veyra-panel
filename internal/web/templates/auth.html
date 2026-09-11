@@ -4,7 +4,7 @@
   <h1>初始化</h1>
   <p class="dim">还没有管理员。设置一个，这个页面之后就关闭了。</p>
   <div class="card">
-    <form hx-post="/setup" hx-target="#err">
+    <form hx-post="{{panelPath "/setup"}}" hx-target="#err">
       <label>用户名<input name="username" value="admin" required autofocus></label>
       <label>密码<input name="password" type="password" required minlength="12"
              placeholder="至少 12 个字符"></label>
@@ -21,7 +21,7 @@
 <main class="center">
   <h1>登录</h1>
   <div class="card">
-    <form hx-post="/login" hx-target="#err">
+    <form hx-post="{{panelPath "/login"}}" hx-target="#err">
       <label>用户名<input name="username" required autofocus></label>
       <label>密码<input name="password" type="password" required></label>
       <button>登录</button>
@@ -65,7 +65,7 @@
       <tbody>
       {{range .NodeTraffic}}
         <tr>
-          <td><a href="/nodes/{{.Node.ID}}/inbounds">{{.Node.Name}}</a>
+          <td><a href="{{panelPath "/nodes/"}}{{.Node.ID}}/inbounds">{{.Node.Name}}</a>
               <span class="dim">{{.Node.Country}}</span>
               <div class="dim" style="font-size:.75rem">{{.Node.Address}}</div></td>
           <td>{{if not .Node.Enabled}}<span class="pill off">已停用</span>

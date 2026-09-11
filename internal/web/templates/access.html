@@ -2,14 +2,14 @@
 {{template "head" .}}
 {{template "nav" .}}
 <main>
-  <h1><a href="/users" class="dim">用户</a> / {{.User.Name}} 可用的协议</h1>
+  <h1><a href="{{panelPath "/users"}}" class="dim">用户</a> / {{.User.Name}} 可用的协议</h1>
   <div id="access">{{template "access-form" .}}</div>
 </main>
 {{template "foot" .}}
 {{end}}
 
 {{define "access-form"}}
-<form data-access-form hx-post="/users/{{.User.ID}}/access" hx-target="#access" hx-swap="innerHTML">
+<form data-access-form hx-post="{{panelPath "/users/"}}{{.User.ID}}/access" hx-target="#access" hx-swap="innerHTML">
   <div class="card">
     <div class="row" style="display:flex;gap:.8rem;align-items:flex-end;flex-wrap:wrap">
       <label>开放范围<select name="access_mode">
@@ -23,7 +23,7 @@
   </div>
   {{if not .Groups}}
     <div class="card"><p class="dim" style="margin:.5rem">
-      还没有任何入站。先到<a href="/nodes">节点</a>里建几个。
+      还没有任何入站。先到<a href="{{panelPath "/nodes"}}">节点</a>里建几个。
     </p></div>
   {{else}}
     {{range .Groups}}

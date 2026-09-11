@@ -4,7 +4,7 @@
 <main>
   <h1>用户</h1>
   <div class="card">
-    <form class="row" hx-post="/users" hx-target="#users" hx-swap="outerHTML">
+    <form class="row" hx-post="{{panelPath "/users"}}" hx-target="#users" hx-swap="outerHTML">
       <label>名称<input name="name" required placeholder="alice"
              pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}"></label>
       <label>到期（服务器时间）<input name="expires_at" type="datetime-local"></label>
@@ -54,7 +54,7 @@
 {{define "user-edit-row"}}
 <tr id="u-{{.User.ID}}">
   <td colspan="8">
-    <form class="row" hx-post="/users/{{.User.ID}}"
+    <form class="row" hx-post="{{panelPath "/users/"}}{{.User.ID}}"
           hx-target="#users" hx-swap="outerHTML" style="align-items:flex-end">
       <label>名称<input name="name" required value="{{.User.Name}}"
              pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}"></label>
@@ -73,7 +73,7 @@
              value="{{resettime .User.ResetHour .User.ResetMinute}}"></label>
       <label>备注<input name="note" value="{{.User.Note}}"></label>
       <button>保存</button>
-      <button type="button" class="ghost" hx-get="/users"
+      <button type="button" class="ghost" hx-get="{{panelPath "/users"}}"
               hx-target="#users" hx-swap="outerHTML">取消</button>
     </form>
     <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
@@ -103,7 +103,7 @@
         <td>
           {{.Name}}{{if .Note}}<div class="dim" style="font-size:.8rem">{{.Note}}</div>{{end}}
           <div style="font-size:.75rem;margin-top:.2rem">
-            <a href="/users/{{.ID}}/activity">活动</a>
+            <a href="{{panelPath "/users/"}}{{.ID}}/activity">活动</a>
             <a class="dim" href="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" target="_blank" rel="noopener">订阅页</a>
             <button class="ghost" style="font-size:.7rem;padding:.1rem .35rem"
                     data-sub-url="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" onclick="copySub(this)">复制链接</button>
@@ -119,7 +119,7 @@
         </td>
         <td>
           {{$n := index $.Access .ID}}
-          <a href="/users/{{.ID}}/access">
+          <a href="{{panelPath "/users/"}}{{.ID}}/access">
             {{if lt $n 0}}全部{{else}}{{$n}} / {{$.InboundCount}}{{end}}</a>
         </td>
         {{/* Distinct source addresses now, over the cap. The count is summed
@@ -149,14 +149,14 @@
           {{end}}
         </td>
         <td style="text-align:right;white-space:nowrap">
-          <button class="ghost" hx-get="/users/{{.ID}}/edit"
+          <button class="ghost" hx-get="{{panelPath "/users/"}}{{.ID}}/edit"
                   hx-target="closest tr" hx-swap="outerHTML">编辑</button>
-          <button class="ghost" hx-post="/users/{{.ID}}/toggle"
+          <button class="ghost" hx-post="{{panelPath "/users/"}}{{.ID}}/toggle"
                   hx-target="#users" hx-swap="outerHTML">{{if .Enabled}}停用{{else}}启用{{end}}</button>
-          <button class="ghost" hx-post="/users/{{.ID}}/reset"
+          <button class="ghost" hx-post="{{panelPath "/users/"}}{{.ID}}/reset"
                   hx-target="#users" hx-swap="outerHTML"
                   hx-confirm="把 {{.Name}} 的已用流量清零？">清零</button>
-          <button class="ghost danger" hx-delete="/users/{{.ID}}"
+          <button class="ghost danger" hx-delete="{{panelPath "/users/"}}{{.ID}}"
                   hx-target="#users" hx-swap="outerHTML"
                   hx-confirm="删除 {{.Name}}？该用户的订阅会立即失效。">删除</button>
         </td>

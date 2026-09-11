@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>skysbx</title>
-<script src="/static/htmx.min.js"></script>
+<script src="{{panelPath "/static/htmx.min.js"}}"></script>
 {{- /* Every state-changing htmx request must carry the CSRF token. The
         token is bound to the logged-in session; the page data always has
         it (set by Server.page / the render helpers), so we read it once
@@ -83,7 +83,7 @@ button.danger:hover{color:var(--bad);border-color:var(--bad)}
 .center button{width:100%}
 code.mono{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim)}
 </style>
-<script src="/static/access.js" defer></script>
+<script src="{{panelPath "/static/access.js"}}" defer></script>
 </head>
 <body>
 {{end}}
@@ -92,12 +92,13 @@ code.mono{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim)
 <header>
   <span class="brand">skysbx</span>
   <nav>
-    <a href="/"      class="{{if eq .Page "dashboard"}}on{{end}}">概览</a>
-    <a href="/users" class="{{if eq .Page "users"}}on{{end}}">用户</a>
-    <a href="/nodes" class="{{if eq .Page "nodes"}}on{{end}}">节点</a>
-    <a href="/policy" class="{{if eq .Page "policy"}}on{{end}}">限制</a>
+    <a href="{{panelPath "/"}}"      class="{{if eq .Page "dashboard"}}on{{end}}">概览</a>
+    <a href="{{panelPath "/users"}}" class="{{if eq .Page "users"}}on{{end}}">用户</a>
+    <a href="{{panelPath "/nodes"}}" class="{{if eq .Page "nodes"}}on{{end}}">节点</a>
+    <a href="{{panelPath "/policy"}}" class="{{if eq .Page "policy"}}on{{end}}">限制</a>
+    <a href="{{panelPath "/settings"}}" class="{{if eq .Page "settings"}}on{{end}}">设置</a>
   </nav>
-  <form hx-post="/logout"><button class="ghost">退出</button></form>
+  <form hx-post="{{panelPath "/logout"}}"><button class="ghost">退出</button></form>
 </header>
 {{end}}
 

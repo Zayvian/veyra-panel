@@ -2,7 +2,7 @@
 {{template "head" .}}
 {{template "nav" .}}
 <main>
-  <h1><a href="/users" class="dim">用户</a> / {{.User.Name}} 的活动</h1>
+  <h1><a href="{{panelPath "/users"}}" class="dim">用户</a> / {{.User.Name}} 的活动</h1>
 
   <div class="card stats">
     <div class="stat"><div class="n">{{.LiveIPs}}</div><div class="k">当前来源 IP</div></div>
@@ -52,7 +52,7 @@
     <p class="dim" style="margin:.8rem 0 0;font-size:.8rem">
       「目标数偏高」是指该小时内某个采样点连到了 {{.Threshold}} 个以上不同地址。
       <strong>这是提示，不是结论</strong> —— 开几十个标签页的人也会越线。
-      要处理的话回<a href="/users">用户</a>页停用或删除。
+      要处理的话回<a href="{{panelPath "/users"}}">用户</a>页停用或删除。
     </p>
     {{end}}
   </div>

@@ -1,0 +1,27 @@
+{{define "settings"}}
+{{template "head" .}}
+{{template "nav" .}}
+<main>
+  <h1>设置</h1>
+  <div id="settings">
+    {{if .Saved}}<div class="card" style="border-color:rgba(62,207,142,.4)"><span class="pill ok">{{.Saved}}</span></div>{{end}}
+    <form class="card" hx-post="{{panelPath "/settings"}}" hx-target="#settings" hx-swap="innerHTML">
+      <label>面板访问路径
+        <input name="access_path" value="{{.AccessPath}}" placeholder="/skypanel" autocomplete="off">
+      </label>
+      <p class="dim" style="margin:.45rem 0 1rem;font-size:.82rem">
+        设置后只有 <code class="mono">https://你的域名{{if .AccessPath}}{{.AccessPath}}{{else}}/skypanel{{end}}</code> 才会进入管理面板。
+        留空会恢复原来的根路径访问。可使用英文字母、数字、横线、下划线和 <code>/</code>。
+      </p>
+      <label>根域名跳转地址（可选）
+        <input name="root_redirect" type="url" value="{{.RootRedirect}}" placeholder="https://www.example.com">
+      </label>
+      <p class="dim" style="margin:.45rem 0 1rem;font-size:.82rem">
+        设置访问路径后，直接访问根域名会跳转到此地址；留空则返回 404。节点接入和订阅链接不会变化。
+      </p>
+      <button>保存访问设置</button>
+    </form>
+  </div>
+</main>
+{{template "foot" .}}
+{{end}}

@@ -9,7 +9,7 @@
 {{end}}
 
 {{define "policy-form"}}
-<form hx-post="/policy" hx-target="#policy" hx-swap="innerHTML"
+<form hx-post="{{panelPath "/policy"}}" hx-target="#policy" hx-swap="innerHTML"
       hx-confirm="保存会给所有节点推一份新配置，监听器会重建、现有连接会断一次。继续？">
   {{if .Saved}}
     <div class="card" style="border-color:rgba(62,207,142,.4)">
@@ -31,7 +31,7 @@
       · <strong>拦得住</strong>：明文 BT 握手、uTP（BT 的 UDP 传输，即使载荷加密，帧头也是明文）、UDP tracker announce —— 也就是大部分流量和全部的 peer 发现。<br>
       · <strong>拦不住</strong>：走 TCP 的加密 BT（MSE，多数客户端的默认）。它的头几个字节是随机的，嗅探认不出来。<br>
       实际效果是让 BT 很难用，不是让它不能用。真要确认某个用户在跑 BT，看
-      <a href="/users">用户</a>页里的活动记录 —— 连接形态比协议特征诚实。
+      <a href="{{panelPath "/users"}}">用户</a>页里的活动记录 —— 连接形态比协议特征诚实。
     </p>
   </div>
 
@@ -69,7 +69,7 @@
       限制对<strong>所有节点、所有用户</strong>生效。开启任何一项都意味着节点会嗅探每条
       连接的头几个字节来判断协议和域名 —— 这是按域名/协议拦截的前提，没有别的办法。<br>
       <strong>「大流量下载」没有开关。</strong>那不是一种协议，是一个用量；能管住它的是
-      用户的<strong>流量上限</strong>和<strong>同时在线 IP</strong>，两个都在<a href="/users">用户</a>页。
+      用户的<strong>流量上限</strong>和<strong>同时在线 IP</strong>，两个都在<a href="{{panelPath "/users"}}">用户</a>页。
     </p>
   </div>
 </form>

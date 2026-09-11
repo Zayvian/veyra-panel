@@ -2,9 +2,9 @@
 {{template "head" .}}
 {{template "nav" .}}
 <main>
-  <h1><a href="/nodes" class="dim">节点</a> / {{.Node.Name}} 的入站</h1>
+  <h1><a href="{{panelPath "/nodes"}}" class="dim">节点</a> / {{.Node.Name}} 的入站</h1>
   <div class="card">
-    <form class="row" hx-post="/nodes/{{.Node.ID}}/inbounds"
+    <form class="row" hx-post="{{panelPath "/nodes/"}}{{.Node.ID}}/inbounds"
           hx-target="#inbounds" hx-swap="outerHTML">
       <label>协议
         <select name="protocol" onchange="onProto(this.value)">
@@ -72,7 +72,7 @@
       {{if not .RelayNodes}}
         <br><span class="pill warn-pill">当前不可用</span>
         面板里只有这一个节点，没有别的节点可以当中转机 ——
-        <a href="/nodes">再加一个节点</a>后这里就能选了。中转机本身也是一个正常节点，
+        <a href="{{panelPath "/nodes"}}">再加一个节点</a>后这里就能选了。中转机本身也是一个正常节点，
         可以同时跑自己的入站。
       {{end}}
     </p>
@@ -115,7 +115,7 @@ onRelay();
      server stops sending this attribute once there is a real answer — and
      while a row is being edited, because a swap replaces half-typed input. */}}
 <div class="card" id="inbounds"
-  {{if .Settle}}hx-get="/nodes/{{.Node.ID}}/inbounds?settle={{.Settle}}"
+  {{if .Settle}}hx-get="{{panelPath "/nodes/"}}{{.Node.ID}}/inbounds?settle={{.Settle}}"
      hx-trigger="load delay:800ms" hx-target="#inbounds" hx-swap="outerHTML"{{end}}>
   {{/* The node's own account of what it is running. Without it an inbound the
        node refused sits here looking enabled, and the only symptom is clients
@@ -139,7 +139,7 @@ onRelay();
            updates the tag in both node config and user lists. */}}
       <tr>
         <td colspan="6">
-          <form class="row" hx-post="/inbounds/{{.ID}}"
+          <form class="row" hx-post="{{panelPath "/inbounds/"}}{{.ID}}"
                 hx-target="#inbounds" hx-swap="outerHTML" style="align-items:flex-end">
             <label>入站名称<input name="tag" value="{{.Tag}}" required maxlength="128"></label>
             <label>节点内排序<input name="sort_order" type="number" min="0" max="999999" step="1" value="{{.SortOrder}}" required style="width:7rem"></label>
@@ -185,7 +185,7 @@ onRelay();
             <label>跳跃间隔<input name="hop_interval" value="{{$.HopInterval}}" placeholder="30s"></label>
             {{end}}
             <button>保存</button>
-            <button type="button" class="ghost" hx-get="/nodes/{{$.Node.ID}}/inbounds"
+            <button type="button" class="ghost" hx-get="{{panelPath "/nodes/"}}{{$.Node.ID}}/inbounds"
                     hx-target="#inbounds" hx-swap="outerHTML">取消</button>
           </form>
           <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
@@ -240,12 +240,12 @@ onRelay();
             {{end}}
         </td>
         <td style="text-align:right;white-space:nowrap">
-          <button class="ghost" hx-get="/inbounds/{{.ID}}/edit"
+          <button class="ghost" hx-get="{{panelPath "/inbounds/"}}{{.ID}}/edit"
                   hx-target="#inbounds" hx-swap="outerHTML">编辑</button>
-          <button class="ghost" hx-post="/inbounds/{{.ID}}/toggle"
+          <button class="ghost" hx-post="{{panelPath "/inbounds/"}}{{.ID}}/toggle"
                   hx-target="#inbounds" hx-swap="outerHTML"
                   >{{if .Enabled}}停用{{else}}启用{{end}}</button>
-          <button class="ghost danger" hx-delete="/inbounds/{{.ID}}"
+          <button class="ghost danger" hx-delete="{{panelPath "/inbounds/"}}{{.ID}}"
                   hx-target="#inbounds" hx-swap="outerHTML"
                   hx-confirm="删除 {{.Tag}}？连着它的客户端会断开，而且密钥不可恢复。">删除</button>
         </td>
@@ -273,7 +273,7 @@ onRelay();
           <td class="dim">{{.Tag}}</td>
           <td class="num">{{.ListenPort}}</td>
           <td class="dim">{{.Target}}</td>
-          <td><a href="/nodes/{{.Inbound.NodeID}}/inbounds">{{.OriginNode}} / {{.Inbound.Tag}}</a></td>
+          <td><a href="{{panelPath "/nodes/"}}{{.Inbound.NodeID}}/inbounds">{{.OriginNode}} / {{.Inbound.Tag}}</a></td>
           <td>{{if .Serving}}<span class="pill ok">转发中</span>
               {{else}}<span class="pill off">已停</span>{{end}}</td>
         </tr>

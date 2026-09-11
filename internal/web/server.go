@@ -126,6 +126,7 @@ type Server struct {
 	nodes              NodeChannel
 	logins             *ratelimit.Limiter
 	secureCookies      bool
+	access             panelAccess
 	sessionGen         int64 // current session generation, cached to avoid a DB read per request
 }
 
@@ -150,11 +151,6 @@ type NodeChannel interface {
 }
 
 func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookies bool) (*Server, error) {
-	tpl, err := template.New("").Funcs(templateFuncs()).ParseFS(assets, "templates/*.html")
-	if err != nil {
-		return nil, fmt.Errorf("parse templates: %w", err)
-	}
-
 	// The session key lives in the database so restarts do not log everyone out.
 	stored, err := svc.Store().Setting(settingSessionKey)
 	if err != nil {
@@ -197,16 +193,46 @@ func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookie
 	if nodes == nil {
 		return nil, fmt.Errorf("a node channel is required")
 	}
+	accessPath, err := svc.Store().Setting(settingPanelAccessPath)
+	if err != nil {
+		return nil, err
+	}
+	accessPath, err = normalizePanelAccessPath(accessPath)
+	if err != nil {
+		return nil, fmt.Errorf("stored panel access path is invalid: %w", err)
+	}
+	rootRedirect, err := svc.Store().Setting(settingRootRedirect)
+	if err != nil {
+		return nil, err
+	}
+	rootRedirect, err = normalizeRootRedirect(rootRedirect)
+	if err != nil {
+		return nil, fmt.Errorf("stored root redirect is invalid: %w", err)
+	}
+
 	srv := &Server{
 		svc:           svc,
 		nodes:         nodes,
 		log:           log,
-		tpl:           tpl,
 		sess:          newSessions(key),
 		csrf:          newCSRF(csrfKey),
 		secureCookies: secureCookies,
 		logins:        ratelimit.New(10, 5*time.Second),
+		access: panelAccess{
+			path:         accessPath,
+			rootRedirect: rootRedirect,
+		},
 	}
+	funcs := templateFuncs()
+	// Templates need the current value, rather than the value at startup:
+	// changing the path from Settings takes effect before the browser is
+	// redirected to the newly chosen URL.
+	funcs["panelPath"] = srv.panelPath
+	tpl, err := template.New("").Funcs(funcs).ParseFS(assets, "templates/*.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse templates: %w", err)
+	}
+	srv.tpl = tpl
 	// The session generation is cached for the lifetime of the Server; it
 	// only changes on logout, which goes through this same Server.
 	gen, err := srv.sessionGeneration()
@@ -240,6 +266,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /login", s.getLogin)
 	mux.HandleFunc("POST /login", s.postLogin)
 	mux.HandleFunc("POST /logout", s.postLogout)
+	mux.Handle("GET /settings", s.auth(http.HandlerFunc(s.getSettings)))
+	mux.Handle("POST /settings", s.auth(s.requireCSRF(http.HandlerFunc(s.postSettings))))
 
 	// Everything else needs a session, and every state-changing route
 	// needs a CSRF token. The two gates stack: auth() first (so we know
@@ -289,7 +317,46 @@ func (s *Server) Handler() http.Handler {
 				return
 			}
 		}
-		mux.ServeHTTP(w, r)
+
+		// Nodes and subscriptions are stable public machine endpoints.  Do not
+		// put them behind the administrator's changing path: otherwise a path
+		// rename would disconnect every node and invalidate every subscription.
+		if strings.HasPrefix(r.URL.Path, "/sub/") || r.URL.Path == "/api/v1/node/connect" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+
+		accessPath, rootRedirect := s.accessSettings()
+		if accessPath == "" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+		if r.URL.Path == "/" {
+			if rootRedirect == "" {
+				http.NotFound(w, r)
+				return
+			}
+			http.Redirect(w, r, rootRedirect, http.StatusFound)
+			return
+		}
+		if r.URL.Path != accessPath && !strings.HasPrefix(r.URL.Path, accessPath+"/") {
+			http.NotFound(w, r)
+			return
+		}
+		// A prefixed copy of a public endpoint would defeat the separate
+		// subscription-domain rule above and is never needed by a client.
+		internalPath := strings.TrimPrefix(r.URL.Path, accessPath)
+		if internalPath == "" {
+			internalPath = "/"
+		}
+		if strings.HasPrefix(internalPath, "/sub/") || internalPath == "/api/v1/node/connect" {
+			http.NotFound(w, r)
+			return
+		}
+		inner := r.Clone(r.Context())
+		inner.URL.Path = internalPath
+		inner.URL.RawPath = ""
+		mux.ServeHTTP(w, inner)
 	}))
 }
 
@@ -394,6 +461,7 @@ func (s *Server) auth(next http.Handler) http.Handler {
 // into a fragment, which would nest a whole login page inside a table;
 // HX-Redirect tells it to navigate instead.
 func (s *Server) redirect(w http.ResponseWriter, r *http.Request, to string) {
+	to = s.panelPath(to)
 	if r.Header.Get("HX-Request") == "true" {
 		w.Header().Set("HX-Redirect", to)
 		w.WriteHeader(http.StatusNoContent)

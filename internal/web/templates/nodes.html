@@ -4,7 +4,7 @@
 <main>
   <h1>节点</h1>
   <div class="card">
-    <form class="row" hx-post="/nodes" hx-target="#nodes" hx-swap="outerHTML">
+    <form class="row" hx-post="{{panelPath "/nodes"}}" hx-target="#nodes" hx-swap="outerHTML">
       <label>名称<input name="name" required placeholder="香港无限流量"
              maxlength="64"></label>
       <label>客户端连接地址<input name="address" required placeholder="jp.example.com"
@@ -48,7 +48,7 @@
      row is being edited — a swap replaces half-typed input, which is what made
      the edit form appear to close itself ten seconds after it opened. */}}
 <div id="nodes"
-     {{if and (not .NewToken) (not .EditID)}}hx-get="/nodes" hx-trigger="every 10s"
+     {{if and (not .NewToken) (not .EditID)}}hx-get="{{panelPath "/nodes"}}" hx-trigger="every 10s"
      hx-target="#nodes" hx-swap="outerHTML"{{end}}>
   {{if .NewToken}}
   <div class="token">
@@ -73,7 +73,7 @@
              because the node connects outward regardless. */}}
         <tr>
           <td colspan="7">
-            <form class="row" hx-post="/nodes/{{.ID}}"
+            <form class="row" hx-post="{{panelPath "/nodes/"}}{{.ID}}"
                   hx-target="#nodes" hx-swap="outerHTML" style="align-items:flex-end">
               <label>名称<input name="name" required value="{{.Name}}"
                      maxlength="64"></label>
@@ -88,7 +88,7 @@
               <label>重置时间<input name="stats_reset_time" type="time"
                 value="{{resettime .StatsResetHour .StatsResetMinute}}"></label>
               <button>保存</button>
-              <button type="button" class="ghost" hx-get="/nodes"
+              <button type="button" class="ghost" hx-get="{{panelPath "/nodes"}}"
                       hx-target="#nodes" hx-swap="outerHTML">取消</button>
             </form>
             <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
@@ -125,26 +125,26 @@
             {{else}}<span class="pill off">从未接入</span>{{end}}
           </td>
           <td>
-            <a href="/nodes/{{.ID}}/inbounds">{{index $.InboundCounts .ID}} 个</a>
+            <a href="{{panelPath "/nodes/"}}{{.ID}}/inbounds">{{index $.InboundCounts .ID}} 个</a>
             {{/* The node told us it refused the last configuration and is
                  still on the previous one. Saying so here means the operator
                  does not have to open the node to find out. */}}
             {{if index $.Rejected .ID}}
-              <a href="/nodes/{{.ID}}/inbounds" class="pill bad"
+              <a href="{{panelPath "/nodes/"}}{{.ID}}/inbounds" class="pill bad"
                  style="margin-left:.35rem">未生效</a>{{end}}
           </td>
           <td><code class="mono">{{if .Version}}{{.Version}}{{else}}—{{end}}</code></td>
           <td style="text-align:right;white-space:nowrap">
-            <button class="ghost" hx-get="/nodes/{{.ID}}/edit"
+            <button class="ghost" hx-get="{{panelPath "/nodes/"}}{{.ID}}/edit"
                     hx-target="#nodes" hx-swap="outerHTML">编辑</button>
-            <button class="ghost" hx-post="/nodes/{{.ID}}/toggle"
+            <button class="ghost" hx-post="{{panelPath "/nodes/"}}{{.ID}}/toggle"
                     hx-target="#nodes" hx-swap="outerHTML"
                     {{if .Enabled}}hx-confirm="停用 {{.Name}}？该节点会停掉所有入站，连着它的客户端立即断开。"{{end}}
                     >{{if .Enabled}}停用{{else}}启用{{end}}</button>
-            <button class="ghost" hx-post="/nodes/{{.ID}}/rotate"
+            <button class="ghost" hx-post="{{panelPath "/nodes/"}}{{.ID}}/rotate"
                     hx-target="#nodes" hx-swap="outerHTML"
                     hx-confirm="重新生成 {{.Name}} 的 token？旧 token 立即失效，该节点会掉线直到你换上新的。">换 token</button>
-            <button class="ghost danger" hx-delete="/nodes/{{.ID}}"
+            <button class="ghost danger" hx-delete="{{panelPath "/nodes/"}}{{.ID}}"
                     hx-target="#nodes" hx-swap="outerHTML"
                     hx-confirm="删除 {{.Name}}？它的入站会一并删除。">删除</button>
           </td>
