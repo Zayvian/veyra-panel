@@ -1,7 +1,9 @@
 #!/bin/sh
 # Install skysbx-panel and skysbx-node on this host.
 #
-#   curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh | bash
+#   curl -fL --retry 3 --connect-timeout 15 \
+#     https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh \
+#     -o /tmp/skysbx-all-install.sh && bash /tmp/skysbx-all-install.sh
 #
 # The node must have a join token.  Create a node in the panel after the panel
 # installer finishes, then paste that one-time token when this script asks.
