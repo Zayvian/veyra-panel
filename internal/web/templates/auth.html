@@ -59,8 +59,8 @@
     <table>
       <thead><tr>
         <th>节点</th><th>状态</th><th class="num">入站</th>
-        <th class="num">上行</th><th class="num">下行</th>
-        <th class="num">近 {{.Days}} 天</th><th class="num">累计</th><th class="num">占比</th>
+        <th class="num">周期上行</th><th class="num">周期下行</th><th class="num">本周期</th>
+        <th>下次重置</th><th class="num">近 {{.Days}} 天</th><th class="num">累计</th><th class="num">占比</th>
       </tr></thead>
       <tbody>
       {{range .NodeTraffic}}
@@ -72,8 +72,10 @@
               {{else if .Connected}}<span class="pill ok">在线</span>
               {{else}}<span class="pill bad">离线</span>{{end}}</td>
           <td class="num dim">{{.Inbounds}}</td>
-          <td class="num dim">{{bytes .Up}}</td>
-          <td class="num dim">{{bytes .Down}}</td>
+          <td class="num dim">{{bytes .Node.StatsUp}}</td>
+          <td class="num dim">{{bytes .Node.StatsDown}}</td>
+          <td class="num">{{bytes .Period}}</td>
+          <td class="dim" style="font-size:.75rem">{{if gt .Node.StatsResetDay 0}}{{nextreset .Node.StatsResetDay .Node.StatsResetHour .Node.StatsResetMinute}}{{else}}不重置{{end}}</td>
           <td class="num">{{bytes .Recent}}</td>
           <td class="num">{{bytes .Total}}</td>
           <td class="num dim">{{pct .Total $.LedgerTotal}}</td>
@@ -81,14 +83,14 @@
       {{end}}
       </tbody>
       <tfoot><tr>
-        <td colspan="5" class="dim">合计</td>
-        <td class="num"></td>
+        <td colspan="8" class="dim">累计合计</td>
         <td class="num">{{bytes .LedgerTotal}}</td>
         <td></td>
       </tr></tfoot>
     </table>
     <p class="dim" style="margin:.8rem 0 0;font-size:.8rem">
-      这里的累计按<strong>节点</strong>记账，上面那个「累计流量」按<strong>用户</strong>记账。
+      每个节点可在「节点 → 编辑」单独设置本周期的每月重置日期和时间；重置只清本周期统计，
+      不删除历史账，也不影响用户套餐。这里的累计按<strong>节点</strong>记账，上面那个「累计流量」按<strong>用户</strong>记账。
       删节点会带走它的记账行，删用户会带走用户的，所以两个数字会慢慢分开 ——
       与其挑一个装作准确，不如两个都摆出来。
     </p>

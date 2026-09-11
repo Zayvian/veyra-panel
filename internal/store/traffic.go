@@ -22,12 +22,15 @@ func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) error {
 	if err := tx.QueryRow(`SELECT rate_milli FROM nodes WHERE id = ?`, nodeID).Scan(&rate); err != nil {
 		return err
 	}
+	var nodeUp, nodeDown int64
 	for userID, d := range deltas {
 		up, down := d[0], d[1]
 		// Bounds also protect fixed-point multiplication from integer overflow.
 		if up < 0 || down < 0 || up > 1<<40 || down > 1<<40 {
 			return fmt.Errorf("invalid traffic delta")
 		}
+		nodeUp += up
+		nodeDown += down
 		var remUp, remDown int64
 		if err := tx.QueryRow(`SELECT traffic_up_remainder, traffic_down_remainder FROM users WHERE id = ?`, userID).Scan(&remUp, &remDown); err != nil {
 			return err
@@ -50,6 +53,13 @@ func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) error {
 			billedUp+billedDown, billedUp, billedDown, scaledUp%1000, scaledDown%1000, userID); err != nil {
 			return err
 		}
+	}
+	// This is deliberately raw traffic, before a node's billing multiplier.
+	// The dashboard answers what bandwidth the server carried; user quotas may
+	// intentionally charge a different number of bytes.
+	if _, err := tx.Exec(`UPDATE nodes SET stats_up = stats_up + ?, stats_down = stats_down + ? WHERE id = ?`,
+		nodeUp, nodeDown, nodeID); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

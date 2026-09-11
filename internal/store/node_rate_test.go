@@ -42,6 +42,13 @@ func TestRatesPreserveRawTrafficAndFractionalBilling(t *testing.T) {
 	if rawUp != 1010 || rawDown != 2020 {
 		t.Fatalf("raw traffic lost: %d %d", rawUp, rawDown)
 	}
+	period, err := s.Node(n.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if period.StatsUp != rawUp || period.StatsDown != rawDown {
+		t.Fatalf("node period usage = %d/%d, want raw %d/%d", period.StatsUp, period.StatsDown, rawUp, rawDown)
+	}
 	n.RateMilli = 2000
 	if err := s.UpdateNode(n); err != nil {
 		t.Fatal(err)

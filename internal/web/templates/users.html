@@ -7,7 +7,7 @@
     <form class="row" hx-post="/users" hx-target="#users" hx-swap="outerHTML">
       <label>名称<input name="name" required placeholder="alice"
              pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}"></label>
-      <label>到期<input name="expires_at" type="date"></label>
+      <label>到期（服务器时间）<input name="expires_at" type="datetime-local"></label>
       <label>流量上限 GiB<input name="traffic_limit_gb" type="number" step="1" min="0"
              placeholder="留空 = 不限"></label>
       <label>同时在线 IP<input name="ip_limit" type="number" step="1" min="0"
@@ -20,13 +20,14 @@
         <select name="reset_day" style="min-width:9rem">
           {{template "reset-day-options" 0}}
         </select></label>
+      <label>重置时间<input name="reset_time" type="time" value="00:00"></label>
       <label>备注<input name="note" placeholder="可选"></label>
       <button>新建</button>
     </form>
     <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
-      <strong>流量重置</strong>是月付套餐用的：到了那一天已用流量归零，不用每个月手动清。
+      <strong>流量重置</strong>是月付套餐用的：在选定日期和时间已用流量归零，不用每个月手动清。
       选「每月最后一天」或 29–31 号时，短月会自动落到该月最后一天，二月不会被跳过。
-      重置只清计数器，概览页的历史曲线和按节点的流量账不受影响。
+      到期和重置落在同一时刻时，到期优先，用户不会因重置恢复可用。所有日期时间按服务器本地时区解释。
     </p>
   </div>
   {{template "user-table" .}}
@@ -57,8 +58,8 @@
           hx-target="#users" hx-swap="outerHTML" style="align-items:flex-end">
       <label>名称<input name="name" required value="{{.User.Name}}"
              pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}"></label>
-      <label>到期<input name="expires_at" type="date"
-             value="{{dateval .User.ExpiresAt}}"></label>
+      <label>到期（服务器时间）<input name="expires_at" type="datetime-local"
+             value="{{datetimeval .User.ExpiresAt}}"></label>
       <label>流量上限 GiB<input name="traffic_limit_gb" type="number" step="0.01" min="0"
              placeholder="留空 = 不限" value="{{gibval .User.TrafficLimit}}"></label>
       <label>同时在线 IP<input name="ip_limit" type="number" step="1" min="0"
@@ -68,6 +69,8 @@
         <select name="reset_day" style="min-width:9rem">
           {{template "reset-day-options" .User.ResetDay}}
         </select></label>
+      <label>重置时间<input name="reset_time" type="time"
+             value="{{resettime .User.ResetHour .User.ResetMinute}}"></label>
       <label>备注<input name="note" value="{{.User.Note}}"></label>
       <button>保存</button>
       <button type="button" class="ghost" hx-get="/users"
@@ -142,7 +145,7 @@
                something quite different depending on whether it resets on
                Tuesday. */}}
           {{if gt .ResetDay 0}}
-            <div class="dim" style="font-size:.7rem">{{nextreset .ResetDay}} 重置</div>
+            <div class="dim" style="font-size:.7rem">{{nextreset .ResetDay .ResetHour .ResetMinute}} 重置</div>
           {{end}}
         </td>
         <td style="text-align:right;white-space:nowrap">

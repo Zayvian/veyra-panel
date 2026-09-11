@@ -94,7 +94,7 @@ func (s *Server) subscriptionPage(w http.ResponseWriter, r *http.Request,
 
 	var expires string
 	if sb.User.ExpiresAt != nil {
-		expires = sb.User.ExpiresAt.Format("2006-01-02")
+		expires = sb.User.ExpiresAt.Local().Format("2006-01-02 15:04")
 	}
 
 	s.render(w, "subscription", map[string]any{

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kosje/skysbx-panel/internal/store"
@@ -33,6 +34,11 @@ func (nopNotifier) ConfigChanged(int64) {}
 type Service struct {
 	st     *store.Store
 	notify Notifier
+	// lastScheduleCheck lets the minute scheduler tell live nodes precisely when
+	// an expiry boundary was crossed, without rebuilding every user list every
+	// minute.
+	scheduleMu        sync.Mutex
+	lastScheduleCheck time.Time
 }
 
 func New(st *store.Store) *Service {
@@ -74,6 +80,8 @@ type NewUser struct {
 	TrafficLimit int64
 	IPLimit      int
 	ResetDay     int
+	ResetHour    int
+	ResetMinute  int
 }
 
 func (s *Service) CreateUser(nu NewUser) (*store.User, error) {
@@ -84,6 +92,7 @@ func (s *Service) CreateUser(nu NewUser) (*store.User, error) {
 	if nu.TrafficLimit < 0 {
 		return nil, invalid("traffic limit cannot be negative")
 	}
+	nu.ResetHour, nu.ResetMinute = ClampResetTime(nu.ResetHour, nu.ResetMinute)
 
 	u := &store.User{
 		Name:         nu.Name,
@@ -96,6 +105,8 @@ func (s *Service) CreateUser(nu NewUser) (*store.User, error) {
 		TrafficLimit: nu.TrafficLimit,
 		IPLimit:      nu.IPLimit,
 		ResetDay:     ClampResetDay(nu.ResetDay),
+		ResetHour:    nu.ResetHour,
+		ResetMinute:  nu.ResetMinute,
 		Note:         nu.Note,
 	}
 	if err := s.st.CreateUser(u); err != nil {
@@ -121,6 +132,7 @@ func (s *Service) UpdateUser(u *store.User) error {
 		return invalid("traffic limit cannot be negative")
 	}
 	u.ResetDay = ClampResetDay(u.ResetDay)
+	u.ResetHour, u.ResetMinute = ClampResetTime(u.ResetHour, u.ResetMinute)
 	if u.IPLimit < 0 {
 		return invalid("address limit cannot be negative")
 	}
@@ -135,7 +147,7 @@ func (s *Service) UpdateUser(u *store.User) error {
 	// has been running for months would be measured against a boundary in the
 	// past, be found overdue, and lose its counter on the next sweep — which is
 	// not what "from now on, reset monthly" means to whoever just asked for it.
-	if prev.ResetDay == 0 && u.ResetDay > 0 {
+	if (prev.ResetDay != u.ResetDay || prev.ResetHour != u.ResetHour || prev.ResetMinute != u.ResetMinute) && u.ResetDay > 0 {
 		if err := s.st.TouchUserReset(u.ID); err != nil {
 			return err
 		}
@@ -258,6 +270,8 @@ func (s *Service) UpdateNode(n *store.Node) error {
 	if err := checkRate(n.RateMilli); err != nil {
 		return err
 	}
+	n.StatsResetDay = ClampResetDay(n.StatsResetDay)
+	n.StatsResetHour, n.StatsResetMinute = ClampResetTime(n.StatsResetHour, n.StatsResetMinute)
 	n.Name = strings.TrimSpace(n.Name)
 	if err := checkDisplayName("node name", n.Name); err != nil {
 		return err
@@ -274,6 +288,15 @@ func (s *Service) UpdateNode(n *store.Node) error {
 	}
 	if err := s.st.UpdateNode(n); err != nil {
 		return err
+	}
+	if prev.StatsResetDay != n.StatsResetDay || prev.StatsResetHour != n.StatsResetHour || prev.StatsResetMinute != n.StatsResetMinute {
+		// Changing a node's reporting cycle begins a new one now. Otherwise a
+		// value from an unrelated old cycle would be presented as this month.
+		if n.StatsResetDay > 0 {
+			if err := s.st.ResetNodeStats(n.ID); err != nil {
+				return err
+			}
+		}
 	}
 
 	// Tags follow the node name, so "ss-tokyo" does not outlive a node called

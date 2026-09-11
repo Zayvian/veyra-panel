@@ -47,6 +47,10 @@ type User struct {
 	// the end of a short month clamps to that month's last day, so 31 means
 	// "the last day of every month" and February is not skipped.
 	ResetDay int
+	// ResetHour and ResetMinute are local server time. Existing schedules
+	// migrate as 00:00, which is the original behaviour.
+	ResetHour   int
+	ResetMinute int
 	// LastResetAt is when the counter was last zeroed, by the schedule or by
 	// hand. The schedule compares against this rather than against a stored
 	// "next due", so a panel that was off across a reset day catches up on its
@@ -64,7 +68,9 @@ func (u *User) Active(now time.Time) bool {
 	if !u.Enabled {
 		return false
 	}
-	if u.ExpiresAt != nil && now.After(*u.ExpiresAt) {
+	// Equality is expired too: an operator-selected minute is an exact cutoff,
+	// not an extra second of access.
+	if u.ExpiresAt != nil && !now.Before(*u.ExpiresAt) {
 		return false
 	}
 	if u.TrafficLimit > 0 && u.TrafficUsed >= u.TrafficLimit {
@@ -76,6 +82,14 @@ func (u *User) Active(now time.Time) bool {
 type Node struct {
 	SortOrder int   // subscription group order, smaller values come first
 	RateMilli int64 // 1000 = 1x; 0 does not consume quota
+	// Dashboard statistics have their own optional monthly period. They measure
+	// raw bytes carried by this node and never affect a user's quota.
+	StatsResetDay    int
+	StatsResetHour   int
+	StatsResetMinute int
+	StatsUp          int64
+	StatsDown        int64
+	StatsLastResetAt *time.Time
 	ID        int64
 	Name      string
 

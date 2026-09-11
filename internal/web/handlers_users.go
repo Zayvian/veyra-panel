@@ -78,7 +78,7 @@ func (s *Server) renderUsers(w http.ResponseWriter, r *http.Request, code int) {
 	s.render(w, "users", data)
 }
 
-// expiryFromForm reads the date field. A blank value means no expiry,
+// expiryFromForm reads the local date-time field. A blank value means no expiry,
 // which is a nil pointer rather than the zero time — the zero time is
 // in the past, and would lock everyone out.
 func expiryFromForm(r *http.Request) (*time.Time, error) {
@@ -86,9 +86,15 @@ func expiryFromForm(r *http.Request) (*time.Time, error) {
 	if v == "" {
 		return nil, nil
 	}
-	t, err := time.ParseInLocation("2006-01-02", v, time.Local)
+	t, err := time.ParseInLocation("2006-01-02T15:04", v, time.Local)
+	if err == nil {
+		return &t, nil
+	}
+	// Keep direct API callers and old bookmarked forms compatible. A legacy
+	// date always meant the last second of that local day.
+	t, err = time.ParseInLocation("2006-01-02", v, time.Local)
 	if err != nil {
-		return nil, fmt.Errorf("expiry must be a date like 2026-01-31")
+		return nil, fmt.Errorf("expiry must be like 2026-01-31 23:59")
 	}
 	t = t.Add(24*time.Hour - time.Second)
 	return &t, nil
@@ -121,6 +127,18 @@ func resetDayFromForm(r *http.Request, created time.Time) int {
 		return 0
 	}
 	return service.ClampResetDay(n)
+}
+
+func resetTimeFromForm(r *http.Request) (int, int, error) {
+	v := strings.TrimSpace(r.FormValue("reset_time"))
+	if v == "" {
+		return 0, 0, nil
+	}
+	t, err := time.Parse("15:04", v)
+	if err != nil {
+		return 0, 0, fmt.Errorf("reset time must be like 00:00")
+	}
+	return t.Hour(), t.Minute(), nil
 }
 
 func limitFromForm(r *http.Request) (int64, error) {
@@ -159,6 +177,11 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	nu.IPLimit = ipLimit
 	nu.ResetDay = resetDayFromForm(r, time.Time{})
+	nu.ResetHour, nu.ResetMinute, err = resetTimeFromForm(r)
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if _, err := s.svc.CreateUser(nu); err != nil {
 		s.fail(w, r, err)
 		return
@@ -217,6 +240,11 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	u.TrafficLimit = limit
 	u.IPLimit = ipLimit
 	u.ResetDay = resetDayFromForm(r, u.CreatedAt)
+	u.ResetHour, u.ResetMinute, err = resetTimeFromForm(r)
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := s.svc.UpdateUser(u); err != nil {
 		s.fail(w, r, err)
 		return

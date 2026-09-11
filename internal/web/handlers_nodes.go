@@ -84,7 +84,13 @@ func (s *Server) createNode(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	_, token, err := s.svc.CreateNode(
+	day := nodeStatsDayFromForm(r)
+	hour, minute, err := nodeStatsTimeFromForm(r)
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	node, token, err := s.svc.CreateNode(
 		r.FormValue("name"),
 		r.FormValue("address"),
 		r.FormValue("country"), rate)
@@ -92,7 +98,39 @@ func (s *Server) createNode(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	node.StatsResetDay, node.StatsResetHour, node.StatsResetMinute = day, hour, minute
+	if day > 0 {
+		if err := s.svc.UpdateNode(node); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	s.renderNodes(w, r, http.StatusCreated, token)
+}
+
+func nodeStatsDayFromForm(r *http.Request) int {
+	n, err := strconv.Atoi(strings.TrimSpace(r.FormValue("stats_reset_day")))
+	if err != nil {
+		return 0
+	}
+	return service.ClampResetDay(n)
+}
+
+func nodeStatsTimeFromForm(r *http.Request) (int, int, error) {
+	v := strings.TrimSpace(r.FormValue("stats_reset_time"))
+	if v == "" {
+		return 0, 0, nil
+	}
+	parts := strings.Split(v, ":")
+	if len(parts) != 2 {
+		return 0, 0, fmt.Errorf("node statistics reset time must be like 00:00")
+	}
+	hour, hourErr := strconv.Atoi(parts[0])
+	minute, minuteErr := strconv.Atoi(parts[1])
+	if hourErr != nil || minuteErr != nil || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		return 0, 0, fmt.Errorf("node statistics reset time must be like 00:00")
+	}
+	return hour, minute, nil
 }
 
 func (s *Server) editNode(w http.ResponseWriter, r *http.Request) {
@@ -138,6 +176,12 @@ func (s *Server) updateNode(w http.ResponseWriter, r *http.Request) {
 	n.Name = strings.TrimSpace(r.FormValue("name"))
 	n.Address = strings.TrimSpace(r.FormValue("address"))
 	n.Country = strings.TrimSpace(r.FormValue("country"))
+	n.StatsResetDay = nodeStatsDayFromForm(r)
+	n.StatsResetHour, n.StatsResetMinute, err = nodeStatsTimeFromForm(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if err := s.svc.UpdateNode(n); err != nil {
 		s.fail(w, r, err)
 		return

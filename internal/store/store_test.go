@@ -137,6 +137,7 @@ func TestUserActive(t *testing.T) {
 		{"enabled, no limits", User{Enabled: true}, true},
 		{"disabled", User{Enabled: false}, false},
 		{"expired", User{Enabled: true, ExpiresAt: &past}, false},
+		{"expires at this exact instant", User{Enabled: true, ExpiresAt: &now}, false},
 		{"not yet expired", User{Enabled: true, ExpiresAt: &future}, true},
 		{"under limit", User{Enabled: true, TrafficLimit: 100, TrafficUsed: 99}, true},
 		{"at limit", User{Enabled: true, TrafficLimit: 100, TrafficUsed: 100}, false},

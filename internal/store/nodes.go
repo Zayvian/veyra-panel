@@ -7,21 +7,27 @@ import (
 )
 
 const nodeCols = `id, name, token_hash, token_sha, address, country, enabled,
-	last_seen_at, version, created_at, rate_milli, sort_order`
+	last_seen_at, version, created_at, rate_milli, sort_order,
+	stats_reset_day, stats_reset_hour, stats_reset_minute, stats_up, stats_down, stats_last_reset_at`
 
 func scanNode(sc interface{ Scan(...any) error }) (*Node, error) {
 	var n Node
-	var lastSeen sql.NullInt64
+	var lastSeen, statsLastReset sql.NullInt64
 	var tokenSHA sql.NullString
 	var created int64
 	if err := sc.Scan(&n.ID, &n.Name, &n.TokenHash, &tokenSHA, &n.Address, &n.Country,
-		&n.Enabled, &lastSeen, &n.Version, &created, &n.RateMilli, &n.SortOrder); err != nil {
+		&n.Enabled, &lastSeen, &n.Version, &created, &n.RateMilli, &n.SortOrder,
+		&n.StatsResetDay, &n.StatsResetHour, &n.StatsResetMinute, &n.StatsUp, &n.StatsDown, &statsLastReset); err != nil {
 		return nil, err
 	}
 	n.TokenSHA = tokenSHA.String
 	if lastSeen.Valid {
 		t := time.Unix(lastSeen.Int64, 0).UTC()
 		n.LastSeenAt = &t
+	}
+	if statsLastReset.Valid {
+		t := time.Unix(statsLastReset.Int64, 0).UTC()
+		n.StatsLastResetAt = &t
 	}
 	n.CreatedAt = time.Unix(created, 0).UTC()
 	return &n, nil
@@ -91,8 +97,10 @@ func (s *Store) EnabledNodes() ([]*Node, error) {
 
 func (s *Store) UpdateNode(n *Node) error {
 	res, err := s.db.Exec(`UPDATE nodes SET
-		name = ?, address = ?, country = ?, enabled = ?, rate_milli = ?, sort_order = ? WHERE id = ?`,
-		n.Name, n.Address, n.Country, n.Enabled, n.RateMilli, n.SortOrder, n.ID)
+		name = ?, address = ?, country = ?, enabled = ?, rate_milli = ?, sort_order = ?,
+		stats_reset_day = ?, stats_reset_hour = ?, stats_reset_minute = ? WHERE id = ?`,
+		n.Name, n.Address, n.Country, n.Enabled, n.RateMilli, n.SortOrder,
+		n.StatsResetDay, n.StatsResetHour, n.StatsResetMinute, n.ID)
 	if err != nil {
 		return asConflict(fmt.Errorf("update node %d: %w", n.ID, err))
 	}
@@ -100,6 +108,22 @@ func (s *Store) UpdateNode(n *Node) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ResetNodeStats starts a new dashboard reporting period. It deliberately
+// leaves the traffic ledger alone: historical node totals must remain auditable.
+func (s *Store) ResetNodeStats(id int64) error {
+	_, err := s.db.Exec(`UPDATE nodes SET stats_up = 0, stats_down = 0,
+		stats_last_reset_at = unixepoch() WHERE id = ?`, id)
+	return err
+}
+
+// TouchNodeStats starts a monthly schedule without erasing accumulated bytes.
+// This is used only for an old row whose operator enabled a schedule through a
+// migration or another administrative tool.
+func (s *Store) TouchNodeStats(id int64) error {
+	_, err := s.db.Exec(`UPDATE nodes SET stats_last_reset_at = unixepoch() WHERE id = ?`, id)
+	return err
 }
 
 // RotateNodeToken replaces the stored hash. The plaintext token is never

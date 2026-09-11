@@ -20,7 +20,8 @@ func templateFuncs() template.FuncMap {
 		// Form values. These differ from their display counterparts by
 		// rendering "unset" as an empty field rather than a dash or a zero —
 		// putting "—" in a date input silently clears the date on save.
-		"dateval": dateValue,
+		"datetimeval": dateTimeValue,
+		"resettime":  resetTimeValue,
 		"gibval":  gibValue,
 
 		"hour": func(t time.Time) string { return t.Format("01-02 15:04") },
@@ -49,19 +50,24 @@ var daysTo28 = func() []int {
 }()
 
 // nextResetLabel is when this user's counter next goes to zero.
-func nextResetLabel(day int) string {
+func nextResetLabel(day, hour, minute int) string {
 	if day < 1 {
 		return ""
 	}
-	return service.NextScheduledReset(day, nowFunc()).Format("01-02")
+	return service.NextScheduledResetAt(day, hour, minute, nowFunc()).Format("01-02 15:04")
 }
 
-// dateValue fills a <input type=date>, whose only accepted format is this one.
-func dateValue(t *time.Time) string {
+// dateTimeValue fills a datetime-local input in server-local time.
+func dateTimeValue(t *time.Time) string {
 	if t == nil {
 		return ""
 	}
-	return t.Local().Format("2006-01-02")
+	return t.Local().Format("2006-01-02T15:04")
+}
+
+func resetTimeValue(hour, minute int) string {
+	hour, minute = service.ClampResetTime(hour, minute)
+	return fmt.Sprintf("%02d:%02d", hour, minute)
 }
 
 // gibValue fills the traffic-limit field. Trailing zeros are trimmed so a round
@@ -93,7 +99,7 @@ func formatDate(t *time.Time) string {
 	if t == nil {
 		return "—"
 	}
-	return t.Local().Format("2006-01-02")
+	return t.Local().Format("2006-01-02 15:04")
 }
 
 // formatAgo is for "last seen": an exact timestamp is less useful than knowing

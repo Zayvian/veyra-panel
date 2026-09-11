@@ -16,7 +16,7 @@ func ShadowrocketBase64(entries []Entry, u *store.User) string {
 	}
 	status := fmt.Sprintf("STATUS=上传：%s | 下载：%s | 总量：%s", GB(u.TrafficUp), GB(u.TrafficDown), total)
 	if u.ExpiresAt != nil {
-		status += " | 到期：" + u.ExpiresAt.Local().Format("2006-01-02")
+		status += " | 到期：" + u.ExpiresAt.Local().Format("2006-01-02 15:04")
 	}
 	return base64.StdEncoding.EncodeToString([]byte(status + "\r\n" + strings.Join(ShareLinks(entries), "\r\n")))
 }

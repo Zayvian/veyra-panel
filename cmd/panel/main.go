@@ -195,10 +195,9 @@ func main() {
 		}
 	}()
 
-	// Monthly traffic allowances. Hourly rather than daily so that a reset day
-	// arrives within the hour rather than whenever this process happens to have
-	// started, and immediately at startup so a panel that was off across
-	// somebody's reset day catches up instead of losing the month.
+	// Monthly allowances and node reporting periods. Run at minute precision so
+	// the date-time selected in the UI means a real calendar moment rather than
+	// "some time in that hour"; run immediately too, so downtime catches up.
 	go func() {
 		for {
 			if n, err := svc.RunDueResets(); err != nil {
@@ -209,7 +208,7 @@ func main() {
 			select {
 			case <-ctx.Done():
 				return
-			case <-time.After(time.Hour):
+			case <-time.After(time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))):
 			}
 		}
 	}()

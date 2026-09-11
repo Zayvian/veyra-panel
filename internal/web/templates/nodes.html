@@ -11,6 +11,9 @@
              style="min-width:14rem"></label>
       <label>国家<input name="country" maxlength="2" placeholder="JP" style="min-width:5rem"></label>
       <label>流量倍率<input name="traffic_rate" type="number" min="0" max="100" step="0.001" value="1" required style="width:7rem"></label>
+      <label>节点统计重置
+        <select name="stats_reset_day" style="min-width:7.5rem">{{template "node-reset-day-options" 0}}</select></label>
+      <label>重置时间<input name="stats_reset_time" type="time" value="00:00"></label>
       <button>新建</button>
     </form>
     <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
@@ -19,11 +22,20 @@
       节点 —— 是节点主动连面板。<br>
       <strong>填域名而不是 IP</strong>：换服务器时改 DNS 就够了，不用重发订阅；
       AnyTLS、Hysteria2、TUIC 的证书需匹配域名。代理域名应为 DNS-only（灰云），不能使用 HTTP CDN 代理。
+      节点统计只影响概览页的本周期统计，不影响用户套餐扣量或历史流量账。
     </p>
   </div>
   {{template "node-table" .}}
 </main>
 {{template "foot" .}}
+{{end}}
+
+{{define "node-reset-day-options"}}
+  <option value="0" {{if eq . 0}}selected{{end}}>不重置</option>
+  {{range $d := days28}}<option value="{{$d}}" {{if eq $d $}}selected{{end}}>每月 {{$d}} 号</option>{{end}}
+  <option value="29" {{if eq . 29}}selected{{end}}>每月 29 号（短月月底）</option>
+  <option value="30" {{if eq . 30}}selected{{end}}>每月 30 号（短月月底）</option>
+  <option value="31" {{if eq . 31}}selected{{end}}>每月最后一天</option>
 {{end}}
 
 {{define "node-table"}}
@@ -71,6 +83,10 @@
               <label>国家<input name="country" maxlength="2" value="{{.Country}}"
                      style="min-width:5rem"></label>
               <label>流量倍率<input name="traffic_rate" type="number" min="0" max="100" step="0.001" value="{{.RateText}}" required style="width:7rem"></label>
+              <label>节点统计重置
+                <select name="stats_reset_day" style="min-width:7.5rem">{{template "node-reset-day-options" .StatsResetDay}}</select></label>
+              <label>重置时间<input name="stats_reset_time" type="time"
+                value="{{resettime .StatsResetHour .StatsResetMinute}}"></label>
               <button>保存</button>
               <button type="button" class="ghost" hx-get="/nodes"
                       hx-target="#nodes" hx-swap="outerHTML">取消</button>
@@ -82,6 +98,7 @@
               改名会<strong>重新生成该节点所有入站的 tag</strong>（含手工取过名的），
               订阅里显示的名字跟着变，节点会重启一次、连接断一次。
               接入 token 不在这里改 —— 那是「换 token」。
+              节点统计重置只清概览里的本周期上/下行，不清历史账，也不影响用户套餐。
             </p>
           </td>
         </tr>

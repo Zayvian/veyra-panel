@@ -207,6 +207,7 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 	for _, n := range nodes {
 		u := byNode[n.ID]
 		total := u.Up + u.Down
+		period := n.StatsUp + n.StatsDown
 		ledgerTotal += total
 		rows = append(rows, nodeTrafficRow{
 			Node:      n,
@@ -214,13 +215,14 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 			Down:      u.Down,
 			Total:     total,
 			Recent:    u.Recent,
+			Period:    period,
 			Connected: s.nodes.Connected(n.ID),
 			Inbounds:  countInbounds(inbounds, n.ID),
 		})
 	}
 	// Busiest first: the interesting node is the one at the top, and
 	// with more than a handful of them alphabetical order buries it.
-	sort.Slice(rows, func(i, j int) bool { return rows[i].Total > rows[j].Total })
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Period > rows[j].Period })
 	s.page(w, r, "dashboard", map[string]any{
 		"Users":        len(users),
 		"ActiveUsers":  active,
@@ -251,6 +253,7 @@ type nodeTrafficRow struct {
 	Down      int64
 	Total     int64
 	Recent    int64
+	Period    int64
 	Connected bool
 	Inbounds  int
 }
