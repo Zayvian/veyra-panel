@@ -46,7 +46,7 @@ func (s *Store) CreateUser(u *User) error {
 		(name, vless_uuid, password, ss_password, sub_token, enabled,
 		 expires_at, traffic_limit, traffic_used, ip_limit,
 		 reset_day, reset_hour, reset_minute, last_reset_at, note, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, unixepoch(), ?, unixepoch())`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, unixepoch(), ?, unixepoch())`,
 		u.Name, u.VlessUUID, u.Password, u.SSPassword, u.SubToken, u.Enabled,
 		expires, u.TrafficLimit, u.IPLimit, u.ResetDay, u.ResetHour, u.ResetMinute, u.Note)
 	if err != nil {
