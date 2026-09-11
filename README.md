@@ -192,14 +192,10 @@ ls -l /opt/skysbx/cert.pem /opt/skysbx/key.pem
 
 ```bash
 apt-get update && apt-get install -y curl
-curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh -o /tmp/skysbx-all-install.sh
-sh /tmp/skysbx-all-install.sh \
-  --domain panel.example.com \
-  --sub-domain sub.example.com \
-  --email you@example.com
+curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh | bash
 ```
 
-流程：创建管理员 → 面板上线 → 浏览器登录并新建节点 → 回终端粘贴 token → 节点安装完成。
+交互会按步骤引导：填写面板域名、可选订阅域名和邮箱 → 创建管理员 → 登录面板新建节点 → 回 SSH 粘贴 token（不回显）→ 节点安装完成。订阅域名留空即使用面板域名。
 
 节点连接地址、TLS 入站 SNI 都填 `panel.example.com`。同机脚本让节点复用面板证书，不再单独申请；**不要传另一个节点域名或让 certbot 抢占 TCP 80**。代理 TCP 端口避开面板的 80 / 443，例如 Reality 10443、AnyTLS 8443。
 

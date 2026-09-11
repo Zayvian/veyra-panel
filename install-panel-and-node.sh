@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install skysbx-panel and skysbx-node on this host.
 #
-#   wget -qO- https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh | bash
 #
 # The node must have a join token.  Create a node in the panel after the panel
 # installer finishes, then paste that one-time token when this script asks.
@@ -15,6 +15,8 @@ ROOT=${SKYSBX_ROOT:-/opt/skysbx}
 DOMAIN=""
 SUB_DOMAIN=""
 EMAIL=""
+SUB_DOMAIN_SET=0
+EMAIL_SET=0
 PANEL_URL=""
 TOKEN=""
 ACTION=install
@@ -55,8 +57,8 @@ EOF
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --domain) DOMAIN=${2-}; shift 2 ;;
-        --sub-domain) SUB_DOMAIN=${2-}; shift 2 ;;
-        --email) EMAIL=${2-}; shift 2 ;;
+        --sub-domain) SUB_DOMAIN=${2-}; SUB_DOMAIN_SET=1; shift 2 ;;
+        --email) EMAIL=${2-}; EMAIL_SET=1; shift 2 ;;
         --panel) PANEL_URL=${2-}; shift 2 ;;
         --token) TOKEN=${2-}; shift 2 ;;
         --version) ACTION=version; shift ;;
@@ -80,18 +82,25 @@ if [ "$ACTION" = install ] && (exec 3>/dev/tty) 2>/dev/null; then
     exec </dev/tty
 fi
 
-# Keep the usual installation path fully interactive. Command-line options are
-# still useful for automation, but a person should not have to remember a set
-# of environment variables or flags just to begin a same-host installation.
+# Keep the usual installation path fully guided. Command-line options are still
+# useful for automation, but a person should not have to remember flags just to
+# install both services on a fresh host.
+if [ "$ACTION" = install ]; then
+    printf '\n%s==>%s Same-host setup: panel and node will share one certificate.\n' "$BLD" "$RST"
+fi
 if [ "$ACTION" = install ] && [ -z "$DOMAIN" ] && [ -t 0 ]; then
-    printf '  Panel domain (must already resolve here): '
+    printf '  [1/5] Panel domain (must already resolve here): '
     read -r DOMAIN
 fi
 [ "$ACTION" != install ] || [ -n "$DOMAIN" ] \
     || { usage >&2; die '--domain is required without a terminal'; }
 
-if [ "$ACTION" = install ] && [ -z "$EMAIL" ] && [ -t 0 ]; then
-    printf "  Let's Encrypt contact email [skip]: "
+if [ "$ACTION" = install ] && [ "$SUB_DOMAIN_SET" = 0 ] && [ -t 0 ]; then
+    printf '  [2/5] Subscription domain [blank = use the panel domain]: '
+    read -r SUB_DOMAIN
+fi
+if [ "$ACTION" = install ] && [ -z "$EMAIL" ] && [ "$EMAIL_SET" = 0 ] && [ -t 0 ]; then
+    printf "  [3/5] Let's Encrypt contact email [skip]: "
     read -r EMAIL
 fi
 [ "$ACTION" != install ] || PANEL_URL=${PANEL_URL:-"https://$DOMAIN"}
@@ -113,7 +122,9 @@ fi
 command -v bash >/dev/null 2>&1 || die 'bash is required'
 
 SRC=$(mktemp -d)
-trap 'rm -rf "$SRC"' EXIT
+# The token is typed with echo disabled below. Always restore it before
+# returning to the caller, including Ctrl-C or a failed node installation.
+trap 'stty echo >/dev/null 2>&1 || true; rm -rf "$SRC"' EXIT
 say "fetching $PANEL_REPO@$PANEL_REF"
 git clone -q --branch "$PANEL_REF" --depth 1 "$PANEL_REPO" "$SRC/skysbx-panel" \
     || die "cannot clone $PANEL_REPO"
@@ -121,8 +132,10 @@ git clone -q --branch "$PANEL_REF" --depth 1 "$PANEL_REPO" "$SRC/skysbx-panel" \
 # Run the real panel installer from the checked-out source, rather than piping
 # it, so its administrator prompt keeps a usable stdin.
 if [ "$ACTION" = install ]; then
-    set -- --domain "$DOMAIN"
-    [ -n "$EMAIL" ] && set -- "$@" --email "$EMAIL"
+    printf '\n  Next, create the first panel administrator.\n'
+    # Pass explicit blanks too: the child installer should not ask the same
+    # optional values a second time after the guided launcher collected them.
+    set -- --domain "$DOMAIN" --sub-domain "$SUB_DOMAIN" --email "$EMAIL"
 else
     set -- "--$ACTION"
 fi
@@ -151,8 +164,16 @@ fi
 
 if [ "$ACTION" = install ] && [ -z "$TOKEN" ]; then
     if [ -t 0 ]; then
-        printf '\nCreate a node at %s, then paste its one-time join token: ' "$PANEL_URL"
-        read -r TOKEN
+        printf '\n  [4/5] Open %s, sign in, then create a node and copy its join token.\n' "$PANEL_URL"
+        printf '  [5/5] Paste the join token (input hidden): '
+        stty -echo
+        if ! read -r TOKEN; then
+            stty echo
+            printf '\n'
+            die 'a node join token is required'
+        fi
+        stty echo
+        printf '\n'
     fi
     [ -n "$TOKEN" ] || die 'a node join token is required; rerun with --token <token>'
 fi
