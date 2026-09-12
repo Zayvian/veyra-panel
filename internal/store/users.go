@@ -117,6 +117,46 @@ func (s *Store) UpdateUser(u *User) error {
 	return nil
 }
 
+// UserCredentials is the complete set of client-facing credentials for one
+// account. The subscription token is deliberately absent: a subscription
+// refresh changes the configs it returns, never the URL a user has saved.
+type UserCredentials struct {
+	ID         int64
+	VlessUUID  string
+	Password   string
+	SSPassword string
+}
+
+// RotateAllUserCredentials replaces every user's connection credentials and
+// records the operation in the same transaction. A partial rotation would be
+// the worst possible failure mode: some people would need a refresh while
+// others could keep using an old leaked configuration.
+func (s *Store) RotateAllUserCredentials(credentials []UserCredentials, audit map[string]string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	for _, c := range credentials {
+		res, err := tx.Exec(`UPDATE users SET vless_uuid = ?, password = ?, ss_password = ? WHERE id = ?`,
+			c.VlessUUID, c.Password, c.SSPassword, c.ID)
+		if err != nil {
+			return fmt.Errorf("rotate credentials for user %d: %w", c.ID, err)
+		}
+		if n, _ := res.RowsAffected(); n != 1 {
+			return ErrNotFound
+		}
+	}
+	for key, value := range audit {
+		if _, err := tx.Exec(`INSERT INTO settings (k, v) VALUES (?, ?)
+			ON CONFLICT(k) DO UPDATE SET v = excluded.v`, key, value); err != nil {
+			return fmt.Errorf("record credential rotation: %w", err)
+		}
+	}
+	return tx.Commit()
+}
+
 func (s *Store) DeleteUser(id int64) error {
 	res, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, id)
 	if err != nil {

@@ -1,6 +1,9 @@
 package web
 
-import "net/http"
+import (
+	"fmt"
+	"net/http"
+)
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 	s.renderSettings(w, r, "")
@@ -8,10 +11,22 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, saved string) {
 	path, redirect := s.accessSettings()
+	refresh, err := s.svc.SubscriptionRefreshStatus()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	nodes, err := s.svc.Nodes()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	s.page(w, r, "settings", map[string]any{
-		"AccessPath":   path,
-		"RootRedirect": redirect,
-		"Saved":        saved,
+		"AccessPath":          path,
+		"RootRedirect":        redirect,
+		"Saved":               saved,
+		"SubscriptionRefresh": refresh,
+		"NodeCount":           len(nodes),
 	})
 }
 
@@ -43,4 +58,22 @@ func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderSettings(w, r, "已保存")
+}
+
+func (s *Server) postForceSubscriptionRefresh(w http.ResponseWriter, r *http.Request) {
+	if r.FormValue("confirmation") != "全部断连" {
+		s.errorBanner(w, http.StatusBadRequest, "请输入“全部断连”确认此操作")
+		return
+	}
+	actor, err := s.sess.user(r, s.sessionGen)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	result, err := s.svc.ForceSubscriptionRefresh(actor)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.renderSettings(w, r, fmt.Sprintf("已轮换 %d 个用户的连接凭据，并通知 %d 个节点重建连接。用户更新原订阅后即可恢复。", result.UserCount, result.NodeCount))
 }

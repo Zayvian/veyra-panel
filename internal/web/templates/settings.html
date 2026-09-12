@@ -21,6 +21,22 @@
       </p>
       <button>保存访问设置</button>
     </form>
+    <form class="card" hx-post="{{panelPath "/settings/force-subscription-refresh"}}" hx-target="#settings" hx-swap="innerHTML" hx-confirm="这会立即让所有用户的旧节点配置失效，并断开现有连接。用户须更新原订阅后才能恢复。确定继续吗？">
+      <h2 style="margin-top:0">强制全员更新订阅</h2>
+      <p class="dim" style="margin:.45rem 0 1rem;font-size:.82rem">
+        此操作会重新生成所有用户的 VLESS、AnyTLS、Hysteria2、TUIC 和 Shadowsocks 连接凭据，并通知当前已登记的 {{.NodeCount}} 个节点重建连接。旧配置会失效并断开；每个用户的订阅链接保持不变，更新该链接即可获得新配置。
+      </p>
+      {{if .SubscriptionRefresh.At}}
+      <p class="dim" style="margin:.45rem 0 1rem;font-size:.82rem">
+        最近一次执行：{{date .SubscriptionRefresh.At}}，操作人：{{if .SubscriptionRefresh.Actor}}{{.SubscriptionRefresh.Actor}}{{else}}未知{{end}}，已轮换 {{.SubscriptionRefresh.UserCount}} 个用户。
+      </p>
+      {{end}}
+      <label>确认文字
+        <input name="confirmation" placeholder="请输入：全部断连" autocomplete="off" required>
+      </label>
+      <p class="dim" style="margin:.45rem 0 1rem;font-size:.82rem">请输入 <code class="mono">全部断连</code> 后再执行。该操作不能撤回。</p>
+      <button class="danger">强制全员更新订阅</button>
+    </form>
   </div>
 </main>
 {{template "foot" .}}
