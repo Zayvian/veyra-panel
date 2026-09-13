@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // relayFixture is two nodes: one that owns an inbound, one that could carry it.

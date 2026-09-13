@@ -2,8 +2,8 @@ package sub
 
 import (
 	"encoding/json"
-	"github.com/zayvian-lee/veyra-panel/internal/service"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/store"
 	"gopkg.in/yaml.v3"
 	"net/url"
 	"strings"

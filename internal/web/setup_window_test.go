@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/zayvian-lee/veyra-panel/internal/service"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // The setup form is available within the window after first boot.

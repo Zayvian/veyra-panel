@@ -4,7 +4,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"time"
 
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // clashProxy is mihomo's proxy schema. Field order here is the order they

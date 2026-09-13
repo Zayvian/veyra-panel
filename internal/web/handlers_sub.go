@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zayvian-lee/veyra-panel/internal/service"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
-	"github.com/zayvian-lee/veyra-panel/internal/sub"
+	"github.com/Zayvian/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/sub"
 )
 
 // getSubscription serves a user's configuration in whatever format their client

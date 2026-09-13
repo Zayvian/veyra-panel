@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 func TestBuildVLESSReality(t *testing.T) {

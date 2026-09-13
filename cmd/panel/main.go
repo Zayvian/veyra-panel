@@ -18,10 +18,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/zayvian-lee/veyra-panel/internal/hub"
-	"github.com/zayvian-lee/veyra-panel/internal/service"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
-	"github.com/zayvian-lee/veyra-panel/internal/web"
+	"github.com/Zayvian/veyra-panel/internal/hub"
+	"github.com/Zayvian/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/web"
 )
 
 // version is stamped by the installer with the commit it built from, so an

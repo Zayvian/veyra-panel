@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // retagNodeInbounds re-derives the tags of every inbound on a node after the

@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zayvian-lee/veyra-panel/internal/singbox"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/singbox"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // InboundSpec is what the UI collects. Everything else — keys, short ids,

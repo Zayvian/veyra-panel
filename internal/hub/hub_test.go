@@ -15,9 +15,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/zayvian-lee/veyra-panel/internal/service"
-	"github.com/zayvian-lee/veyra-panel/internal/singbox"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/singbox"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // fakeNode is the other half of the protocol: it dials the panel, says hello,

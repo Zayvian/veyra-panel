@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // Subscription is everything needed to render one user's subscription.

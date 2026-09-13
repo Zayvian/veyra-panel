@@ -1,7 +1,7 @@
 #!/bin/sh
 # One-line installer for Veyra Panel.
 #
-#   curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh | bash
 #
 # With no arguments the installer opens a guided setup: panel domain,
 # optional subscription domain, ACME email and the first administrator.
@@ -21,7 +21,7 @@ set -eu
 
 # VEYRA_* is the public interface. SKYSBX_* remains an upgrade-compatible
 # alias for operators who already automated the previous release.
-REPO=${VEYRA_REPO:-${SKYSBX_REPO:-https://github.com/zayvian-lee/veyra-panel.git}}
+REPO=${VEYRA_REPO:-${SKYSBX_REPO:-https://github.com/Zayvian/veyra-panel.git}}
 REF=${VEYRA_REF:-${SKYSBX_REF:-main}}
 
 RED=$(printf '\033[31m'); GRN=$(printf '\033[32m'); RST=$(printf '\033[0m')

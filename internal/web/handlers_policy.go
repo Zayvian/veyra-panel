@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/service"
 )
 
 func (s *Server) getPolicy(w http.ResponseWriter, r *http.Request) {

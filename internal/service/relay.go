@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zayvian-lee/veyra-panel/internal/singbox"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/singbox"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // Relaying one node's inbound through another, at layer 4.

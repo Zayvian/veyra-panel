@@ -5,8 +5,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/zayvian-lee/veyra-panel/internal/singbox"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/singbox"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // Tags for the outbounds the panel always emits.

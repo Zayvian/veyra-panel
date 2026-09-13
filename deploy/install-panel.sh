@@ -14,7 +14,7 @@ SUB_DOMAIN_SET=0
 EMAIL_SET=0
 SRC_DIR=""
 GH_TOKEN=${GITHUB_TOKEN:-}
-GH_OWNER=${VEYRA_GH_OWNER:-${SKYSBX_GH_OWNER:-zayvian-lee}}
+GH_OWNER=${VEYRA_GH_OWNER:-${SKYSBX_GH_OWNER:-Zayvian}}
 REF=${VEYRA_REF:-${SKYSBX_REF:-main}}
 
 RED=$'\e[31m'; GRN=$'\e[32m'; YLW=$'\e[33m'; BLD=$'\e[1m'; RST=$'\e[0m'

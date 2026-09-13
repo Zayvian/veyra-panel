@@ -1,4 +1,4 @@
-module github.com/zayvian-lee/veyra-panel
+module github.com/Zayvian/veyra-panel
 
 go 1.27.0
 

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/zayvian-lee/veyra-panel/internal/singbox"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/singbox"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // Addresses the node binds its own API services to. Loopback only: these carry

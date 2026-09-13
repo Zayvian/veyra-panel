@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 const activityHours = 7 * 24

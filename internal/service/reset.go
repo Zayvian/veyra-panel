@@ -3,7 +3,7 @@ package service
 import (
 	"time"
 
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // A monthly traffic allowance.

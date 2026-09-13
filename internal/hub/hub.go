@@ -14,8 +14,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/zayvian-lee/veyra-panel/internal/ratelimit"
-	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/ratelimit"
+	"github.com/Zayvian/veyra-panel/internal/service"
 )
 
 const (

@@ -2,13 +2,13 @@
 
 Veyra 的管理面板：管理节点、用户、套餐额度、节点倍率与订阅。
 
-[![Panel CI](https://github.com/zayvian-lee/veyra-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/zayvian-lee/veyra-panel/actions/workflows/ci.yml)
+[![Panel CI](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml)
 
 | 组件 | 作用 | 安装位置 |
 | --- | --- | --- |
 | **本仓库：Veyra Panel** | 管理用户、配置节点、生成订阅、计算扣量 | 面板服务器 |
-| [Veyra Node](https://github.com/zayvian-lee/veyra-node) | 运行代理、接收配置、上报流量 | 每台代理服务器安装一份 |
-| [Veyra Core](https://github.com/zayvian-lee/veyra-core) | 节点内置协议内核 | 不单独安装；随节点编译、更新 |
+| [Veyra Node](https://github.com/Zayvian/veyra-node) | 运行代理、接收配置、上报流量 | 每台代理服务器安装一份 |
+| [Veyra Core](https://github.com/Zayvian/veyra-core) | 节点内置协议内核 | 不单独安装；随节点编译、更新 |
 
 支持 VLESS Reality、AnyTLS、Shadowsocks 2022、Hysteria2、TUIC v5。Hysteria2 支持 UDP 端口跳跃，**TUIC 当前使用固定端口**。支持中文节点名称、0–100 倍流量计费和独立 HTTPS 订阅域名。
 
@@ -59,7 +59,7 @@ ss -lntp | grep -E ':(80|443)\b'
 
 ```bash
 apt-get update && apt-get install -y curl
-curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh | bash
 ```
 
 命令执行后按提示填写：面板域名、可选的独立订阅域名、Let's Encrypt 邮箱和首个管理员账号。订阅域名直接回车即可使用面板域名；它必须是已解析到这台服务器的 HTTPS 域名。管理员密码不会显示在终端中。
@@ -107,7 +107,7 @@ https://panel.example.com/skypanel
 
 ```bash
 apt-get update && apt-get install -y curl
-curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-node/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh | bash
 ```
 
 按顺序填写面板地址、刚复制的接入 token（输入不回显）、节点域名和证书邮箱。输入完成后才会下载配套内核并编译。**AnyTLS、Hysteria2、TUIC 都需要节点证书**；只用 Reality 或 Shadowsocks 时在节点域名处直接回车。
@@ -122,7 +122,7 @@ ls -l /opt/skysbx/cert.pem /opt/skysbx/key.pem
 
 最后一条仅对使用 TLS 证书的节点适用。**在线不代表代理已可用**：还需添加入站。证书申请失败时节点服务可能仍在线，必须修复证书后再使用 TLS 协议。
 
-无法用 TCP 80 申请证书或已有自己的证书时，见 [节点证书选项](https://github.com/zayvian-lee/veyra-node#证书选项)。
+无法用 TCP 80 申请证书或已有自己的证书时，见 [节点证书选项](https://github.com/Zayvian/veyra-node#证书选项)。
 
 ## 4. 配置协议和端口
 
@@ -213,7 +213,7 @@ ls -l /opt/skysbx/cert.pem /opt/skysbx/key.pem
 ```bash
 apt-get update && apt-get install -y curl
 curl -4 -fL --retry 3 --connect-timeout 15 \
-  https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install-panel-and-node.sh \
+  https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-panel-and-node.sh \
   -o /tmp/skysbx-all-install.sh && bash /tmp/skysbx-all-install.sh
 ```
 
@@ -238,7 +238,7 @@ curl -4 -fL --retry 3 --connect-timeout 15 \
 ### 更新面板：在面板服务器执行
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install.sh | bash -s -- --upgrade
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh | bash -s -- --upgrade
 ```
 
 脚本读取 `/opt/skysbx/panel.env` 的域名，更早版本可从 systemd unit 读取。读取失败时显式补上 `--domain panel.example.com --email you@example.com`。
@@ -246,7 +246,7 @@ curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/instal
 增加独立订阅域名：先配置 DNS，再执行：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install.sh | bash -s -- --upgrade --sub-domain sub.example.com
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh | bash -s -- --upgrade --sub-domain sub.example.com
 ```
 
 原 token 保留。配置独立订阅域名后，只有该域名能访问订阅，旧面板域名及其他域名的订阅路径返回 404；面板管理功能照常使用。复制的新链接使用订阅域名；客户端已有旧 URL 不会自动改变，必须手动替换后才能更新订阅。未配置独立订阅域名时，仍使用面板域名订阅。
@@ -254,7 +254,7 @@ curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/instal
 ### 更新节点：在每台节点服务器执行
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-node/main/install.sh | bash -s -- --upgrade
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh | bash -s -- --upgrade
 ```
 
 读取 `/opt/skysbx/node.env` 的面板地址和 token，不必删除重建节点。**更新节点会同时编译配套内核**，不单独安装 core。节点会重启，造成短暂断连。
@@ -262,7 +262,7 @@ curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-node/main/install
 ### 同机更新
 
 ```bash
-curl -fL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install-panel-and-node.sh -o /tmp/skysbx-all-install.sh
+curl -fL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-panel-and-node.sh -o /tmp/skysbx-all-install.sh
 sh /tmp/skysbx-all-install.sh --upgrade
 ```
 
@@ -305,6 +305,6 @@ journalctl -u skysbx-node -n 100 --no-pager
 
 ## 项目维护
 
-问题与建议提交到 [本项目 Issues](https://github.com/zayvian-lee/veyra-panel/issues)，附版本、部署方式和脱敏日志。自动检查覆盖测试、并发检测、脚本语法和 Linux 构建；真实 DNS、证书、防火墙和客户端仍需部署验收。
+问题与建议提交到 [本项目 Issues](https://github.com/Zayvian/veyra-panel/issues)，附版本、部署方式和脱敏日志。自动检查覆盖测试、并发检测、脚本语法和 Linux 构建；真实 DNS、证书、防火墙和客户端仍需部署验收。
 
 许可证见 [LICENSE](LICENSE)，代码来源与致谢见 [NOTICE.md](NOTICE.md)。

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/zayvian-lee/veyra-panel/internal/service"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // A template error only happens at render time, and nothing else in the suite

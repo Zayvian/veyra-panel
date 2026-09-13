@@ -2,16 +2,16 @@
 # Install Veyra Panel and Veyra Node on this host.
 #
 #   curl -fL --retry 3 --connect-timeout 15 \
-#     https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install-panel-and-node.sh \
+#     https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-panel-and-node.sh \
 #     -o /tmp/veyra-all-install.sh && bash /tmp/veyra-all-install.sh
 #
 # The node must have a join token.  Create a node in the panel after the panel
 # installer finishes, then paste that one-time token when this script asks.
 set -eu
 
-PANEL_REPO=${VEYRA_PANEL_REPO:-${SKYSBX_REPO:-https://github.com/zayvian-lee/veyra-panel.git}}
+PANEL_REPO=${VEYRA_PANEL_REPO:-${SKYSBX_REPO:-https://github.com/Zayvian/veyra-panel.git}}
 PANEL_REF=${VEYRA_PANEL_REF:-${SKYSBX_REF:-main}}
-NODE_REPO=${VEYRA_NODE_REPO:-${SKYSBX_NODE_REPO:-https://github.com/zayvian-lee/veyra-node.git}}
+NODE_REPO=${VEYRA_NODE_REPO:-${SKYSBX_NODE_REPO:-https://github.com/Zayvian/veyra-node.git}}
 NODE_REF=${VEYRA_NODE_REF:-${SKYSBX_NODE_REF:-main}}
 ROOT=${VEYRA_ROOT:-${SKYSBX_ROOT:-/opt/skysbx}}
 DOMAIN=""

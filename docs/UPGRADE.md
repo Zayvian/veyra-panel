@@ -34,9 +34,9 @@ ls -ld /opt/skysbx
 ### 面板服务器
 
 ```bash
-curl -fL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install.sh -o /tmp/veyra-panel-install.sh
-VEYRA_REPO=https://github.com/zayvian-lee/veyra-panel.git \
-VEYRA_GH_OWNER=zayvian-lee VEYRA_REF=main \
+curl -fL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh -o /tmp/veyra-panel-install.sh
+VEYRA_REPO=https://github.com/Zayvian/veyra-panel.git \
+VEYRA_GH_OWNER=Zayvian VEYRA_REF=main \
 sh /tmp/veyra-panel-install.sh --upgrade
 ```
 
@@ -45,10 +45,10 @@ sh /tmp/veyra-panel-install.sh --upgrade
 ### 每台节点服务器
 
 ```bash
-curl -fL https://raw.githubusercontent.com/zayvian-lee/veyra-node/main/install.sh -o /tmp/veyra-node-install.sh
-VEYRA_REPO=https://github.com/zayvian-lee/veyra-node.git \
-VEYRA_CORE_REPO=https://github.com/zayvian-lee/veyra-core.git \
-VEYRA_GH_OWNER=zayvian-lee VEYRA_REF=main \
+curl -fL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh -o /tmp/veyra-node-install.sh
+VEYRA_REPO=https://github.com/Zayvian/veyra-node.git \
+VEYRA_CORE_REPO=https://github.com/Zayvian/veyra-core.git \
+VEYRA_GH_OWNER=Zayvian VEYRA_REF=main \
 sh /tmp/veyra-node-install.sh --upgrade
 ```
 

@@ -3,7 +3,7 @@ package sub
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/store"
 	"strings"
 )
 

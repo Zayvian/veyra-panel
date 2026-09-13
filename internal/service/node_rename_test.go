@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // Every tag on the node follows the rename, including one that was typed by
