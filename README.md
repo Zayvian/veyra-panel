@@ -276,7 +276,35 @@ sh /tmp/skysbx-all-install.sh --upgrade
 
 升级后检查服务 `active`、节点在线、原用户与额度、入站生效状态；刷新订阅并实测连接。出现问题保留日志，按 [迁移与回退说明](docs/UPGRADE.md) 操作。回退数据库版本时不能只替换旧二进制。
 
-## 8. 日常检查和故障排查
+## 8. 卸载、彻底清理与重装
+
+先决定是否保留数据：`--uninstall` 只移除程序和 systemd 服务，数据库、用户、节点、订阅 token 与证书都会保留；`--purge` 才会删除面板数据和证书，无法恢复。
+
+### 只卸载面板程序，保留数据以便重装
+
+```bash
+curl -4 -fL --retry 3 --connect-timeout 15 \
+  https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh \
+  -o /root/veyra-panel-install.sh && \
+bash /root/veyra-panel-install.sh --uninstall
+```
+
+以后要恢复同一个面板，执行同一脚本的 `--upgrade` 即可；原来的数据库、管理员、用户、节点和证书都会继续使用。
+
+### 彻底删除面板
+
+```bash
+curl -4 -fL --retry 3 --connect-timeout 15 \
+  https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh \
+  -o /root/veyra-panel-install.sh && \
+bash /root/veyra-panel-install.sh --purge
+```
+
+这会删除面板服务、程序、数据库、管理员、全部用户、节点记录、订阅 token 与面板证书。独立部署的节点机不会自动删除；请到每台节点机执行 [Node README 的 `--purge`](https://github.com/Zayvian/veyra-node#5-日常管理与卸载)。如果面板和节点同机，**先清理 Node，再清理 Panel**，以免共享目录中的节点文件或证书残留。
+
+`--purge` 不会盲目移除 `curl`、`git`、`nftables` 或 `certbot` 等可能被其他服务使用的软件包；Docker 仅在该安装器确认由自己安装时才会删除。它已足以彻底移除 Veyra 本身，不需要为了卸载而重装 VPS 系统。
+
+## 9. 日常检查和故障排查
 
 在安装了对应组件的服务器上执行：
 
