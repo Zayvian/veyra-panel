@@ -1,6 +1,6 @@
 # 更新、旧版迁移与维护
 
-正常安装流程见 [README](../README.md)。本页适用于 skysbx 的 systemd 部署，不是其他面板数据库的导入工具。
+正常安装流程见 [README](../README.md)。本页适用于 Veyra 及其旧版兼容 systemd 部署，不是其他面板数据库的导入工具。
 
 ## 一、先确认当前安装
 
@@ -34,10 +34,10 @@ ls -ld /opt/skysbx
 ### 面板服务器
 
 ```bash
-curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh -o /tmp/skysbx-panel-install.sh
-SKYSBX_REPO=https://github.com/zayvian-lee/skysbx-panel.git \
-SKYSBX_GH_OWNER=zayvian-lee SKYSBX_REF=main \
-sh /tmp/skysbx-panel-install.sh --upgrade
+curl -fL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install.sh -o /tmp/veyra-panel-install.sh
+VEYRA_REPO=https://github.com/zayvian-lee/veyra-panel.git \
+VEYRA_GH_OWNER=zayvian-lee VEYRA_REF=main \
+sh /tmp/veyra-panel-install.sh --upgrade
 ```
 
 域名读取失败时加 `--domain 你的面板域名 --email 你的邮箱`。旧版没有独立订阅域名也可以升级，仍按同域名运行；新增订阅域名则补 `--sub-domain 你的订阅域名`，先完成 DNS。
@@ -45,11 +45,11 @@ sh /tmp/skysbx-panel-install.sh --upgrade
 ### 每台节点服务器
 
 ```bash
-curl -fL https://raw.githubusercontent.com/zayvian-lee/skysbx-node/main/install.sh -o /tmp/skysbx-node-install.sh
-SKYSBX_REPO=https://github.com/zayvian-lee/skysbx-node.git \
-SKYSBX_FORK=https://github.com/zayvian-lee/skysbx-core.git \
-SKYSBX_GH_OWNER=zayvian-lee SKYSBX_REF=main \
-sh /tmp/skysbx-node-install.sh --upgrade
+curl -fL https://raw.githubusercontent.com/zayvian-lee/veyra-node/main/install.sh -o /tmp/veyra-node-install.sh
+VEYRA_REPO=https://github.com/zayvian-lee/veyra-node.git \
+VEYRA_CORE_REPO=https://github.com/zayvian-lee/veyra-core.git \
+VEYRA_GH_OWNER=zayvian-lee VEYRA_REF=main \
+sh /tmp/veyra-node-install.sh --upgrade
 ```
 
 节点与内核从配套仓库重新编译。`--upgrade` 从 `node.env` 保留面板地址、token，并跳过重新签证书；不要把节点从面板删除重建。证书缺失时需要先恢复证书，升级不会自动补签。

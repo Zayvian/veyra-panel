@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // Notifier lets the service tell the node hub that something it pushes has

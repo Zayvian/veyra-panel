@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 func newSvc(t *testing.T) (*Service, *store.Store) {

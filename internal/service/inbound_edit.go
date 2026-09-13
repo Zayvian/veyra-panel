@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // InboundEdit is the subset of an inbound that can be changed after it exists.

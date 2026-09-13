@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kosje/skysbx-panel/internal/service"
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 func TestRateFormsAndSubscriptionStatus(t *testing.T) {

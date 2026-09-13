@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>skysbx</title>
+<title>Veyra</title>
 <script src="{{panelPath "/static/htmx.min.js"}}"></script>
 {{- /* Every state-changing htmx request must carry the CSRF token. The
         token is bound to the logged-in session; the page data always has
@@ -90,7 +90,7 @@ code.mono{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim)
 
 {{define "nav"}}
 <header>
-  <span class="brand">skysbx</span>
+  <span class="brand">Veyra</span>
   <nav>
     <a href="{{panelPath "/"}}"      class="{{if eq .Page "dashboard"}}on{{end}}">概览</a>
     <a href="{{panelPath "/users"}}" class="{{if eq .Page "users"}}on{{end}}">用户</a>
@@ -115,7 +115,7 @@ document.body.addEventListener('htmx:beforeSwap', function (e) {
   if (e.detail.xhr.status >= 400) { e.detail.shouldSwap = false; }
 });
 </script>
-<footer style="text-align:center;padding:1rem;font-size:.8rem"><a href="https://github.com/zayvian-lee/skysbx-panel" target="_blank" rel="noopener noreferrer">skysbx · zayvian-lee · 源代码</a></footer>
+<footer style="text-align:center;padding:1rem;font-size:.8rem"><a href="https://github.com/zayvian-lee/veyra-panel" target="_blank" rel="noopener noreferrer">Veyra · zayvian-lee · 源代码</a></footer>
 </body>
 </html>
 {{end}}

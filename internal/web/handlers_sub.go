@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/kosje/skysbx-panel/internal/service"
-	"github.com/kosje/skysbx-panel/internal/store"
-	"github.com/kosje/skysbx-panel/internal/sub"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/sub"
 )
 
 // getSubscription serves a user's configuration in whatever format their client

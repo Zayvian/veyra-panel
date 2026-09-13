@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // Editing an inbound must carry the generated secrets over untouched. Minting

@@ -2,8 +2,8 @@ package sub
 
 import (
 	"encoding/json"
-	"github.com/kosje/skysbx-panel/internal/service"
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 	"gopkg.in/yaml.v3"
 	"net/url"
 	"strings"

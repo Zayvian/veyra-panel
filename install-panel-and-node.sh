@@ -1,19 +1,19 @@
 #!/bin/sh
-# Install skysbx-panel and skysbx-node on this host.
+# Install Veyra Panel and Veyra Node on this host.
 #
 #   curl -fL --retry 3 --connect-timeout 15 \
-#     https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install-panel-and-node.sh \
-#     -o /tmp/skysbx-all-install.sh && bash /tmp/skysbx-all-install.sh
+#     https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install-panel-and-node.sh \
+#     -o /tmp/veyra-all-install.sh && bash /tmp/veyra-all-install.sh
 #
 # The node must have a join token.  Create a node in the panel after the panel
 # installer finishes, then paste that one-time token when this script asks.
 set -eu
 
-PANEL_REPO=${SKYSBX_REPO:-https://github.com/zayvian-lee/skysbx-panel.git}
-PANEL_REF=${SKYSBX_REF:-main}
-NODE_REPO=${SKYSBX_NODE_REPO:-https://github.com/zayvian-lee/skysbx-node.git}
-NODE_REF=${SKYSBX_NODE_REF:-main}
-ROOT=${SKYSBX_ROOT:-/opt/skysbx}
+PANEL_REPO=${VEYRA_PANEL_REPO:-${SKYSBX_REPO:-https://github.com/zayvian-lee/veyra-panel.git}}
+PANEL_REF=${VEYRA_PANEL_REF:-${SKYSBX_REF:-main}}
+NODE_REPO=${VEYRA_NODE_REPO:-${SKYSBX_NODE_REPO:-https://github.com/zayvian-lee/veyra-node.git}}
+NODE_REF=${VEYRA_NODE_REF:-${SKYSBX_NODE_REF:-main}}
+ROOT=${VEYRA_ROOT:-${SKYSBX_ROOT:-/opt/skysbx}}
 DOMAIN=""
 SUB_DOMAIN=""
 EMAIL=""
@@ -51,8 +51,8 @@ The node reuses the certificate already obtained by the local panel. Do not
 pass a node domain: requesting another HTTP-01 certificate would contend with
 the panel for port 80.
 
-Environment overrides: SKYSBX_REPO, SKYSBX_REF (panel), SKYSBX_NODE_REPO,
-SKYSBX_NODE_REF (node), GITHUB_TOKEN.
+Environment overrides: VEYRA_PANEL_REPO, VEYRA_PANEL_REF, VEYRA_NODE_REPO,
+VEYRA_NODE_REF (legacy SKYSBX_* aliases also work), GITHUB_TOKEN.
 EOF
 }
 
@@ -128,7 +128,7 @@ SRC=$(mktemp -d)
 # returning to the caller, including Ctrl-C or a failed node installation.
 trap 'stty echo >/dev/null 2>&1 || true; rm -rf "$SRC"' EXIT
 say "fetching $PANEL_REPO@$PANEL_REF"
-git clone -q --branch "$PANEL_REF" --depth 1 "$PANEL_REPO" "$SRC/skysbx-panel" \
+git clone -q --branch "$PANEL_REF" --depth 1 "$PANEL_REPO" "$SRC/veyra-panel" \
     || die "cannot clone $PANEL_REPO"
 
 # Run the real panel installer from the checked-out source, rather than piping
@@ -143,7 +143,7 @@ else
 fi
 [ "$ACTION" != upgrade ] || [ -z "$DOMAIN" ] || set -- "$@" --domain "$DOMAIN"
 [ -n "$SUB_DOMAIN" ] && set -- "$@" --sub-domain "$SUB_DOMAIN"
-bash "$SRC/skysbx-panel/deploy/install-panel.sh" "$@"
+bash "$SRC/veyra-panel/deploy/install-panel.sh" "$@"
 
 if [ "$ACTION" = install ] || [ "$ACTION" = upgrade ]; then
 # The child installer resolves upgrade defaults and persists the effective
@@ -181,19 +181,19 @@ if [ "$ACTION" = install ] && [ -z "$TOKEN" ]; then
 fi
 
 say "fetching $NODE_REPO@$NODE_REF installer"
-git clone -q --branch "$NODE_REF" --depth 1 "$NODE_REPO" "$SRC/skysbx-node" \
+git clone -q --branch "$NODE_REF" --depth 1 "$NODE_REPO" "$SRC/veyra-node" \
     || die "cannot clone $NODE_REPO"
 # Call the real installer directly instead of the node repository's launcher.
 # Its launcher deliberately reattaches /dev/tty for standalone interactive
 # use. All required node values are already supplied here, and leaving that
 # tty attached can keep this combined command alive after it prints success.
-NODE_INSTALL=$SRC/skysbx-node/deploy/install-node.sh
+NODE_INSTALL=$SRC/veyra-node/deploy/install-node.sh
 [ -f "$NODE_INSTALL" ] || die "node installer is missing from $NODE_REPO"
 
 if [ "$ACTION" = install ]; then
-    set -- --panel "$PANEL_URL" --token "$TOKEN" --src "$SRC/skysbx-node"
+    set -- --panel "$PANEL_URL" --token "$TOKEN" --src "$SRC/veyra-node"
 elif [ "$ACTION" = upgrade ]; then
-    set -- "--$ACTION" --src "$SRC/skysbx-node"
+    set -- "--$ACTION" --src "$SRC/veyra-node"
 else
     set -- "--$ACTION"
 fi
@@ -226,24 +226,24 @@ EOF
     chmod 700 "$DOCKER_SHIM_DIR/docker"
 fi
 
-# The two repositories intentionally use the same SKYSBX_REPO variable for
-# their standalone launchers.  Set it explicitly here so a custom panel source
-# cannot accidentally be cloned as the node source.
+# The standalone node installer accepts VEYRA_REPO and its legacy SKYSBX_REPO
+# alias. Set it explicitly here so a custom panel source cannot accidentally
+# be cloned as the node source.
 if [ "$ACTION" = install ] || [ "$ACTION" = upgrade ]; then
     PATH="$DOCKER_SHIM_DIR:$PATH" \
     SKYSBX_REAL_DOCKER=$REAL_DOCKER \
     SKYSBX_GO_MOD_CACHE=$GO_MOD_CACHE \
     SKYSBX_GO_BUILD_CACHE=$GO_BUILD_CACHE \
-    SKYSBX_REPO=$NODE_REPO SKYSBX_REF=$NODE_REF bash "$NODE_INSTALL" "$@" </dev/null
+    VEYRA_REPO=$NODE_REPO VEYRA_REF=$NODE_REF bash "$NODE_INSTALL" "$@" </dev/null
 else
-    SKYSBX_REPO=$NODE_REPO SKYSBX_REF=$NODE_REF bash "$NODE_INSTALL" "$@" </dev/null
+    VEYRA_REPO=$NODE_REPO VEYRA_REF=$NODE_REF bash "$NODE_INSTALL" "$@" </dev/null
 fi
 
 case "$ACTION" in
-    install) printf '\n%sskysbx panel and node are installed on this host.%s\n' "$GRN" "$RST" ;;
-    upgrade) printf '\n%sskysbx panel and node are upgraded.%s\n' "$GRN" "$RST" ;;
-    uninstall) printf '\n%sskysbx panel and node are uninstalled.%s\n' "$GRN" "$RST" ;;
-    purge) printf '\n%sskysbx panel and node are purged.%s\n' "$GRN" "$RST" ;;
+    install) printf '\n%sVeyra Panel and Node are installed on this host.%s\n' "$GRN" "$RST" ;;
+    upgrade) printf '\n%sVeyra Panel and Node are upgraded.%s\n' "$GRN" "$RST" ;;
+    uninstall) printf '\n%sVeyra Panel and Node are uninstalled.%s\n' "$GRN" "$RST" ;;
+    purge) printf '\n%sVeyra Panel and Node are purged.%s\n' "$GRN" "$RST" ;;
 esac
 
 # Be explicit here rather than relying on end-of-file. This makes the pipe's

@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kosje/skysbx-panel/internal/service"
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // Entry is one connectable endpoint: a user's credentials against one inbound

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/singbox"
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/singbox"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // Addresses the node binds its own API services to. Loopback only: these carry

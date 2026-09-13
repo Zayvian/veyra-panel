@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Install the skysbx panel on a Debian/Ubuntu host.
+# Install Veyra Panel on a Debian/Ubuntu host.
 #
 #   sudo ./install-panel.sh --domain panel.example.com --email you@example.com
 #
 # Upgrades replace the binary; startup migrates the existing database schema.
 set -euo pipefail
 
-ROOT=${SKYSBX_ROOT:-/opt/skysbx}
+ROOT=${VEYRA_ROOT:-${SKYSBX_ROOT:-/opt/skysbx}}
 DOMAIN=""
 SUB_DOMAIN=""
 EMAIL=""
@@ -14,8 +14,8 @@ SUB_DOMAIN_SET=0
 EMAIL_SET=0
 SRC_DIR=""
 GH_TOKEN=${GITHUB_TOKEN:-}
-GH_OWNER=${SKYSBX_GH_OWNER:-zayvian-lee}
-REF=${SKYSBX_REF:-main}
+GH_OWNER=${VEYRA_GH_OWNER:-${SKYSBX_GH_OWNER:-zayvian-lee}}
+REF=${VEYRA_REF:-${SKYSBX_REF:-main}}
 
 RED=$'\e[31m'; GRN=$'\e[32m'; YLW=$'\e[33m'; BLD=$'\e[1m'; RST=$'\e[0m'
 say()  { printf '%s==>%s %s\n' "$BLD" "$RST" "$*"; }
@@ -81,7 +81,7 @@ if [ "$ACTION" = version ]; then
         [ -f "$ROOT/skysbx.db" ] && printf 'database   %s (%s)\n' "$ROOT/skysbx.db" \
             "$(du -h "$ROOT/skysbx.db" 2>/dev/null | cut -f1)"
     else
-        printf 'skysbx-panel is not installed at %s\n' "$ROOT"
+        printf 'Veyra Panel is not installed at %s\n' "$ROOT"
     fi
     exit 0
 fi
@@ -94,7 +94,7 @@ if [ "$ACTION" = uninstall ] || [ "$ACTION" = purge ]; then
     rm -f /etc/systemd/system/skysbx-panel.service
     systemctl daemon-reload 2>/dev/null || true
     systemctl reset-failed 2>/dev/null || true
-    ok "skysbx-panel stopped and removed"
+    ok "Veyra Panel stopped and removed"
 
     rm -f "$ROOT/skysbx-panel"
     # The build tree is scratch space, not data: a fresh clone on every run.
@@ -136,7 +136,7 @@ if [ "$ACTION" = uninstall ] || [ "$ACTION" = purge ]; then
         (ls -A "$ROOT" 2>/dev/null || true) | sed 's/^/       /'
     fi
 
-    printf '\n%sskysbx panel removed.%s\n' "$GRN" "$RST"
+    printf '\n%sVeyra Panel removed.%s\n' "$GRN" "$RST"
     [ "$ACTION" = uninstall ] && printf \
         'The database and certificates were kept at %s; --purge removes those too.\n' "$ROOT"
     exit 0
@@ -216,8 +216,8 @@ if [ "$ACTION" = install ] && [ ! -f "$ROOT/skysbx.db" ]; then
         # first, which is the thing this whole block exists to prevent.
         [ -t 0 ] || die "no terminal to ask for the administrator on.
   Set SKYSBX_ADMIN_USER and SKYSBX_ADMIN_PASSWORD, or run the script directly:
-    git clone https://github.com/${GH_OWNER}/skysbx-panel.git
-    sudo ./skysbx-panel/deploy/install-panel.sh --domain $DOMAIN"
+    git clone https://github.com/${GH_OWNER}/veyra-panel.git
+    sudo ./veyra-panel/deploy/install-panel.sh --domain $DOMAIN"
 
         printf '  Administrator username [admin]: '
         read -r ADMIN_USER || die "no administrator given"
@@ -306,25 +306,25 @@ install -d -m 0700 "$GO_MOD_CACHE" "$GO_BUILD_CACHE"
 
 say "sources"
 if [ -n "$SRC_DIR" ]; then
-    rm -rf "$BUILD/skysbx-panel"
-    cp -a "$SRC_DIR" "$BUILD/skysbx-panel"
+    rm -rf "$BUILD/veyra-panel"
+    cp -a "$SRC_DIR" "$BUILD/veyra-panel"
     ok "using $SRC_DIR"
 else
-    URL="https://github.com/${GH_OWNER}/skysbx-panel.git"
-    rm -rf "$BUILD/skysbx-panel"
+    URL="https://github.com/${GH_OWNER}/veyra-panel.git"
+    rm -rf "$BUILD/veyra-panel"
     # The token goes in a per-command header, not in the URL: git writes the
     # remote URL into the clone's .git/config, and a token in it would sit on
     # disk for as long as the build directory does.
     if [ -n "$GH_TOKEN" ]; then
         git -c "http.extraHeader=Authorization: Basic $(printf 'x-access-token:%s' \
             "$GH_TOKEN" | base64 -w0)" \
-            clone -q --branch "$REF" --depth 1 "$URL" "$BUILD/skysbx-panel" \
-            || die "cannot clone ${GH_OWNER}/skysbx-panel (check GITHUB_TOKEN)"
+            clone -q --branch "$REF" --depth 1 "$URL" "$BUILD/veyra-panel" \
+            || die "cannot clone ${GH_OWNER}/veyra-panel (check GITHUB_TOKEN)"
     else
-        git clone -q --branch "$REF" --depth 1 "$URL" "$BUILD/skysbx-panel" \
-            || die "cannot clone ${GH_OWNER}/skysbx-panel (a private repo needs GITHUB_TOKEN)"
+        git clone -q --branch "$REF" --depth 1 "$URL" "$BUILD/veyra-panel" \
+            || die "cannot clone ${GH_OWNER}/veyra-panel (a private repo needs GITHUB_TOKEN)"
     fi
-    ok "$(git -C "$BUILD/skysbx-panel" rev-parse --short HEAD)"
+    ok "$(git -C "$BUILD/veyra-panel" rev-parse --short HEAD)"
 fi
 
 # Sources that travelled through a Windows checkout carry CRLF, and bash then
@@ -341,15 +341,15 @@ fi
 
 # Stamped into the binary so `--version` can answer what is running without
 # anyone reading a build log.
-VER=$(git -C "$BUILD/skysbx-panel" rev-parse --short HEAD 2>/dev/null || echo unknown)
+VER=$(git -C "$BUILD/veyra-panel" rev-parse --short HEAD 2>/dev/null || echo unknown)
 
 say "building"
-docker run --rm -v "$BUILD/skysbx-panel:/src" -w /src \
+docker run --rm -v "$BUILD/veyra-panel:/src" -w /src \
     -v "$GO_MOD_CACHE:/go/pkg/mod" -v "$GO_BUILD_CACHE:/root/.cache/go-build" \
     -e GOFLAGS=-buildvcs=false -e CGO_ENABLED=0 -e GOOS=linux \
     golang:1.27 \
     go build -trimpath -ldflags "-s -w -X main.version=$VER" -o /src/skysbx-panel ./cmd/panel
-install -m 0755 "$BUILD/skysbx-panel/skysbx-panel" "$ROOT/skysbx-panel"
+install -m 0755 "$BUILD/veyra-panel/skysbx-panel" "$ROOT/skysbx-panel"
 ok "panel binary installed"
 
 # Before the service starts, so there is never a moment where the panel is
@@ -379,7 +379,7 @@ chmod 600 "$ROOT/panel.env"
 
 cat > /etc/systemd/system/skysbx-panel.service <<EOF
 [Unit]
-Description=skysbx panel
+Description=Veyra Panel
 After=network-online.target
 Wants=network-online.target
 
@@ -427,7 +427,7 @@ fi
 
 cat <<EOF
 
-${GRN}skysbx panel
+${GRN}Veyra Panel
 ===========
 Panel     https://${DOMAIN}
 ${LOGIN_LINE}

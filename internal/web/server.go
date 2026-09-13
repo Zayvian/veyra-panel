@@ -21,9 +21,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/ratelimit"
-	"github.com/kosje/skysbx-panel/internal/service"
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/ratelimit"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 //go:embed templates/*.html static/*

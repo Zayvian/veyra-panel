@@ -5,8 +5,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/kosje/skysbx-panel/internal/singbox"
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/singbox"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // Tags for the outbounds the panel always emits.

@@ -1,4 +1,4 @@
-module github.com/kosje/skysbx-panel
+module github.com/zayvian-lee/veyra-panel
 
 go 1.27.0
 

@@ -1,7 +1,7 @@
 #!/bin/sh
-# One-line installer for the Install skysbx-panel and skysbx-node.
+# One-line installer for Veyra Panel.
 #
-#   curl -fsSL https://raw.githubusercontent.com/zayvian-lee/skysbx-panel/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/zayvian-lee/veyra-panel/main/install.sh | bash
 #
 # With no arguments the installer opens a guided setup: panel domain,
 # optional subscription domain, ACME email and the first administrator.
@@ -19,8 +19,10 @@
 # is in deploy/install-panel.sh, which is worth reading before running either.
 set -eu
 
-REPO=${SKYSBX_REPO:-https://github.com/zayvian-lee/skysbx-panel.git}
-REF=${SKYSBX_REF:-main}
+# VEYRA_* is the public interface. SKYSBX_* remains an upgrade-compatible
+# alias for operators who already automated the previous release.
+REPO=${VEYRA_REPO:-${SKYSBX_REPO:-https://github.com/zayvian-lee/veyra-panel.git}}
+REF=${VEYRA_REF:-${SKYSBX_REF:-main}}
 
 RED=$(printf '\033[31m'); GRN=$(printf '\033[32m'); RST=$(printf '\033[0m')
 say() { printf '%s==>%s %s\n' "$GRN" "$RST" "$*"; }
@@ -44,7 +46,7 @@ fi
 SRC=$(mktemp -d)
 trap 'rm -rf "$SRC"' EXIT
 say "fetching $REPO@$REF"
-git clone -q --branch "$REF" --depth 1 "$REPO" "$SRC/skysbx-panel" \
+git clone -q --branch "$REF" --depth 1 "$REPO" "$SRC/veyra-panel" \
     || die "cannot clone $REPO"
 
 # A pipeline leaves stdin pointing at the downloaded script, not the terminal,
@@ -61,6 +63,6 @@ git clone -q --branch "$REF" --depth 1 "$REPO" "$SRC/skysbx-panel" \
 # which fails on the first line with "Illegal option -o pipefail".
 command -v bash >/dev/null 2>&1 || die "bash is required"
 if ( exec 3>/dev/tty ) 2>/dev/null; then
-    exec bash "$SRC/skysbx-panel/deploy/install-panel.sh" "$@" </dev/tty
+    exec bash "$SRC/veyra-panel/deploy/install-panel.sh" "$@" </dev/tty
 fi
-exec bash "$SRC/skysbx-panel/deploy/install-panel.sh" "$@"
+exec bash "$SRC/veyra-panel/deploy/install-panel.sh" "$@"

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
 )
 
 func templateFuncs() template.FuncMap {

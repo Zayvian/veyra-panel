@@ -3,7 +3,7 @@ package service
 import (
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // DailyTotal is one day of traffic across every user and node.

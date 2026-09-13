@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // Sniffing has to be the first rule. Every rule below it matches on what

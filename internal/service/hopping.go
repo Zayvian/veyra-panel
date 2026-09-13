@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // ValidateHopping normalizes the UI representation used by URI and Mihomo.

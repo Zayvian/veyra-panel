@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // relayFixture is two nodes: one that owns an inbound, one that could carry it.

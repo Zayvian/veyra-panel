@@ -3,7 +3,7 @@
 面板 **skysbx-panel** 和节点 **skysbx-node** 是两个独立的程序，通过一条 WebSocket
 通信。下文用 **panel** 和 **node** 指代它们。
 
-内嵌的 sing-box 来自 [`skysbx-core`](https://github.com/kosje/skysbx-core)，一个带
+内嵌的 sing-box 来自 [`Veyra Core`](https://github.com/zayvian-lee/veyra-core)，一个带
 少量补丁的分支，补丁内容见那边的 `MODIFICATIONS.md`。
 
 ---

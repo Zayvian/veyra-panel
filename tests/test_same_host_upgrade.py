@@ -25,8 +25,8 @@ class SameHostUpgrade(unittest.TestCase):
 set -eu
 for arg in "$@"; do
   case "$arg" in
-    */skysbx-panel.git) component=panel ;;
-    */skysbx-node.git) component=node ;;
+    */veyra-panel.git) component=panel ;;
+    */veyra-node.git) component=node ;;
   esac
   destination=$arg
 done

@@ -1,4 +1,4 @@
-// Command panel runs the skysbx control plane: admin UI, subscriptions and the
+// Command panel runs the Veyra control plane: admin UI, subscriptions and the
 // node control channel, backed by a single SQLite file.
 package main
 
@@ -18,10 +18,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/hub"
-	"github.com/kosje/skysbx-panel/internal/service"
-	"github.com/kosje/skysbx-panel/internal/store"
-	"github.com/kosje/skysbx-panel/internal/web"
+	"github.com/zayvian-lee/veyra-panel/internal/hub"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/web"
 )
 
 // version is stamped by the installer with the commit it built from, so an
@@ -49,7 +49,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("skysbx-panel %s\n", version)
+		fmt.Printf("veyra-panel %s\n", version)
 		return
 	}
 

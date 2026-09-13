@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
 )
 
 // nowFunc exists so tests can pin time without a clock abstraction

@@ -6,4 +6,4 @@
 
 Shadowrocket 的 `STATUS=` 格式参考 [Xboard 的协议实现](https://github.com/cedar2025/Xboard/blob/master/app/Protocols/Shadowrocket.php)。其他依赖及版本见 go.mod、go.sum。
 
-本版本问题请向 [zayvian-lee/skysbx-panel](https://github.com/zayvian-lee/skysbx-panel/issues) 报告。
+本版本问题请向 [zayvian-lee/veyra-panel](https://github.com/zayvian-lee/veyra-panel/issues) 报告。

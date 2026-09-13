@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/kosje/skysbx-panel/internal/service"
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // The setup form is available within the window after first boot.

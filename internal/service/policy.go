@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/kosje/skysbx-panel/internal/singbox"
+	"github.com/zayvian-lee/veyra-panel/internal/singbox"
 )
 
 const settingPolicy = "policy"

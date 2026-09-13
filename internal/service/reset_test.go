@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 func at(y int, m time.Month, d, h int) time.Time {

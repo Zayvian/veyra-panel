@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kosje/skysbx-panel/internal/singbox"
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/singbox"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 // InboundSpec is what the UI collects. Everything else — keys, short ids,

@@ -13,9 +13,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/kosje/skysbx-panel/internal/ratelimit"
-	"github.com/kosje/skysbx-panel/internal/service"
-	"github.com/kosje/skysbx-panel/internal/store"
+	"github.com/zayvian-lee/veyra-panel/internal/ratelimit"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/store"
 )
 
 func (s *Server) getSetup(w http.ResponseWriter, r *http.Request) {

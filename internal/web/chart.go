@@ -5,7 +5,7 @@ import (
 	"html/template"
 	"strings"
 
-	"github.com/kosje/skysbx-panel/internal/service"
+	"github.com/zayvian-lee/veyra-panel/internal/service"
 )
 
 // trafficChart renders a bar chart as inline SVG.
