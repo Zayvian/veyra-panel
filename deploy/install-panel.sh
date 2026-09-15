@@ -101,6 +101,12 @@ if [ "$ACTION" = uninstall ] || [ "$ACTION" = purge ]; then
     rm -rf "$ROOT/build/skysbx-panel"
     ok "binary and build cache removed"
 
+    # The same command manages either component. Keep it while a node remains
+    # on this host; otherwise uninstalling Veyra should remove the shortcut too.
+    if [ ! -f /etc/systemd/system/skysbx-node.service ] && [ ! -x "$ROOT/skysbx-node" ]; then
+        rm -f /usr/local/bin/veyra
+    fi
+
     if [ "$ACTION" = purge ]; then
         say "purging"
         # Every user, node and subscription lives in this one file. Nothing else
@@ -407,6 +413,9 @@ systemctl daemon-reload
 systemctl enable -q skysbx-panel
 systemctl restart skysbx-panel
 ok "systemd unit installed"
+
+    install -m 0755 "$BUILD/veyra-panel/deploy/veyra-menu.sh" /usr/local/bin/veyra
+ok "management command installed: veyra"
 
 printf '    waiting for a certificate '
 for _ in $(seq 1 60); do

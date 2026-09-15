@@ -75,6 +75,8 @@ curl -I https://panel.example.com/login
 journalctl -u skysbx-panel -n 50 --no-pager
 ```
 
+安装完成后可直接输入 `veyra` 打开交互式管理菜单；其中可查看状态、升级、重启、查看日志和卸载。菜单不显示管理员密码、节点 token 等敏感信息。
+
 服务应为 `active`，浏览器证书应有效。独立订阅域名的 `/login` 返回 404 是正常行为，它只开放 `/sub/`；完整订阅链接在创建用户后获得。
 
 ### 隐藏管理访问路径
