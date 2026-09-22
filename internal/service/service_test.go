@@ -64,7 +64,7 @@ func TestUserNameValidation(t *testing.T) {
 		}
 	}
 
-	good := []string{"a", "alice", "alice.smith", "alice-1", "alice_1", "A1"}
+	good := []string{"a", "alice", "alice.smith", "alice-1", "alice_1", "A1", "临时用户", "用户-01", "東京1"}
 	for _, name := range good {
 		if _, err := svc.CreateUser(NewUser{Name: name}); err != nil {
 			t.Errorf("name %q should have been accepted: %v", name, err)
@@ -105,7 +105,7 @@ func TestNodeTokenAuthenticates(t *testing.T) {
 		t.Fatalf("authenticate: id=%d err=%v", id, err)
 	}
 
-	if _, err := svc.AuthenticateNode(token + "x", nil); !errors.Is(err, ErrBadCredentials) {
+	if _, err := svc.AuthenticateNode(token+"x", nil); !errors.Is(err, ErrBadCredentials) {
 		t.Fatalf("a wrong token should be rejected, got %v", err)
 	}
 	if _, err := svc.AuthenticateNode("", nil); !errors.Is(err, ErrBadCredentials) {

@@ -9,10 +9,10 @@ package service
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/Zayvian/veyra-panel/internal/store"
 )
@@ -57,17 +57,20 @@ func invalid(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
 }
 
-// A user name travels into sing-box's user list and comes back as a traffic
-// counter key, so it has to survive JSON, a gRPC field and a log line without
-// needing quoting. A tag is used the same way plus as a routing identifier.
-var nameRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$`)
-
 func checkName(kind, name string) error {
-	if !nameRE.MatchString(name) {
-		return invalid("%s %q must be 1-32 chars of letters, digits, dot, dash or underscore, starting with a letter or digit", kind, name)
+	runes := []rune(name)
+	if len(runes) == 0 || len(runes) > 32 || !isNameLetterOrNumber(runes[0]) {
+		return invalid("%s %q must be 1-32 Unicode letters or digits, with optional dot, dash or underscore", kind, name)
+	}
+	for _, r := range runes[1:] {
+		if !isNameLetterOrNumber(r) && r != '.' && r != '-' && r != '_' {
+			return invalid("%s %q must be 1-32 Unicode letters or digits, with optional dot, dash or underscore", kind, name)
+		}
 	}
 	return nil
 }
+
+func isNameLetterOrNumber(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }
 
 // ── users ───────────────────────────────────────────────────────────────────
 

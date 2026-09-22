@@ -5,8 +5,7 @@
   <h1>用户</h1>
   <div class="card">
     <form class="row" hx-post="{{panelPath "/users"}}" hx-target="#users" hx-swap="outerHTML">
-      <label>名称<input name="name" required placeholder="alice"
-             pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}"></label>
+      <label>名称<input name="name" required placeholder="例如：张三" maxlength="32"></label>
       <label>到期（服务器时间）<input name="expires_at" type="datetime-local"></label>
       <label>流量上限 GiB<input name="traffic_limit_gb" type="number" step="1" min="0"
              placeholder="留空 = 不限"></label>
@@ -56,8 +55,7 @@
   <td colspan="8">
     <form class="row" hx-post="{{panelPath "/users/"}}{{.User.ID}}"
           hx-target="#users" hx-swap="outerHTML" style="align-items:flex-end">
-      <label>名称<input name="name" required value="{{.User.Name}}"
-             pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,31}"></label>
+      <label>名称<input name="name" required value="{{.User.Name}}" maxlength="32"></label>
       <label>到期（服务器时间）<input name="expires_at" type="datetime-local"
              value="{{datetimeval .User.ExpiresAt}}"></label>
       <label>流量上限 GiB<input name="traffic_limit_gb" type="number" step="0.01" min="0"
