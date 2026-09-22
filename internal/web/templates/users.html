@@ -104,7 +104,7 @@
           {{.Name}}{{if .Note}}<div class="dim" style="font-size:.8rem">{{.Note}}</div>{{end}}
           <div style="font-size:.75rem;margin-top:.2rem">
             <a href="{{panelPath "/users/"}}{{.ID}}/activity">活动</a>
-            <a class="dim" href="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" target="_blank" rel="noopener">订阅页</a>
+            <a class="dim" href="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" target="_blank" rel="noopener">打开订阅</a>
             <button class="ghost" style="font-size:.7rem;padding:.1rem .35rem"
                     data-sub-url="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" onclick="copySub(this)">复制链接</button>
           </div>

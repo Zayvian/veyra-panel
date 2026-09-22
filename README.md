@@ -203,9 +203,11 @@ ls -l /opt/skysbx/cert.pem /opt/skysbx/key.pem
 | Clash Party / Mihomo | 导入远程订阅；可指定 `?format=clash` |
 | Shadowrocket | 添加 Subscribe，粘贴链接并更新；隐藏 User-Agent 时指定 `?format=shadowrocket` |
 | sing-box | 远程配置使用 `?format=singbox` |
-| 浏览器 | 打开订阅网页；必要时指定 `?format=html` |
+| 浏览器 | 显示 Base64 订阅文本；这是正常行为，HTML 预览已禁用 |
 
 已有查询参数时使用 `&format=...`，否则使用 `?format=...`。客户端内核需支持所选协议，原版旧 Clash 不在兼容范围内。
+
+订阅链接是访问凭证。Base64 只避免浏览器直接展示节点和套餐信息，**不是加密**；拿到完整订阅链接的人仍可解码或导入节点，因此不要公开分享链接。若需要让旧客户端配置立即失效，可使用用户页的「强制全员更新订阅」；该操作会刷新连接凭证，但不会改变订阅链接本身。
 
 导出只显示入站名称。Shadowrocket 专用格式显示「上传：1.00 GB | 下载：2.00 GB | 总量：200.00 GB」，无限套餐显示「不限」。其他格式保留标准字节响应头，由客户端决定显示单位。具体 iOS 版本效果需在设备刷新验证。
 

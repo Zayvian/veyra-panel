@@ -504,16 +504,13 @@ GET /sub/<sub_token>
 
 | 客户端 | 判定 | 返回 |
 |---|---|---|
-| 浏览器 | `Accept` 含 `text/html` | 订阅页（用量 / 到期 / 一键导入） |
+| 浏览器 | 不作 HTML 分支 | base64 分享链接列表（`text/plain`） |
 | sing-box / SFA / SFI | `User-Agent` | sing-box JSON |
 | mihomo / Clash | `User-Agent` | Clash YAML |
 | 其它 | 兜底 | base64 分享链接列表 |
 
 也可以用 `?format=` 强制：`singbox` / `sing-box`、`clash` / `mihomo`、`base64` /
-`v2ray`、`html` / `page`。
-
-> 用 curl 自测时注意：浏览器规则匹配的是 **`Accept` 头**，只带
-> `User-Agent: Mozilla/…` 命中不了。
+`v2ray`。`html` / `page` 不再启用，避免持有订阅链接的访问者通过浏览器直接看到节点和用户详情。
 
 三种分享链接：
 

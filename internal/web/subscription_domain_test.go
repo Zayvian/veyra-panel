@@ -36,9 +36,11 @@ func TestSubscriptionDomain(t *testing.T) {
 	}
 	for _, host := range []string{"sub.example.com", "SUB.EXAMPLE.COM", "sub.example.com:443"} {
 		rec := httptest.NewRecorder()
-		srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "https://"+host+"/sub/"+user.SubToken+"?format=html", nil))
-		if rec.Code != 200 || !strings.Contains(rec.Body.String(), "https://sub.example.com/sub/"+user.SubToken) {
-			t.Fatalf("wrong subscription URL: %s", rec.Body)
+		req := httptest.NewRequest("GET", "https://"+host+"/sub/"+user.SubToken+"?format=html", nil)
+		req.Header.Set("Accept", "text/html,application/xhtml+xml")
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/plain") || strings.Contains(rec.Body.String(), "<html") || strings.Contains(rec.Body.String(), user.Name) {
+			t.Fatalf("subscription preview was exposed: type=%q body=%q", rec.Header().Get("Content-Type"), rec.Body.String())
 		}
 	}
 	for _, host := range []string{"panel.example.com", "panel.example.com:443", "old-sub.example.com", "127.0.0.1", "sub.example.com.evil.test"} {
@@ -75,8 +77,8 @@ func TestSubscriptionDomain(t *testing.T) {
 	srv.SetSubscriptionDomain("")
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "https://panel.example.com/sub/"+user.SubToken+"?format=html", nil))
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "https://panel.example.com/sub/"+user.SubToken) {
-		t.Fatalf("same-host subscription broken: %d %s", rec.Code, rec.Body)
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/plain") || strings.Contains(rec.Body.String(), "<html") {
+		t.Fatalf("same-host subscription preview exposed: %d %s", rec.Code, rec.Body)
 	}
 }
 

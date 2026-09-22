@@ -438,9 +438,9 @@ func TestDetect(t *testing.T) {
 		{"clash-verge", "clash-verge/1.5", "", "", FormatClash},
 		{"stash", "Stash/2.5", "", "", FormatClash},
 		{"v2rayNG", "v2rayNG/1.8.5", "", "", FormatBase64},
-		{"browser", "Mozilla/5.0", "text/html,application/xhtml+xml", "", FormatHTML},
+		{"browser", "Mozilla/5.0", "text/html,application/xhtml+xml", "", FormatBase64},
 		{"real browser accept", "Mozilla/5.0",
-			"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "", FormatHTML},
+			"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "", FormatBase64},
 		{"curl", "curl/8.0", "*/*", "", FormatBase64},
 
 		// An unrecognised client that sends a catch-all Accept must still get a
@@ -449,7 +449,8 @@ func TestDetect(t *testing.T) {
 		{"unknown client, catch-all accept", "SomeClient/1.0", "text/html,*/*", "", FormatBase64},
 		{"unknown client, wildcard first", "SomeClient/1.0", "*/*,text/html", "", FormatBase64},
 		{"explicit override", "sing-box", "", "clash", FormatClash},
-		{"explicit html", "curl/8.0", "", "html", FormatHTML},
+		{"disabled html override", "curl/8.0", "", "html", FormatBase64},
+		{"disabled page override", "curl/8.0", "", "page", FormatBase64},
 	}
 	for _, c := range cases {
 		target := "/sub/tok"
@@ -469,10 +470,9 @@ func TestDetect(t *testing.T) {
 	}
 }
 
-// A client that sends both a recognised User-Agent and an HTML Accept header
-// must get its own format. Browsers are identified by Accept precisely because
-// so many clients also claim to be Mozilla.
-func TestUserAgentBeatsAcceptHTML(t *testing.T) {
+// A recognised client still receives its native format even if it uses an
+// Accept header that a browser would send.
+func TestUserAgentBeatsBrowserAccept(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/sub/tok", nil)
 	r.Header.Set("User-Agent", "ClashMetaForAndroid/2.9 Mozilla/5.0")
 	r.Header.Set("Accept", "text/html,*/*")
