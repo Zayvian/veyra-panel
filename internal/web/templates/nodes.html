@@ -61,7 +61,7 @@
     {{if not .Nodes}}
       <p class="dim" style="margin:.5rem">还没有节点。</p>
     {{else}}
-    <table>
+    <table class="mobile-cards">
       <thead><tr>
         <th>名称</th><th>倍率</th><th>地址</th><th>状态</th><th>入站</th><th>版本</th><th></th>
       </tr></thead>
@@ -105,8 +105,8 @@
         {{else}}
         <tr>
           <td>{{.Name}} <span class="dim">{{.Country}}</span><div class="dim" style="font-size:.75rem">排序 {{.SortOrder}}</div></td>
-          <td>{{.RateText}}×{{if eq .RateMilli 0}} <span class="dim">不扣套餐</span>{{end}}</td>
-          <td class="dim">
+          <td data-label="倍率">{{.RateText}}×{{if eq .RateMilli 0}} <span class="dim">不扣套餐</span>{{end}}</td>
+          <td class="dim" data-label="地址">
             {{.Address}}
             {{/* This value is what every subscription hands to a client. */}}
             {{if index $.BareIP .ID}}
@@ -114,7 +114,7 @@
                    title="订阅里发给客户端的就是这个地址。填域名的话换服务器只需改 DNS，而且 AnyTLS 的证书只对域名有效。">
                 建议改为域名</div>{{end}}
           </td>
-          <td>
+          <td data-label="状态">
             {{/* Whether the control channel is up right now, which last_seen_at
                  cannot answer — it records the last handshake, and a node that
                  died a minute ago still has a recent one. */}}
@@ -124,7 +124,7 @@
               <div class="dim" style="font-size:.75rem">最后 {{ago .LastSeenAt}}</div>
             {{else}}<span class="pill off">从未接入</span>{{end}}
           </td>
-          <td>
+          <td data-label="入站">
             <a href="{{panelPath "/nodes/"}}{{.ID}}/inbounds">{{index $.InboundCounts .ID}} 个</a>
             {{/* The node told us it refused the last configuration and is
                  still on the previous one. Saying so here means the operator
@@ -133,8 +133,8 @@
               <a href="{{panelPath "/nodes/"}}{{.ID}}/inbounds" class="pill bad"
                  style="margin-left:.35rem">未生效</a>{{end}}
           </td>
-          <td><code class="mono">{{if .Version}}{{.Version}}{{else}}—{{end}}</code></td>
-          <td style="text-align:right;white-space:nowrap">
+          <td data-label="版本"><code class="mono">{{if .Version}}{{.Version}}{{else}}—{{end}}</code></td>
+          <td class="mobile-actions" style="text-align:right;white-space:nowrap">
             <button class="ghost" hx-get="{{panelPath "/nodes/"}}{{.ID}}/edit"
                     hx-target="#nodes" hx-swap="outerHTML">编辑</button>
             <button class="ghost" hx-post="{{panelPath "/nodes/"}}{{.ID}}/toggle"

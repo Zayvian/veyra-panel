@@ -29,7 +29,7 @@
     {{if not .Rows}}
       <p class="dim" style="margin:.5rem">这段时间没有活动记录。</p>
     {{else}}
-    <table>
+    <table class="mobile-cards">
       <thead><tr>
         <th>时间</th><th>节点</th>
         <th class="num">并发连接</th><th class="num">目标地址</th>
@@ -39,11 +39,11 @@
       {{range .Rows}}
         <tr>
           <td class="dim">{{hour .When}}</td>
-          <td>{{.Node}}</td>
-          <td class="num">{{.Conns}}</td>
-          <td class="num">{{.Peers}}</td>
-          <td class="num dim">{{.Ports}}</td>
-          <td class="num dim">{{.IPs}}</td>
+          <td data-label="节点">{{.Node}}</td>
+          <td class="num" data-label="并发连接">{{.Conns}}</td>
+          <td class="num" data-label="目标地址">{{.Peers}}</td>
+          <td class="num dim" data-label="目标端口">{{.Ports}}</td>
+          <td class="num dim" data-label="来源 IP">{{.IPs}}</td>
           <td>{{if .Busy}}<span class="pill warn-pill">目标数偏高</span>{{end}}</td>
         </tr>
       {{end}}

@@ -90,7 +90,7 @@
   {{if not .Users}}
     <p class="dim" style="margin:.5rem">还没有用户。</p>
   {{else}}
-  <table>
+  <table class="mobile-cards">
     <thead><tr>
       <th>名称</th><th>状态</th><th>可用协议</th><th class="num">IP</th><th>到期</th>
       <th class="num">已用</th><th class="num">上限</th><th></th>
@@ -107,7 +107,7 @@
                     data-sub-url="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" onclick="copySub(this)">复制链接</button>
           </div>
         </td>
-        <td>
+        <td data-label="状态">
           {{if .Active $.Now}}<span class="pill ok">正常</span>
           {{else if not .Enabled}}<span class="pill off">已停用</span>
           {{else}}<span class="pill bad">已失效</span>{{end}}
@@ -115,7 +115,7 @@
                well under their limit and simply not connected. */}}
           {{if index $.Online .Name}}<span class="pill live">在线</span>{{end}}
         </td>
-        <td>
+        <td data-label="可用协议">
           {{$n := index $.Access .ID}}
           <a href="{{panelPath "/users/"}}{{.ID}}/access">
             {{if lt $n 0}}全部{{else}}{{$n}} / {{$.InboundCount}}{{end}}</a>
@@ -124,7 +124,7 @@
              across nodes while the cap is enforced per node, so on a
              multi-node panel it can legitimately read higher than the limit —
              which is itself the thing worth seeing. */}}
-        <td class="num">
+        <td class="num" data-label="在线 IP">
           {{$n := index $.IPs .Name}}
           {{if gt .IPLimit 0}}
             <span {{if gt $n .IPLimit}}class="pill bad"{{else}}class="dim"{{end}}
@@ -132,9 +132,9 @@
           {{else if $n}}<span class="dim">{{$n}}</span>
           {{else}}<span class="dim">—</span>{{end}}
         </td>
-        <td class="dim">{{date .ExpiresAt}}</td>
-        <td class="num">{{bytes .TrafficUsed}}</td>
-        <td class="num dim">
+        <td class="dim" data-label="到期">{{date .ExpiresAt}}</td>
+        <td class="num" data-label="已用">{{bytes .TrafficUsed}}</td>
+        <td class="num dim" data-label="上限">
           {{if gt .TrafficLimit 0}}{{bytes .TrafficLimit}}
             <div style="font-size:.75rem">{{pct .TrafficUsed .TrafficLimit}}</div>
           {{else}}不限{{end}}
@@ -146,7 +146,7 @@
             <div class="dim" style="font-size:.7rem">{{nextreset .ResetDay .ResetHour .ResetMinute}} 重置</div>
           {{end}}
         </td>
-        <td style="text-align:right;white-space:nowrap">
+        <td class="mobile-actions" style="text-align:right;white-space:nowrap">
           <button class="ghost" hx-get="{{panelPath "/users/"}}{{.ID}}/edit"
                   hx-target="closest tr" hx-swap="outerHTML">编辑</button>
           <button class="ghost" hx-post="{{panelPath "/users/"}}{{.ID}}/toggle"

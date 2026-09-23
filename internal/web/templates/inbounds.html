@@ -129,7 +129,7 @@ onRelay();
   {{if not .Inbounds}}
     <p class="dim" style="margin:.5rem">这个节点还没有入站。</p>
   {{else}}
-  <table>
+  <table class="mobile-cards">
     <thead><tr><th>tag</th><th>协议</th><th class="num">端口</th><th>连接地址</th>
       <th>状态</th><th></th></tr></thead>
     <tbody>
@@ -210,11 +210,11 @@ onRelay();
       {{else}}
       <tr>
         <td>{{.Tag}}<div class="dim" style="font-size:.75rem">排序 {{.SortOrder}}</div></td>
-        <td class="dim">{{.Protocol}}</td>
-        <td class="num">{{.Port}}</td>
+        <td class="dim" data-label="协议">{{.Protocol}}</td>
+        <td class="num" data-label="端口">{{.Port}}</td>
         {{/* What a client is told to dial, which is not always where the node
              listens: a relay puts this inbound on a port the node cannot have. */}}
-        <td class="dim">
+        <td class="dim" data-label="连接地址">
           {{if .RelayNodeID}}
             {{index $.NodeNames .RelayNodeID}}:{{.RelayPort}}
             <span class="pill live" style="margin-left:.35rem">站内中转</span>
@@ -222,7 +222,7 @@ onRelay();
             <span class="pill warn-pill" style="margin-left:.35rem">外部中转</span>
           {{else}}{{$.Node.Address}}:{{.Port}}{{end}}
         </td>
-        <td>{{if .Enabled}}<span class="pill ok">启用</span>
+        <td data-label="状态">{{if .Enabled}}<span class="pill ok">启用</span>
             {{else}}<span class="pill off">停用</span>{{end}}
             {{if .Enabled}}
               {{/* A rejected configuration leaves the node running the previous
@@ -239,7 +239,7 @@ onRelay();
               {{else}}<span class="pill off">节点离线</span>{{end}}
             {{end}}
         </td>
-        <td style="text-align:right;white-space:nowrap">
+        <td class="mobile-actions" style="text-align:right;white-space:nowrap">
           <button class="ghost" hx-get="{{panelPath "/inbounds/"}}{{.ID}}/edit"
                   hx-target="#inbounds" hx-swap="outerHTML">编辑</button>
           <button class="ghost" hx-post="{{panelPath "/inbounds/"}}{{.ID}}/toggle"
@@ -264,17 +264,17 @@ onRelay();
   <div style="margin-top:1.25rem;border-top:1px solid var(--line);padding-top:1rem">
     <h2 style="font-size:.85rem;color:var(--dim);font-weight:500;margin:0 0 .6rem;
                text-transform:uppercase;letter-spacing:.4px">本节点为其它节点中转</h2>
-    <table>
+    <table class="mobile-cards">
       <thead><tr><th>tag</th><th class="num">监听端口</th><th>转发到</th>
         <th>归属</th><th>状态</th></tr></thead>
       <tbody>
       {{range .Carried}}
         <tr>
           <td class="dim">{{.Tag}}</td>
-          <td class="num">{{.ListenPort}}</td>
-          <td class="dim">{{.Target}}</td>
-          <td><a href="{{panelPath "/nodes/"}}{{.Inbound.NodeID}}/inbounds">{{.OriginNode}} / {{.Inbound.Tag}}</a></td>
-          <td>{{if .Serving}}<span class="pill ok">转发中</span>
+          <td class="num" data-label="监听端口">{{.ListenPort}}</td>
+          <td class="dim" data-label="转发到">{{.Target}}</td>
+          <td data-label="归属"><a href="{{panelPath "/nodes/"}}{{.Inbound.NodeID}}/inbounds">{{.OriginNode}} / {{.Inbound.Tag}}</a></td>
+          <td data-label="状态">{{if .Serving}}<span class="pill ok">转发中</span>
               {{else}}<span class="pill off">已停</span>{{end}}</td>
         </tr>
       {{end}}
