@@ -81,6 +81,11 @@ type conn struct {
 	// leaving the node on a user list the panel has already moved past.
 	pushMu sync.Mutex
 
+	// What this node and the panel agreed on in hello/welcome. Both false for
+	// a node older than protocol 2, which is spoken to as it always was.
+	statsAck  atomic.Bool
+	configRev atomic.Bool
+
 	lastSeen atomic.Int64 // unix seconds, for pong tracking
 	online   atomic.Pointer[[]string]
 	ips      atomic.Pointer[map[string]int]
@@ -250,7 +255,25 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 		}
 		h.log.Info("node connected", "node", c.nodeID,
 			"version", hello.Version, "singbox", hello.SingboxVersion,
-			"host", hello.Hostname)
+			"host", hello.Hostname, "proto", hello.Proto, "caps", hello.Caps)
+		// Protocol 2: answer with what this panel supports, before anything
+		// else — a node that receives a config first takes the panel for an
+		// older one. A node that did not say proto 2 is older itself and gets
+		// no welcome, which it would only log as an unknown message.
+		if hello.Proto >= 2 {
+			for _, offered := range hello.Caps {
+				switch offered {
+				case CapStatsAck:
+					c.statsAck.Store(true)
+				case CapConfigRev:
+					c.configRev.Store(true)
+				}
+			}
+			if err := h.send(ctx, c, TypeWelcome, 0,
+				Welcome{Proto: ProtoVersion, Caps: PanelCaps}); err != nil {
+				return err
+			}
+		}
 		// A node has no state of its own worth keeping across a reconnect, so
 		// it is brought up to date immediately rather than waiting for the next
 		// edit in the UI.
@@ -271,6 +294,9 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 		var s StatsData
 		if err := json.Unmarshal(env.Data, &s); err != nil {
 			return fmt.Errorf("stats: %w", err)
+		}
+		if env.ID != 0 && s.Epoch != "" && c.statsAck.Load() {
+			return h.applyNumberedStats(ctx, c, env.ID, s)
 		}
 		return h.applyStats(c.nodeID, s)
 
@@ -333,6 +359,30 @@ func (h *Hub) applyStats(nodeID int64, s StatsData) error {
 	if len(s.Users) == 0 {
 		return nil
 	}
+	return h.svc.RecordTraffic(nodeID, h.usage(nodeID, s))
+}
+
+// applyNumberedStats bills a stats_ack report at most once and acknowledges it.
+//
+// The ok goes out only after the traffic is committed: until the node hears
+// it, the node keeps the report and resends it, so a panel that fails here —
+// or dies here — loses nothing. A repeat of a report already committed is
+// acknowledged too, without being billed; otherwise a node whose ok was lost
+// would resend it forever.
+func (h *Hub) applyNumberedStats(ctx context.Context, c *conn, seq uint64, s StatsData) error {
+	duplicate, err := h.svc.RecordTrafficReport(c.nodeID, s.Epoch, seq, h.usage(c.nodeID, s))
+	if err != nil {
+		return fmt.Errorf("stats %d: %w", seq, err)
+	}
+	if duplicate {
+		h.log.Debug("stats report already recorded", "node", c.nodeID, "seq", seq)
+	}
+	return h.send(ctx, c, TypeOK, seq, nil)
+}
+
+// usage converts a report to the service's form, dropping what cannot be
+// a measurement.
+func (h *Hub) usage(nodeID int64, s StatsData) map[string]service.Usage {
 	usage := make(map[string]service.Usage, len(s.Users))
 	for name, u := range s.Users {
 		if u.Up < 0 || u.Down < 0 {
@@ -345,7 +395,7 @@ func (h *Hub) applyStats(nodeID int64, s StatsData) error {
 		}
 		usage[name] = service.Usage{Up: u.Up, Down: u.Down}
 	}
-	return h.svc.RecordTraffic(nodeID, usage)
+	return usage
 }
 
 // ── outbound pushes ─────────────────────────────────────────────────────────
@@ -372,8 +422,13 @@ func (h *Hub) pushTo(ctx context.Context, c *conn, config, users bool) error {
 		if err != nil {
 			return fmt.Errorf("build config for node %d: %w", c.nodeID, err)
 		}
+		rev, err := service.ConfigRev(cfg)
+		if err != nil {
+			return fmt.Errorf("config rev for node %d: %w", c.nodeID, err)
+		}
+		// Sent to every node; one older than config_rev ignores the field.
 		if err := h.send(ctx, c, TypeConfig, h.nextID.Add(1),
-			ConfigData{Config: cfg}); err != nil {
+			ConfigData{Rev: rev, Config: cfg}); err != nil {
 			return err
 		}
 	}
@@ -551,6 +606,23 @@ func (h *Hub) ApplyError(nodeID int64) string {
 		return st.Error
 	}
 	return ""
+}
+
+// AppliedRev is the rev of the configuration a node says it is running (see
+// service.ConfigRev). known is false for a node that is disconnected, has not
+// reported yet, or is older than config_rev — which says nothing either way.
+func (h *Hub) AppliedRev(nodeID int64) (rev string, known bool) {
+	h.mu.RLock()
+	c := h.conns[nodeID]
+	h.mu.RUnlock()
+	if c == nil || !c.configRev.Load() {
+		return "", false
+	}
+	st := c.state.Load()
+	if st == nil {
+		return "", false
+	}
+	return st.AppliedRev, true
 }
 
 func (h *Hub) stateOf(nodeID int64) *StateData {

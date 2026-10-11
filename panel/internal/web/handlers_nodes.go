@@ -269,7 +269,19 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		}
 	}
 	applyErr := s.nodes.ApplyError(nodeID)
-	settle := s.settle(r, nodeID, inbounds, tags, known, applyErr)
+	// For a node that reports its config rev, "serving that tag" is not yet
+	// "serving it with these settings": until the revs match, the node is
+	// still on the previous configuration. stale says so.
+	stale := false
+	if rev, revKnown := s.nodes.AppliedRev(nodeID); revKnown && applyErr == "" {
+		want, err := s.svc.NodeConfigRev(nodeID)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		stale = rev != want
+	}
+	settle := s.settle(r, nodeID, inbounds, tags, known, applyErr, stale)
 	if editID != 0 {
 		settle = 0
 	}
@@ -304,6 +316,7 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		"StateKnown":       known,
 		"Live":             live,
 		"NodeError":        applyErr,
+		"Stale":            stale,
 		"Settle":           settle,
 		"EditID":           editID,
 		"CSRFToken":        s.csrf.csrfValue(r),
@@ -326,11 +339,11 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 
 const settleLimit = 8
 
-func (s *Server) settle(r *http.Request, nodeID int64, inbounds []*store.Inbound, tags map[string]bool, known bool, applyErr string) int {
+func (s *Server) settle(r *http.Request, nodeID int64, inbounds []*store.Inbound, tags map[string]bool, known bool, applyErr string, stale bool) int {
 	if applyErr != "" || !s.nodes.Connected(nodeID) {
 		return 0
 	}
-	pending := !known
+	pending := !known || stale
 	for _, in := range inbounds {
 		if in.Enabled && !tags[in.Tag] {
 			pending = true

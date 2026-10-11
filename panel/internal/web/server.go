@@ -148,6 +148,9 @@ type NodeChannel interface {
 	LiveInbounds(nodeID int64) (tags map[string]bool, known bool)
 	// ApplyError is why the node is not running what it was last sent.
 	ApplyError(nodeID int64) string
+	// AppliedRev is the rev of the configuration the node says it runs.
+	// known is false when it has not said — including every node too old to.
+	AppliedRev(nodeID int64) (rev string, known bool)
 }
 
 func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookies bool) (*Server, error) {

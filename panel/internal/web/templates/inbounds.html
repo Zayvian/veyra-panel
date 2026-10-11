@@ -231,8 +231,13 @@ onRelay();
                    read 已生效 while the port beside it is not the port being
                    listened on. That is the one word an operator relies on, so
                    it must not be said about a node running something else. */}}
+              {{/* A node new enough to report its config rev answers the
+                   settings question too: until its rev matches, the tag it
+                   serves still has the previous settings. */}}
               {{if and $.StateKnown (index $.Live .ID)}}
                 {{if $.NodeError}}<span class="pill warn-pill">跑的是旧配置</span>
+                {{else if and $.Stale $.Settle}}<span class="pill off">确认中…</span>
+                {{else if $.Stale}}<span class="pill warn-pill">等待节点应用</span>
                 {{else}}<span class="pill live">已生效</span>{{end}}
               {{else if $.Settle}}<span class="pill off">确认中…</span>
               {{else if $.StateKnown}}<span class="pill bad">未生效</span>

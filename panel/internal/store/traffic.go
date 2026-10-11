@@ -1,6 +1,9 @@
 package store
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
+)
 
 // AddTraffic folds one reporting interval into both the daily rollup and each
 // user's billed running total, in a single transaction. Daily rows retain raw
@@ -21,7 +24,62 @@ func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) (crosse
 		return nil, err
 	}
 	defer tx.Rollback()
+	if crossed, err = addTraffic(tx, nodeID, day, deltas); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return crossed, nil
+}
 
+// AddTrafficReport is AddTraffic for a node that numbers its reports (protocol
+// 2, stats_ack): it bills each report at most once.
+//
+// A node resends a report until it hears that it was committed, and the reply
+// can be lost after the commit — the connection drops, the panel restarts. The
+// resend then carries the same epoch (one per node process) and sequence number
+// as the report already billed. Those are recorded on the node row in the same
+// transaction as the traffic, so either both land or neither does, and a
+// report at or below the recorded number for the same epoch is a repeat:
+// duplicate is true and nothing is written. A new epoch is a restarted node,
+// whose numbering starts again.
+func (s *Store) AddTrafficReport(nodeID, day int64, epoch string, seq uint64,
+	deltas map[int64][2]int64,
+) (crossed []int64, duplicate bool, err error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback()
+
+	var lastEpoch string
+	var lastSeq int64
+	if err := tx.QueryRow(`SELECT stats_epoch, stats_seq FROM nodes WHERE id = ?`, nodeID).
+		Scan(&lastEpoch, &lastSeq); err != nil {
+		return nil, false, err
+	}
+	if epoch == lastEpoch && int64(seq) <= lastSeq {
+		return nil, true, nil
+	}
+	if len(deltas) > 0 {
+		if crossed, err = addTraffic(tx, nodeID, day, deltas); err != nil {
+			return nil, false, err
+		}
+	}
+	if _, err := tx.Exec(`UPDATE nodes SET stats_epoch = ?, stats_seq = ? WHERE id = ?`,
+		epoch, int64(seq), nodeID); err != nil {
+		return nil, false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
+	return crossed, false, nil
+}
+
+// addTraffic does the billing for AddTraffic and AddTrafficReport inside the
+// caller's transaction.
+func addTraffic(tx *sql.Tx, nodeID, day int64, deltas map[int64][2]int64) (crossed []int64, err error) {
 	var rate int64
 	if err := tx.QueryRow(`SELECT rate_milli FROM nodes WHERE id = ?`, nodeID).Scan(&rate); err != nil {
 		return nil, err
@@ -68,9 +126,6 @@ func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) (crosse
 	// intentionally charge a different number of bytes.
 	if _, err := tx.Exec(`UPDATE nodes SET stats_up = stats_up + ?, stats_down = stats_down + ? WHERE id = ?`,
 		nodeUp, nodeDown, nodeID); err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return crossed, nil

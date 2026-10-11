@@ -20,7 +20,13 @@ type fakeChannel struct {
 	tags      map[string]bool
 	known     bool
 	applyErr  string
+
+	// What a config_rev node reports; revKnown false is an older node.
+	rev      string
+	revKnown bool
 }
+
+func (f *fakeChannel) AppliedRev(int64) (string, bool) { return f.rev, f.revKnown }
 
 func (f *fakeChannel) Handler() http.HandlerFunc    { return func(http.ResponseWriter, *http.Request) {} }
 func (f *fakeChannel) Connected(int64) bool         { return f.connected }
@@ -87,6 +93,13 @@ func TestInboundPageShowsWhatTheNodeIsActuallyServing(t *testing.T) {
 
 func inboundPage(t *testing.T, ch NodeChannel) string {
 	t.Helper()
+	return inboundPageWith(t, ch, nil)
+}
+
+// inboundPageWith lets a test see the node's real config rev before the page
+// renders.
+func inboundPageWith(t *testing.T, ch NodeChannel, prepare func(svc *service.Service, nodeID int64)) string {
+	t.Helper()
 
 	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {
@@ -105,6 +118,9 @@ func inboundPage(t *testing.T, ch NodeChannel) string {
 		t.Fatalf("create inbound: %v", err)
 	}
 
+	if prepare != nil {
+		prepare(svc, node.ID)
+	}
 	srv, err := New(svc, ch, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	if err != nil {
 		t.Fatalf("web.New: %v", err)
@@ -140,5 +156,42 @@ func TestRejectedConfigDoesNotClaimRowsAreLive(t *testing.T) {
 	// the explanation.
 	if !strings.Contains(body, "address already in use") {
 		t.Error("the node's reason vanished")
+	}
+}
+
+// A node that reports its config rev answers what tags alone cannot: whether
+// the inbound it serves has the settings last sent. An edit that keeps the tag
+// — a new port, a new certificate — reads 已生效 only once the revs match.
+func TestConfigRevDecidesWhetherSettingsTookEffect(t *testing.T) {
+	serving := func(rev func(svc *service.Service, nodeID int64) string) string {
+		ch := &fakeChannel{connected: true, known: true,
+			tags: map[string]bool{"ss-tokyo": true}, revKnown: true}
+		return inboundPageWith(t, ch, func(svc *service.Service, nodeID int64) {
+			ch.rev = rev(svc, nodeID)
+			// Serve whatever tag the inbound was given.
+			ins, _ := svc.NodeInbounds(nodeID)
+			for _, in := range ins {
+				ch.tags[in.Tag] = true
+			}
+		})
+	}
+
+	current := serving(func(svc *service.Service, nodeID int64) string {
+		rev, err := svc.NodeConfigRev(nodeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rev
+	})
+	if !strings.Contains(current, "已生效") {
+		t.Error("matching rev: the row does not say 已生效")
+	}
+
+	previous := serving(func(*service.Service, int64) string { return "an-older-rev" })
+	if strings.Contains(previous, "已生效") {
+		t.Error("the node runs an older config, but the row claims 已生效")
+	}
+	if !strings.Contains(previous, "确认中") {
+		t.Error("an older rev should read 确认中 while the page waits for the node")
 	}
 }

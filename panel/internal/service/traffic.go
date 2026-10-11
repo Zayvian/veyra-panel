@@ -34,9 +34,66 @@ func (s *Service) RecordTraffic(nodeID int64, usage map[string]Usage) error {
 	if len(usage) == 0 {
 		return nil
 	}
-	byName, err := s.nodeUserIDs(nodeID)
+	deltas, err := s.billable(nodeID, usage)
 	if err != nil {
 		return err
+	}
+	if len(deltas) == 0 {
+		return nil
+	}
+
+	day := time.Now().UTC().Unix() / 86400
+	crossed, err := s.st.AddTraffic(nodeID, day, toStoreDeltas(deltas))
+	if err != nil {
+		return err
+	}
+	s.crossedLimits(crossed)
+	return nil
+}
+
+// RecordTrafficReport is RecordTraffic for a numbered report (protocol 2,
+// stats_ack): each (epoch, seq) is billed at most once. duplicate means this
+// report had already been committed — its acknowledgement was lost — and
+// nothing was billed now; the caller acknowledges it all the same, or the node
+// would go on resending it.
+func (s *Service) RecordTrafficReport(nodeID int64, epoch string, seq uint64,
+	usage map[string]Usage,
+) (duplicate bool, err error) {
+	deltas, err := s.billable(nodeID, usage)
+	if err != nil {
+		return false, err
+	}
+	day := time.Now().UTC().Unix() / 86400
+	crossed, duplicate, err := s.st.AddTrafficReport(nodeID, day, epoch, seq, toStoreDeltas(deltas))
+	if err != nil {
+		return false, err
+	}
+	s.crossedLimits(crossed)
+	return duplicate, nil
+}
+
+// crossedLimits tells the nodes when a report took someone over their limit.
+//
+// Crossing a traffic limit revokes access, and access is revoked by leaving
+// the user out of the next push — so the nodes have to be told. Only then:
+// every node reports every thirty seconds, and pushing the full user list to
+// every node on every report is work that grows with the square of the node
+// count and changes nothing.
+func (s *Service) crossedLimits(crossed []int64) {
+	if len(crossed) > 0 {
+		s.notify.UsersChanged()
+	}
+}
+
+// billable keeps the part of a report this node may bill, keyed by user id.
+// See RecordTraffic for what is left out and why.
+func (s *Service) billable(nodeID int64, usage map[string]Usage) (map[int64]Usage, error) {
+	if len(usage) == 0 {
+		return nil, nil
+	}
+	byName, err := s.nodeUserIDs(nodeID)
+	if err != nil {
+		return nil, err
 	}
 
 	deltas := make(map[int64]Usage, len(usage))
@@ -57,25 +114,7 @@ func (s *Service) RecordTraffic(nodeID int64, usage map[string]Usage) error {
 		}
 		deltas[id] = Usage{Up: u.Up, Down: u.Down}
 	}
-	if len(deltas) == 0 {
-		return nil
-	}
-
-	day := time.Now().UTC().Unix() / 86400
-	crossed, err := s.st.AddTraffic(nodeID, day, toStoreDeltas(deltas))
-	if err != nil {
-		return err
-	}
-
-	// Crossing a traffic limit revokes access, and access is revoked by leaving
-	// the user out of the next push — so the nodes have to be told. Only then:
-	// every node reports every thirty seconds, and pushing the full user list
-	// to every node on every report is work that grows with the square of the
-	// node count and changes nothing.
-	if len(crossed) > 0 {
-		s.notify.UsersChanged()
-	}
-	return nil
+	return deltas, nil
 }
 
 // maxReportedDelta bounds one interval's figure for one user. 1 TiB is far
