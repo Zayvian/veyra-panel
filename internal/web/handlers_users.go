@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Zayvian/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 // nowFunc exists so tests can pin time without a clock abstraction
@@ -42,6 +43,11 @@ func (s *Server) renderUsers(w http.ResponseWriter, r *http.Request, code int) {
 		s.fail(w, r, err)
 		return
 	}
+	plans, err := s.svc.Plans()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	access := make(map[int64]int, len(users))
 	for _, u := range users {
 		if allowed, restricted := restrictions[u.ID]; restricted {
@@ -58,6 +64,8 @@ func (s *Server) renderUsers(w http.ResponseWriter, r *http.Request, code int) {
 		"IPs":                s.nodes.UserIPCounts(),
 		"Access":             access,
 		"InboundCount":       len(inbounds),
+		"Plans":              plans,
+		"Attention":          service.NeedsAttention(users, nowFunc()),
 		// CSRFToken is added by s.page below; renderUsers is the
 		// page- and fragment-level entry point, and htmx requests
 		// re-render the table without the layout. CSRF lives in
@@ -162,6 +170,21 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.errorBanner(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	// A length instead of a date, which is how plans are sold. An explicit
+	// date wins: it is the more specific of the two.
+	days, err := daysFromForm(r)
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if days > service.MaxRenewDays {
+		s.errorBanner(w, http.StatusBadRequest, fmt.Sprintf("days must be at most %d", service.MaxRenewDays))
+		return
+	}
+	if expires == nil && days > 0 {
+		t := nowFunc().Local().AddDate(0, 0, days).Truncate(time.Minute)
+		expires = &t
 	}
 	nu.ExpiresAt = expires
 	limit, err := limitFromForm(r)
@@ -291,6 +314,57 @@ func (s *Server) reissueUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.svc.ReissueUserSubscription(id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.renderUsers(w, r, http.StatusOK)
+}
+
+// renewForm turns the user's row into the 续费 form, the same way editUser does.
+func (s *Server) renewForm(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, "bad user id")
+		return
+	}
+	u, err := s.svc.User(id)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	// Only plans with a length: renewing by an open-ended plan adds nothing.
+	all, err := s.svc.Plans()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	var plans []*store.Plan
+	for _, p := range all {
+		if p.Days > 0 {
+			plans = append(plans, p)
+		}
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	s.render(w, "user-renew-row", map[string]any{
+		"User":      u,
+		"Plans":     plans,
+		"Now":       nowFunc(),
+		"CSRFToken": s.csrf.csrfValue(r),
+	})
+}
+
+func (s *Server) renewUser(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, "bad user id")
+		return
+	}
+	days, err := strconv.Atoi(strings.TrimSpace(r.FormValue("days")))
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, "renewal must be a whole number of days")
+		return
+	}
+	if _, err := s.svc.RenewUser(id, days, r.FormValue("reset_traffic") != ""); err != nil {
 		s.fail(w, r, err)
 		return
 	}

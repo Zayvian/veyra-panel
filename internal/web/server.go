@@ -269,6 +269,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /settings", s.auth(http.HandlerFunc(s.getSettings)))
 	mux.Handle("POST /settings", s.auth(s.requireCSRF(http.HandlerFunc(s.postSettings))))
 	mux.Handle("POST /settings/force-subscription-refresh", s.auth(s.requireCSRF(http.HandlerFunc(s.postForceSubscriptionRefresh))))
+	mux.Handle("POST /settings/2fa/begin", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPBegin))))
+	mux.Handle("POST /settings/2fa/enable", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPEnable))))
+	mux.Handle("POST /settings/2fa/disable", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPDisable))))
+	mux.Handle("POST /settings/2fa/recovery", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPRecovery))))
 
 	// Everything else needs a session, and every state-changing route
 	// needs a CSRF token. The two gates stack: auth() first (so we know
@@ -283,10 +287,19 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /users/{id}/toggle", s.auth(s.requireCSRF(http.HandlerFunc(s.toggleUser))))
 	mux.Handle("POST /users/{id}/reset", s.auth(s.requireCSRF(http.HandlerFunc(s.resetUser))))
 	mux.Handle("POST /users/{id}/reissue", s.auth(s.requireCSRF(http.HandlerFunc(s.reissueUser))))
+	mux.Handle("GET /users/{id}/share", s.auth(http.HandlerFunc(s.shareUser)))
+	mux.Handle("GET /users/{id}/renew", s.auth(http.HandlerFunc(s.renewForm)))
+	mux.Handle("POST /users/{id}/renew", s.auth(s.requireCSRF(http.HandlerFunc(s.renewUser))))
 	mux.Handle("DELETE /users/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deleteUser))))
 	mux.Handle("GET /users/{id}/activity", s.auth(http.HandlerFunc(s.getUserActivity)))
 	mux.Handle("GET /users/{id}/access", s.auth(http.HandlerFunc(s.getUserAccess)))
 	mux.Handle("POST /users/{id}/access", s.auth(s.requireCSRF(http.HandlerFunc(s.setUserAccess))))
+
+	mux.Handle("GET /plans", s.auth(http.HandlerFunc(s.listPlans)))
+	mux.Handle("POST /plans", s.auth(s.requireCSRF(http.HandlerFunc(s.createPlan))))
+	mux.Handle("GET /plans/{id}/edit", s.auth(http.HandlerFunc(s.editPlan)))
+	mux.Handle("POST /plans/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.updatePlan))))
+	mux.Handle("DELETE /plans/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deletePlan))))
 
 	mux.Handle("GET /policy", s.auth(http.HandlerFunc(s.getPolicy)))
 	mux.Handle("POST /policy", s.auth(s.requireCSRF(http.HandlerFunc(s.setPolicy))))

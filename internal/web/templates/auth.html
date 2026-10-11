@@ -24,6 +24,10 @@
     <form hx-post="{{panelPath "/login"}}" hx-target="#err">
       <label>用户名<input name="username" required autofocus></label>
       <label>密码<input name="password" type="password" required></label>
+      {{if .TOTP}}
+      <label>验证码<input name="code" required autocomplete="one-time-code" inputmode="numeric"
+             placeholder="手机上的 6 位数字，或恢复码"></label>
+      {{end}}
       <button>登录</button>
     </form>
   </div>
@@ -39,6 +43,9 @@
   <div class="card stats">
     <div class="stat"><div class="n">{{.ActiveUsers}} <span class="dim" style="font-size:1rem">/ {{.Users}}</span></div><div class="k">在用用户 / 总数</div></div>
     <div class="stat"><div class="n">{{.OnlineUsers}}</div><div class="k">当前在线</div></div>
+    <a class="stat" href="{{panelPath "/users"}}" style="color:inherit">
+      <div class="n" {{if .Attention}}style="color:var(--warn)"{{end}}>{{.Attention}}</div>
+      <div class="k">需要处理（到期 / 流量）</div></a>
     <div class="stat"><div class="n">{{.NodesUp}} <span class="dim" style="font-size:1rem">/ {{.Nodes}}</span></div><div class="k">在线节点 / 总数</div></div>
     <div class="stat"><div class="n">{{.Inbounds}}</div><div class="k">入站</div></div>
     <div class="stat"><div class="n">{{bytes .Traffic}}</div><div class="k">累计流量</div></div>

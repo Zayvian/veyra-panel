@@ -106,7 +106,12 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "/")
 		return
 	}
-	s.page(w, r, "login", nil)
+	totp, err := s.svc.TOTPStatus()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.page(w, r, "login", map[string]any{"TOTP": totp.Enabled})
 }
 
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
@@ -119,12 +124,12 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := r.FormValue("username")
-	if err := s.svc.CheckAdmin(username, r.FormValue("password")); err != nil {
+	if err := s.svc.CheckAdminLogin(username, r.FormValue("password"), r.FormValue("code"), time.Now()); err != nil {
 		if errors.Is(err, service.ErrBadCredentials) {
-			// One message for both wrong username and wrong password:
-			// telling them apart is free reconnaissance.
+			// One message for a wrong username, password or code: telling
+			// them apart is free reconnaissance.
 			s.log.Warn("failed login", "username", username, "remote", r.RemoteAddr)
-			s.errorBanner(w, http.StatusUnauthorized, "wrong username or password")
+			s.errorBanner(w, http.StatusUnauthorized, "用户名、密码或验证码错误")
 			return
 		}
 		s.fail(w, r, err)
@@ -226,6 +231,7 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 	s.page(w, r, "dashboard", map[string]any{
 		"Users":        len(users),
 		"ActiveUsers":  active,
+		"Attention":    len(service.NeedsAttention(users, nowFunc())),
 		"OnlineUsers":  len(online),
 		"Nodes":        len(nodes),
 		"NodesUp":      nodesUp,

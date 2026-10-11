@@ -6,6 +6,15 @@
   <div class="card">
     <form class="row" hx-post="{{panelPath "/users"}}" hx-target="#users" hx-swap="outerHTML">
       <label>名称<input name="name" required placeholder="例如：张三" maxlength="32"></label>
+      {{if .Plans}}
+      <label>套餐
+        <select onchange="applyPlan(this)" style="min-width:9rem">
+          <option value="">不用套餐</option>
+          {{template "plan-options" .Plans}}
+        </select></label>
+      {{end}}
+      <label>有效天数<input name="days" type="number" step="1" min="0" max="3650"
+             placeholder="或填下面的到期" style="min-width:7rem"></label>
       <label>到期（服务器时间）<input name="expires_at" type="datetime-local"></label>
       <label>流量上限 GiB<input name="traffic_limit_gb" type="number" step="1" min="0"
              placeholder="留空 = 不限"></label>
@@ -26,12 +35,34 @@
     <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
       <strong>流量重置</strong>是月付套餐用的：在选定日期和时间已用流量归零，不用每个月手动清。
       选「每月最后一天」或 29–31 号时，短月会自动落到该月最后一天，二月不会被跳过。
-      到期和重置落在同一时刻时，到期优先，用户不会因重置恢复可用。所有日期时间按服务器本地时区解释。
+      到期和重置落在同一时刻时，到期优先，用户不会因重置恢复可用。所有日期时间按服务器本地时区解释。<br>
+      <strong>有效天数</strong>从创建这一刻算起；填了「到期」就以「到期」为准。选套餐会自动填好天数、流量、IP 和重置日，填好后仍然可以改。
     </p>
   </div>
+<script>
+// Copies a plan's values into the form it sits in. Only fields the form has
+// are touched, so the create form and the renew row can share it.
+function applyPlan(sel) {
+  const o = sel.selectedOptions[0], f = sel.form;
+  if (!o || !o.value) return;
+  const set = (name, v) => { if (f.elements[name]) f.elements[name].value = v; };
+  set('days', o.dataset.days);
+  if (o.dataset.days) set('expires_at', '');
+  set('traffic_limit_gb', o.dataset.gb);
+  set('ip_limit', o.dataset.ip);
+  set('reset_day', o.dataset.reset);
+}
+</script>
   {{template "user-table" .}}
 </main>
 {{template "foot" .}}
+{{end}}
+
+{{/* One option per plan, carrying its values for applyPlan. */}}
+{{define "plan-options"}}
+  {{range .}}<option value="{{.ID}}" data-days="{{if gt .Days 0}}{{.Days}}{{end}}"
+    data-gb="{{gibval .TrafficLimit}}" data-ip="{{if gt .IPLimit 0}}{{.IPLimit}}{{end}}"
+    data-reset="{{if eq .ResetDay -1}}created{{else}}{{.ResetDay}}{{end}}">{{.Name}}{{if .Note}}（{{.Note}}）{{end}}</option>{{end}}
 {{end}}
 
 {{/* The day-of-month choices, shared by the create form and the edit row so the
@@ -39,7 +70,7 @@
      as 「每月最后一天」 because that is what it does — short months clamp. */}}
 {{define "reset-day-options"}}
   <option value="0" {{if eq . 0}}selected{{end}}>不重置</option>
-  <option value="created">按创建日</option>
+  <option value="created" {{if eq . -1}}selected{{end}}>按创建日</option>
   {{range $d := days28}}<option value="{{$d}}" {{if eq $d $}}selected{{end}}>每月 {{$d}} 号</option>{{end}}
   <option value="29" {{if eq . 29}}selected{{end}}>每月 29 号（短月顺延到月底）</option>
   <option value="30" {{if eq . 30}}selected{{end}}>每月 30 号（短月顺延到月底）</option>
@@ -85,8 +116,92 @@
 </tr>
 {{end}}
 
+{{/* The 续费 row: what a payment turns into, in one click instead of an edit
+     plus a 清零 plus a 启用. Days count from the later of the current expiry
+     and now, so renewing early loses nothing and renewing late does not refund
+     the lapsed days. */}}
+{{define "user-renew-row"}}
+<tr id="u-{{.User.ID}}">
+  <td colspan="8">
+    <form class="row" hx-post="{{panelPath "/users/"}}{{.User.ID}}/renew"
+          hx-target="#users" hx-swap="outerHTML" style="align-items:flex-end">
+      <div><strong>续费 {{.User.Name}}</strong>
+        <div class="dim" style="font-size:.8rem">当前到期：{{if .User.ExpiresAt}}{{date .User.ExpiresAt}}{{else}}不限{{end}}</div></div>
+      {{if .Plans}}
+      <label>按套餐
+        <select onchange="applyPlan(this)" style="min-width:9rem">
+          <option value="">自己填天数</option>
+          {{template "plan-options" .Plans}}
+        </select></label>
+      {{end}}
+      <label>续费天数<input name="days" type="number" min="1" max="3650" step="1" value="30"
+             required list="renew-days" style="min-width:7rem"></label>
+      <datalist id="renew-days">
+        <option value="30"><option value="90"><option value="180"><option value="365">
+      </datalist>
+      <label style="flex-direction:row;align-items:center;gap:.4rem">
+        <input type="checkbox" name="reset_traffic" value="1" checked>已用流量清零</label>
+      <button>确认续费</button>
+      <button type="button" class="ghost" hx-get="{{panelPath "/users"}}"
+              hx-target="#users" hx-swap="outerHTML">取消</button>
+    </form>
+    <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
+      {{if .User.ExpiresAt}}从<strong>当前到期时间和现在中较晚的那个</strong>往后加：提前续费不吃亏，过期后再续也不会把过期那几天补回去。
+      {{else}}该用户没有到期时间，续费不会加上到期，只会按下面的勾选清零流量。{{end}}
+      续费后账号会自动启用，节点马上生效，订阅链接不变。
+    </p>
+  </td>
+</tr>
+{{end}}
+
+{{/* What gets sent to the customer: the link as a QR code and a message with
+     the terms, each one click from the clipboard. */}}
+{{define "user-share-row"}}
+<tr id="u-{{.User.ID}}">
+  <td colspan="8">
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-start">
+      <div style="text-align:center">
+        <img src="{{.QR}}" width="200" height="200" alt="订阅二维码"
+             style="background:#fff;border-radius:6px;padding:6px;display:block">
+        <div class="dim" style="font-size:.75rem;margin-top:.3rem">客户端扫码导入</div>
+      </div>
+      <div style="flex:1;min-width:16rem">
+        <label>发给用户的话术（可以先改再复制）
+          <textarea id="share-{{.User.ID}}" rows="10"
+            style="width:100%;background:#0c0e12;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.5rem;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical">{{.Message}}</textarea></label>
+        <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">
+          <button type="button" onclick="copyText(this, document.getElementById('share-{{.User.ID}}').value)">复制话术</button>
+          <button type="button" class="ghost" onclick="copyText(this, {{.Link}})">只复制链接</button>
+          <button type="button" class="ghost" hx-get="{{panelPath "/users"}}"
+                  hx-target="#users" hx-swap="outerHTML">收起</button>
+        </div>
+      </div>
+    </div>
+  </td>
+</tr>
+{{end}}
+
 {{define "user-table"}}
 <div class="card" id="users">
+  {{/* Inside the table's fragment rather than above it, so a renewal — which
+       re-renders the table — also takes the account off this list. */}}
+  {{if .Attention}}
+  <div style="border:1px solid rgba(240,160,32,.35);background:rgba(240,160,32,.06);border-radius:6px;padding:.6rem .8rem;margin-bottom:1rem">
+    <div style="font-weight:600;margin-bottom:.4rem">需要处理（{{len .Attention}}）</div>
+    {{range .Attention}}
+      <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;padding:.2rem 0">
+        <span style="min-width:6rem">{{.User.Name}}</span>
+        <span class="pill {{if .Lapsed}}bad{{else}}warn-pill{{end}}">{{.Reason}}</span>
+        <button class="ghost" style="font-size:.75rem;padding:.15rem .5rem"
+                hx-get="{{panelPath "/users/"}}{{.User.ID}}/renew"
+                hx-target="#row-{{.User.ID}}" hx-swap="outerHTML">续费</button>
+      </div>
+    {{end}}
+    <div class="dim" style="font-size:.75rem;margin-top:.3rem">
+      7 天内到期、30 天内已到期，或流量用到 90% 的启用账号。停用的账号不列出。
+    </div>
+  </div>
+  {{end}}
   {{if not .Users}}
     <p class="dim" style="margin:.5rem">还没有用户。</p>
   {{else}}
@@ -97,7 +212,7 @@
     </tr></thead>
     <tbody>
     {{range .Users}}
-      <tr>
+      <tr id="row-{{.ID}}">
         <td>
           {{.Name}}{{if .Note}}<div class="dim" style="font-size:.8rem">{{.Note}}</div>{{end}}
           <div style="font-size:.75rem;margin-top:.2rem">
@@ -105,6 +220,9 @@
             <a class="dim" href="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" target="_blank" rel="noopener">打开订阅</a>
             <button class="ghost" style="font-size:.7rem;padding:.1rem .35rem"
                     data-sub-url="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" onclick="copySub(this)">复制链接</button>
+            <button class="ghost" style="font-size:.7rem;padding:.1rem .35rem"
+                    hx-get="{{panelPath "/users/"}}{{.ID}}/share"
+                    hx-target="closest tr" hx-swap="outerHTML">二维码 / 话术</button>
           </div>
         </td>
         <td data-label="状态">
@@ -149,6 +267,8 @@
         <td class="mobile-actions" style="text-align:right;white-space:nowrap">
           <button class="ghost" hx-get="{{panelPath "/users/"}}{{.ID}}/edit"
                   hx-target="closest tr" hx-swap="outerHTML">编辑</button>
+          <button class="ghost" hx-get="{{panelPath "/users/"}}{{.ID}}/renew"
+                  hx-target="closest tr" hx-swap="outerHTML">续费</button>
           <button class="ghost" hx-post="{{panelPath "/users/"}}{{.ID}}/toggle"
                   hx-target="#users" hx-swap="outerHTML">{{if .Enabled}}停用{{else}}启用{{end}}</button>
           <button class="ghost" hx-post="{{panelPath "/users/"}}{{.ID}}/reset"
@@ -173,8 +293,10 @@
 <script>
 // The server supplies the configured subscription origin for pages and fragments.
 function copySub(btn) {
-  const url = new URL(btn.dataset.subUrl, location.origin).href;
-  navigator.clipboard.writeText(url).then(() => {
+  copyText(btn, new URL(btn.dataset.subUrl, location.origin).href);
+}
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
     const t = btn.textContent;
     btn.textContent = '已复制';
     setTimeout(() => btn.textContent = t, 1200);

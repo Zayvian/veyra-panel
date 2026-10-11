@@ -2,7 +2,10 @@ module github.com/Zayvian/veyra-panel
 
 go 1.27.0
 
-require modernc.org/sqlite v1.40.1
+require (
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	modernc.org/sqlite v1.40.1
+)
 
 require (
 	github.com/caddyserver/certmagic v0.25.4 // indirect

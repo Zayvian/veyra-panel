@@ -135,6 +135,23 @@ func (s *Store) SetSetting(key, value string) error {
 	return err
 }
 
+// SetSettings writes several settings in one transaction, so a group that only
+// makes sense together cannot land half-written.
+func (s *Store) SetSettings(kv map[string]string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for k, v := range kv {
+		if _, err := tx.Exec(`INSERT INTO settings (k, v) VALUES (?, ?)
+			ON CONFLICT(k) DO UPDATE SET v = excluded.v`, k, v); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // SetSettingsIfAbsent writes several settings together, but only if the key
 // named by guard has no value yet. It reports whether it wrote.
 //

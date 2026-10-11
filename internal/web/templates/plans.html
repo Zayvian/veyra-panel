@@ -1,0 +1,85 @@
+{{define "plans"}}
+{{template "head" .}}
+{{template "nav" .}}
+<main>
+  <h1>套餐</h1>
+  <div class="card">
+    <form class="row" hx-post="{{panelPath "/plans"}}" hx-target="#plans" hx-swap="outerHTML">
+      {{template "plan-fields" emptyplan}}
+      <button>新建套餐</button>
+    </form>
+    <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
+      套餐只是<strong>新建用户时的预设</strong>：在「用户」页选一个套餐，表单会自动填好有效天数、流量、IP 和重置日，
+      你仍然可以再改。用户和套餐之间不保留关联，所以改价、改量或删除套餐都<strong>不会影响已经开出去的账号</strong>。
+      有效天数留空或填 0 表示不限期。
+    </p>
+  </div>
+  {{template "plan-table" .}}
+</main>
+{{template "foot" .}}
+{{end}}
+
+{{/* The fields shared by the create form and the edit row. The argument is
+     the plan being edited, or an empty one. */}}
+{{define "plan-fields"}}
+  <label>名称<input name="name" required maxlength="32" placeholder="例如：月付 100G" value="{{.Name}}"></label>
+  <label>有效天数<input name="days" type="number" step="1" min="0" max="3650"
+         placeholder="留空 = 不限期" value="{{if gt .Days 0}}{{.Days}}{{end}}" style="min-width:7rem"></label>
+  <label>流量上限 GiB<input name="traffic_limit_gb" type="number" step="0.01" min="0"
+         placeholder="留空 = 不限" value="{{gibval .TrafficLimit}}"></label>
+  <label>同时在线 IP<input name="ip_limit" type="number" step="1" min="0"
+         placeholder="留空 = 不限" value="{{if gt .IPLimit 0}}{{.IPLimit}}{{end}}" style="min-width:7rem"></label>
+  <label>流量重置
+    <select name="reset_day" style="min-width:9rem">
+      {{template "reset-day-options" .ResetDay}}
+    </select></label>
+  <label>备注<input name="note" placeholder="例如：¥30 / 月" value="{{.Note}}"></label>
+{{end}}
+
+{{define "plan-edit-row"}}
+<tr>
+  <td colspan="7">
+    <form class="row" hx-post="{{panelPath "/plans/"}}{{.ID}}"
+          hx-target="#plans" hx-swap="outerHTML" style="align-items:flex-end">
+      {{template "plan-fields" .}}
+      <button>保存</button>
+      <button type="button" class="ghost" hx-get="{{panelPath "/plans"}}"
+              hx-target="#plans" hx-swap="outerHTML">取消</button>
+    </form>
+  </td>
+</tr>
+{{end}}
+
+{{define "plan-table"}}
+<div class="card" id="plans">
+  {{if not .Plans}}
+    <p class="dim" style="margin:.5rem">还没有套餐。</p>
+  {{else}}
+  <table class="mobile-cards">
+    <thead><tr>
+      <th>名称</th><th class="num">有效期</th><th class="num">流量</th><th class="num">IP</th>
+      <th>重置</th><th>备注</th><th></th>
+    </tr></thead>
+    <tbody>
+    {{range .Plans}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td class="num" data-label="有效期">{{if gt .Days 0}}{{.Days}} 天{{else}}不限期{{end}}</td>
+        <td class="num" data-label="流量">{{if gt .TrafficLimit 0}}{{bytes .TrafficLimit}}{{else}}不限{{end}}</td>
+        <td class="num" data-label="IP">{{if gt .IPLimit 0}}{{.IPLimit}}{{else}}不限{{end}}</td>
+        <td class="dim" data-label="重置">{{plandesc .ResetDay}}</td>
+        <td class="dim" data-label="备注">{{.Note}}</td>
+        <td class="mobile-actions" style="text-align:right;white-space:nowrap">
+          <button class="ghost" hx-get="{{panelPath "/plans/"}}{{.ID}}/edit"
+                  hx-target="closest tr" hx-swap="outerHTML">编辑</button>
+          <button class="ghost danger" hx-delete="{{panelPath "/plans/"}}{{.ID}}"
+                  hx-target="#plans" hx-swap="outerHTML"
+                  hx-confirm="删除套餐 {{.Name}}？已经用它开出的用户不受影响。">删除</button>
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+{{end}}

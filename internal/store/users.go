@@ -175,6 +175,51 @@ func (s *Store) ReissueUser(c UserCredentials, subToken string) error {
 	return nil
 }
 
+// RenewUser extends one account by a number of days and turns it back on, in
+// one transaction, so a renewal can never land half-applied.
+//
+// The days count from whichever is later, the current expiry or now: renewing
+// early adds to what is left, and renewing a lapsed account does not hand back
+// the days it spent expired. An account with no expiry keeps none — a renewal
+// is not the place to start limiting it. With resetTraffic the counter is
+// zeroed and the reset schedule stamped, exactly as ResetUserTraffic does.
+func (s *Store) RenewUser(id int64, days int, resetTraffic bool, now time.Time) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var expires sql.NullInt64
+	if err := tx.QueryRow(`SELECT expires_at FROM users WHERE id = ?`, id).Scan(&expires); err != nil {
+		if err == sql.ErrNoRows {
+			return ErrNotFound
+		}
+		return err
+	}
+	var next any
+	if expires.Valid {
+		from := time.Unix(expires.Int64, 0)
+		if from.Before(now) {
+			from = now
+		}
+		// AddDate in local time, so a day is a calendar day and the
+		// time of day the account expires at stays where it was.
+		next = from.In(time.Local).AddDate(0, 0, days).Unix()
+	}
+	if _, err := tx.Exec(`UPDATE users SET expires_at = ?, enabled = 1 WHERE id = ?`, next, id); err != nil {
+		return fmt.Errorf("renew user %d: %w", id, err)
+	}
+	if resetTraffic {
+		if _, err := tx.Exec(`UPDATE users SET traffic_used = 0, traffic_up = 0, traffic_down = 0,
+			traffic_up_remainder = 0, traffic_down_remainder = 0, last_reset_at = ? WHERE id = ?`,
+			now.Unix(), id); err != nil {
+			return fmt.Errorf("renew user %d: %w", id, err)
+		}
+	}
+	return tx.Commit()
+}
+
 func (s *Store) DeleteUser(id int64) error {
 	res, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, id)
 	if err != nil {
