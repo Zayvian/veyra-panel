@@ -14,7 +14,7 @@ func TestRatesPreserveRawTrafficAndFractionalBilling(t *testing.T) {
 	}
 	add := func(up, down int64) {
 		t.Helper()
-		if err := s.AddTraffic(n.ID, 1, map[int64][2]int64{u.ID: {up, down}}); err != nil {
+		if _, err := s.AddTraffic(n.ID, 1, map[int64][2]int64{u.ID: {up, down}}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -72,7 +72,7 @@ func TestRatesPreserveRawTrafficAndFractionalBilling(t *testing.T) {
 	if got.TrafficUsed != 0 || got.TrafficUp != 0 || got.TrafficDown != 0 {
 		t.Fatal("reset left billing state")
 	}
-	if err := s.AddTraffic(n.ID, 1, map[int64][2]int64{u.ID: {-1, 2}}); err == nil {
+	if _, err := s.AddTraffic(n.ID, 1, map[int64][2]int64{u.ID: {-1, 2}}); err == nil {
 		t.Fatal("negative delta accepted")
 	}
 }

@@ -62,13 +62,19 @@ func (s *Service) RecordTraffic(nodeID int64, usage map[string]Usage) error {
 	}
 
 	day := time.Now().UTC().Unix() / 86400
-	if err := s.st.AddTraffic(nodeID, day, toStoreDeltas(deltas)); err != nil {
+	crossed, err := s.st.AddTraffic(nodeID, day, toStoreDeltas(deltas))
+	if err != nil {
 		return err
 	}
 
 	// Crossing a traffic limit revokes access, and access is revoked by leaving
-	// the user out of the next push — so the nodes have to be told.
-	s.notify.UsersChanged()
+	// the user out of the next push — so the nodes have to be told. Only then:
+	// every node reports every thirty seconds, and pushing the full user list
+	// to every node on every report is work that grows with the square of the
+	// node count and changes nothing.
+	if len(crossed) > 0 {
+		s.notify.UsersChanged()
+	}
 	return nil
 }
 

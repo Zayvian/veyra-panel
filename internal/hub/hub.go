@@ -29,6 +29,11 @@ const (
 	// Coalescing window for pushes. A bulk edit in the UI fires one
 	// notification per row; without this each one would be its own frame.
 	coalesce = 100 * time.Millisecond
+
+	// The longest a pending push may be held back. Each notification restarts
+	// the coalescing window, so a steady stream of them less than coalesce
+	// apart would otherwise postpone the push indefinitely.
+	maxCoalesce = time.Second
 )
 
 // Hub tracks the nodes currently connected and pushes to them.
@@ -46,6 +51,7 @@ type Hub struct {
 	pendUsers  bool
 	pendConfig map[int64]bool
 	pendTimer  *time.Timer
+	pendSince  time.Time // when the oldest pending notification arrived
 
 	// Guards the pre-index authentication path, which is the only expensive
 	// thing this unauthenticated endpoint can be made to do. Three attempts,
@@ -69,6 +75,11 @@ type conn struct {
 	ws     *websocket.Conn
 
 	writeMu sync.Mutex // a websocket allows one writer at a time
+
+	// Held across building a push and sending it. Two flushes can overlap, and
+	// without this the older snapshot could be built first and sent last —
+	// leaving the node on a user list the panel has already moved past.
+	pushMu sync.Mutex
 
 	lastSeen atomic.Int64 // unix seconds, for pong tracking
 	online   atomic.Pointer[[]string]
@@ -354,6 +365,8 @@ func (h *Hub) send(ctx context.Context, c *conn, t string, id uint64, data any) 
 
 // pushTo sends the current config and/or user list to one node.
 func (h *Hub) pushTo(ctx context.Context, c *conn, config, users bool) error {
+	c.pushMu.Lock()
+	defer c.pushMu.Unlock()
 	if config {
 		cfg, err := h.svc.NodeConfig(c.nodeID)
 		if err != nil {
@@ -369,7 +382,7 @@ func (h *Hub) pushTo(ctx context.Context, c *conn, config, users bool) error {
 		if err != nil {
 			return fmt.Errorf("build users for node %d: %w", c.nodeID, err)
 		}
-		limits, err := h.svc.UserIPLimits()
+		limits, err := h.svc.UserIPLimits(c.nodeID)
 		if err != nil {
 			return fmt.Errorf("read address limits: %w", err)
 		}
@@ -406,10 +419,13 @@ func (h *Hub) schedule(nodeID int64, users bool) {
 		h.pendConfig[nodeID] = true
 	}
 	if h.pendTimer == nil {
+		h.pendSince = time.Now()
 		h.pendTimer = time.AfterFunc(coalesce, h.flush)
-	} else {
+	} else if time.Since(h.pendSince) < maxCoalesce {
 		h.pendTimer.Reset(coalesce)
 	}
+	// Past maxCoalesce the timer is left alone: it is due within coalesce, and
+	// this notification goes out with it.
 }
 
 func (h *Hub) flush() {
@@ -431,15 +447,24 @@ func (h *Hub) flush() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// One goroutine per node. Each write may wait up to its own timeout, and
+	// done in turn, one unresponsive node would hold every node after it — and
+	// with them every user change — until it gave up.
+	var wg sync.WaitGroup
 	for _, c := range conns {
 		wantConfig := configs[c.nodeID]
 		if !wantConfig && !users {
 			continue
 		}
-		if err := h.pushTo(ctx, c, wantConfig, users); err != nil {
-			h.log.Warn("push to node", "node", c.nodeID, "error", err)
-		}
+		wg.Add(1)
+		go func(c *conn) {
+			defer wg.Done()
+			if err := h.pushTo(ctx, c, wantConfig, users); err != nil {
+				h.log.Warn("push to node", "node", c.nodeID, "error", err)
+			}
+		}(c)
 	}
+	wg.Wait()
 }
 
 // ── status for the UI ───────────────────────────────────────────────────────
