@@ -8,32 +8,37 @@ import "fmt"
 //
 // deltas maps user id to {up, down}. Both are added, never assigned: reports
 // are deltas precisely so that a node restart cannot make a total go backwards.
-func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) error {
+//
+// crossed lists the users this report took from under their traffic limit to
+// at or over it — the only way a traffic report changes who may connect. The
+// caller pushes new user lists for those and for nothing else.
+func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) (crossed []int64, err error) {
 	if len(deltas) == 0 {
-		return nil
+		return nil, nil
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
 
 	var rate int64
 	if err := tx.QueryRow(`SELECT rate_milli FROM nodes WHERE id = ?`, nodeID).Scan(&rate); err != nil {
-		return err
+		return nil, err
 	}
 	var nodeUp, nodeDown int64
 	for userID, d := range deltas {
 		up, down := d[0], d[1]
 		// Bounds also protect fixed-point multiplication from integer overflow.
 		if up < 0 || down < 0 || up > 1<<40 || down > 1<<40 {
-			return fmt.Errorf("invalid traffic delta")
+			return nil, fmt.Errorf("invalid traffic delta")
 		}
 		nodeUp += up
 		nodeDown += down
-		var remUp, remDown int64
-		if err := tx.QueryRow(`SELECT traffic_up_remainder, traffic_down_remainder FROM users WHERE id = ?`, userID).Scan(&remUp, &remDown); err != nil {
-			return err
+		var remUp, remDown, used, limit int64
+		if err := tx.QueryRow(`SELECT traffic_up_remainder, traffic_down_remainder, traffic_used, traffic_limit
+			FROM users WHERE id = ?`, userID).Scan(&remUp, &remDown, &used, &limit); err != nil {
+			return nil, err
 		}
 		scaledUp, scaledDown := up*rate+remUp, down*rate+remDown
 		billedUp, billedDown := scaledUp/1000, scaledDown/1000
@@ -43,7 +48,7 @@ func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) error {
 			ON CONFLICT(user_id, node_id, day) DO UPDATE SET
 				up = up + excluded.up, down = down + excluded.down`,
 			userID, nodeID, day, up, down); err != nil {
-			return err
+			return nil, err
 		}
 		// Quota checks use billed totals, not the raw daily rollup. Remainders
 		// persist across reports and rate changes so small reports aren't free.
@@ -51,7 +56,11 @@ func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) error {
 			`UPDATE users SET traffic_used = traffic_used + ?, traffic_up = traffic_up + ?, traffic_down = traffic_down + ?,
      traffic_up_remainder = ?, traffic_down_remainder = ? WHERE id = ?`,
 			billedUp+billedDown, billedUp, billedDown, scaledUp%1000, scaledDown%1000, userID); err != nil {
-			return err
+			return nil, err
+		}
+		// Same comparison as User.Active: at the limit is over it.
+		if limit > 0 && used < limit && used+billedUp+billedDown >= limit {
+			crossed = append(crossed, userID)
 		}
 	}
 	// This is deliberately raw traffic, before a node's billing multiplier.
@@ -59,9 +68,12 @@ func (s *Store) AddTraffic(nodeID, day int64, deltas map[int64][2]int64) error {
 	// intentionally charge a different number of bytes.
 	if _, err := tx.Exec(`UPDATE nodes SET stats_up = stats_up + ?, stats_down = stats_down + ? WHERE id = ?`,
 		nodeUp, nodeDown, nodeID); err != nil {
-		return err
+		return nil, err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return crossed, nil
 }
 
 // DailyUsage is one row of a user's traffic history.
