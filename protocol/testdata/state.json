@@ -1,1 +1,1 @@
-{"t":"state","d":{"inbounds":["东京 01","reality-443"],"error":"inbound hy2-8443: certificate not found"}}
+{"t":"state","d":{"inbounds":["东京 01","reality-443"],"error":"inbound hy2-8443: certificate not found","applied_rev":"3b8f0c5e7a1d2f4960b8c3e5d7a9f1b2c4e6a8d0f2b4c6e8a0d2f4b6c8e0a2d4"}}

@@ -2,13 +2,15 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/gofrs/uuid/v5"
+	"github.com/sagernet/sing-box/common/trafficcontrol"
+	"github.com/sagernet/sing/service"
 
 	"github.com/Zayvian/veyra-node/internal/proto"
 )
@@ -31,7 +33,15 @@ import (
 // Without it, a user who idles for a moment loses their place to whoever
 // connects next, and comes back to find themselves the one being cut off. With
 // it, a genuinely shared account still converges on the first N addresses.
-const ipGrace = 5 * time.Minute
+//
+// One minute rather than the original five. The cost of a long grace falls on
+// the honest user: a phone that moves from Wi-Fi to mobile data shows up from a
+// new address while the old one still holds its slot, and on an account at its
+// limit the new address — the same person — is refused until the old slot
+// expires. Five minutes of that read as the node being down. A minute still
+// covers a screen lock or a dropped connection reconnecting; a sharer has to
+// stay away longer than that to lose their place.
+const ipGrace = time.Minute
 
 // limiter tracks which addresses are using which account, and closes the ones
 // over the line.
@@ -173,60 +183,58 @@ func (l *limiter) forget(known map[string]bool) {
 	}
 }
 
-// connections reads the live connection list from the node's own clash API.
-func (e *Engine) connections(ctx context.Context) ([]conn, error) {
+// tracker is sing-box's own table of live connections — the one its clash API
+// serves over HTTP. It is registered in the instance's context, so the node
+// reads it directly: no loopback request every few seconds, no JSON of every
+// connection encoded and decoded again, which on a small machine with many
+// connections was a real share of the CPU. Nil when nothing is running.
+func (e *Engine) tracker() *trafficcontrol.Manager {
 	e.mu.Lock()
-	running, addr := e.running, e.apis.clash
+	running, ctx := e.running, e.ctx
 	e.mu.Unlock()
-	if !running || addr == "" {
+	if !running || ctx == nil {
+		return nil
+	}
+	return service.PtrFromContext[trafficcontrol.Manager](ctx)
+}
+
+// connections lists the live connections.
+func (e *Engine) connections(context.Context) ([]conn, error) {
+	m := e.tracker()
+	if m == nil {
 		return nil, nil
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"http://"+addr+"/connections", nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("clash api: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("clash api returned %s", resp.Status)
-	}
-
-	var body struct {
-		Connections []struct {
-			ID       string `json:"id"`
-			Metadata struct {
-				User            string `json:"user"`
-				SourceIP        string `json:"sourceIP"`
-				DestinationIP   string `json:"destinationIP"`
-				DestinationPort string `json:"destinationPort"`
-				Host            string `json:"host"`
-			} `json:"metadata"`
-		} `json:"connections"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("clash api response: %w", err)
-	}
-
-	out := make([]conn, 0, len(body.Connections))
-	for _, c := range body.Connections {
-		dest := strings.TrimSpace(c.Metadata.DestinationIP)
-		if dest == "" {
+	live := m.Connections()
+	out := make([]conn, 0, len(live))
+	for _, t := range live {
+		md := t.Metadata
+		var src string
+		if md.Source.Addr.IsValid() {
+			// Unmapped, so one client is one address whether it reached a
+			// dual-stack listener over IPv4 or as ::ffff:a.b.c.d.
+			src = md.Source.Addr.Unmap().String()
+		}
+		var dest string
+		if md.Destination.Addr.IsValid() {
+			dest = md.Destination.Addr.Unmap().String()
+		} else if md.Domain != "" {
 			// A connection to a name that has not been resolved yet still has a
-			// distinct destination; the host stands in for it so the peer count
+			// distinct destination; the name stands in for it so the peer count
 			// is not silently short.
-			dest = strings.TrimSpace(c.Metadata.Host)
+			dest = md.Domain
+		} else {
+			dest = md.Destination.Fqdn
+		}
+		var port string
+		if md.Destination.Port != 0 {
+			port = strconv.Itoa(int(md.Destination.Port))
 		}
 		out = append(out, conn{
-			ID:       c.ID,
-			User:     strings.TrimSpace(c.Metadata.User),
-			IP:       strings.TrimSpace(c.Metadata.SourceIP),
+			ID:       t.ID.String(),
+			User:     strings.TrimSpace(md.User),
+			IP:       src,
 			DestIP:   dest,
-			DestPort: strings.TrimSpace(c.Metadata.DestinationPort),
+			DestPort: port,
 		})
 	}
 	return out, nil
@@ -267,23 +275,19 @@ func activity(conns []conn) map[string]proto.Activity {
 	return out
 }
 
-func (e *Engine) closeConnection(ctx context.Context, id string) error {
-	e.mu.Lock()
-	addr := e.apis.clash
-	e.mu.Unlock()
-	if addr == "" {
+func (e *Engine) closeConnection(_ context.Context, id string) error {
+	m := e.tracker()
+	if m == nil {
 		return nil
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete,
-		"http://"+addr+"/connections/"+id, nil)
+	uid, err := uuid.FromString(id)
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
+	// Already gone is fine: it closed on its own between the sample and now.
+	if t := m.Connection(uid); t != nil {
+		return t.Close()
 	}
-	resp.Body.Close()
 	return nil
 }
 

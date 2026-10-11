@@ -100,9 +100,15 @@ func TestQUICHotSwapAndRevocation(t *testing.T) {
 				t.Fatal(err)
 			}
 			attributed := false
+			_, echoPort, _ := net.SplitHostPort(echo.Addr().String())
 			for _, c := range conns {
 				if c.User == "alice" {
 					attributed = true
+					// Read in-process from sing-box's tracker: the address the
+					// IP limit counts, and where the connection went.
+					if c.IP != "127.0.0.1" || c.DestPort != echoPort || c.ID == "" {
+						t.Fatalf("connection fields: %+v, want source 127.0.0.1 to port %s", c, echoPort)
+					}
 				}
 			}
 			if !attributed {
@@ -130,14 +136,69 @@ func TestQUICHotSwapAndRevocation(t *testing.T) {
 				t.Fatal("revocation restarted listener")
 			}
 			bobOutbound := testQUICClient(t, protocol, port, cert, bob)
-			bobConn, err := dialQUIC(bobOutbound, echo.Addr().String())
+			// The fresh client's network monitor can report a change just after
+			// it starts, and the client then closes its own new QUIC connection
+			// ("Application error 0x0 (local)") — sometimes after the dial has
+			// already succeeded. That is the test client settling, not the
+			// server refusing bob, so the first exchange redials once or twice.
+			var bobConn net.Conn
+			for attempt := 1; ; attempt++ {
+				bobConn, err = dialQUIC(bobOutbound, echo.Addr().String())
+				if err == nil {
+					if err = echoOnce(bobConn); err == nil {
+						break
+					}
+					bobConn.Close()
+				}
+				if attempt == 5 {
+					t.Fatalf("bob cannot relay after alice was revoked: %v", err)
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			defer bobConn.Close()
+
+			// What the address limit does to a connection over the line:
+			// closed through the tracker, it stops relaying.
+			conns, err = e.connections(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer bobConn.Close()
-			roundTrip(bobConn)
+			closed := 0
+			for _, c := range conns {
+				if c.User == "bob" {
+					if err := e.closeConnection(ctx, c.ID); err != nil {
+						t.Fatal(err)
+					}
+					closed++
+				}
+			}
+			if closed == 0 {
+				t.Fatalf("bob's connection is not in the tracker: %+v", conns)
+			}
+			bobConn.SetDeadline(time.Now().Add(4 * time.Second))
+			bobConn.Write([]byte("after-close"))
+			if _, err := bobConn.Read(make([]byte, 32)); err == nil {
+				t.Fatal("a connection closed through the tracker still relays")
+			}
 		})
 	}
+}
+
+// echoOnce sends a few bytes through c and checks they come back.
+func echoOnce(c net.Conn) error {
+	c.SetDeadline(time.Now().Add(4 * time.Second))
+	defer c.SetDeadline(time.Time{})
+	if _, err := c.Write([]byte("hello")); err != nil {
+		return err
+	}
+	b := make([]byte, 5)
+	if _, err := io.ReadFull(c, b); err != nil {
+		return err
+	}
+	if string(b) != "hello" {
+		return fmt.Errorf("corrupt echo %q", b)
+	}
+	return nil
 }
 
 // The interface monitor can issue its initial network-change event just after
@@ -183,6 +244,12 @@ func testQUICClient(t *testing.T, protocol string, port int, cert string, user p
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { client.Close() })
+	// A freshly started client's network monitor reports its first "network
+	// changed" shortly after Start, and the QUIC outbounds answer it by closing
+	// their connections. Dialing before that has happened gives a connection
+	// that dies under the test for reasons that have nothing to do with the
+	// server — so let it settle first.
+	time.Sleep(300 * time.Millisecond)
 	manager := service.FromContext[adapter.OutboundManager](ctx)
 	ob, ok := manager.Outbound("proxy")
 	if !ok {

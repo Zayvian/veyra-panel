@@ -148,6 +148,9 @@ type NodeChannel interface {
 	LiveInbounds(nodeID int64) (tags map[string]bool, known bool)
 	// ApplyError is why the node is not running what it was last sent.
 	ApplyError(nodeID int64) string
+	// AppliedRev is the rev of the configuration the node says it runs.
+	// known is false when it has not said — including every node too old to.
+	AppliedRev(nodeID int64) (rev string, known bool)
 }
 
 func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookies bool) (*Server, error) {
@@ -314,6 +317,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("GET /nodes/{id}/inbounds", s.auth(http.HandlerFunc(s.listInbounds)))
 	mux.Handle("POST /nodes/{id}/inbounds", s.auth(s.requireCSRF(http.HandlerFunc(s.createInbound))))
+	mux.Handle("GET /inbounds/handshake-check", s.auth(http.HandlerFunc(s.checkHandshake)))
 	mux.Handle("GET /inbounds/{id}/edit", s.auth(http.HandlerFunc(s.editInbound)))
 	mux.Handle("POST /inbounds/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.updateInbound))))
 	mux.Handle("POST /inbounds/{id}/toggle", s.auth(s.requireCSRF(http.HandlerFunc(s.toggleInbound))))

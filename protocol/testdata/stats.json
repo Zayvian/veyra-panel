@@ -1,1 +1,1 @@
-{"t":"stats","d":{"users":{"alice":{"up":1024,"down":65536},"bob":{"up":0,"down":12}},"system":{"cpu":3.5,"mem_used":104857600,"mem_total":1073741824,"uptime":86400}}}
+{"t":"stats","id":5,"d":{"epoch":"9f2c1d7e4b3a6f80","users":{"alice":{"up":1024,"down":65536},"bob":{"up":0,"down":12}},"system":{"cpu":3.5,"mem_used":104857600,"mem_total":1073741824,"uptime":86400}}}

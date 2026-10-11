@@ -269,7 +269,19 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		}
 	}
 	applyErr := s.nodes.ApplyError(nodeID)
-	settle := s.settle(r, nodeID, inbounds, tags, known, applyErr)
+	// For a node that reports its config rev, "serving that tag" is not yet
+	// "serving it with these settings": until the revs match, the node is
+	// still on the previous configuration. stale says so.
+	stale := false
+	if rev, revKnown := s.nodes.AppliedRev(nodeID); revKnown && applyErr == "" {
+		want, err := s.svc.NodeConfigRev(nodeID)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		stale = rev != want
+	}
+	settle := s.settle(r, nodeID, inbounds, tags, known, applyErr, stale)
 	if editID != 0 {
 		settle = 0
 	}
@@ -299,11 +311,16 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		"EditRelayNodeID":  int64(0),
 		"Protocols":        []string{store.ProtoVLESS, store.ProtoAnyTLS, store.ProtoShadowsocks, store.ProtoHysteria2, store.ProtoTUIC},
 		"DefaultHandshake": service.DefaultHandshake,
+		"Handshakes":       service.HandshakeCandidates,
+		"DefaultMasq":      service.DefaultMasquerade,
+		"RandomMasq":       service.RandomMasquerade(),
+		"Masquerades":      service.MasqueradeCandidates,
 		"DefaultCertPath":  service.DefaultCertPath,
 		"DefaultKeyPath":   service.DefaultKeyPath,
 		"StateKnown":       known,
 		"Live":             live,
 		"NodeError":        applyErr,
+		"Stale":            stale,
 		"Settle":           settle,
 		"EditID":           editID,
 		"CSRFToken":        s.csrf.csrfValue(r),
@@ -326,11 +343,11 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 
 const settleLimit = 8
 
-func (s *Server) settle(r *http.Request, nodeID int64, inbounds []*store.Inbound, tags map[string]bool, known bool, applyErr string) int {
+func (s *Server) settle(r *http.Request, nodeID int64, inbounds []*store.Inbound, tags map[string]bool, known bool, applyErr string, stale bool) int {
 	if applyErr != "" || !s.nodes.Connected(nodeID) {
 		return 0
 	}
-	pending := !known
+	pending := !known || stale
 	for _, in := range inbounds {
 		if in.Enabled && !tags[in.Tag] {
 			pending = true
@@ -372,6 +389,8 @@ func (s *Server) createInbound(w http.ResponseWriter, r *http.Request) {
 		ServerName:  strings.TrimSpace(r.FormValue("server_name")),
 		HopPorts:    strings.TrimSpace(r.FormValue("hop_ports")),
 		HopInterval: strings.TrimSpace(r.FormValue("hop_interval")),
+		Obfs:        r.FormValue("obfs") != "",
+		Masquerade:  r.FormValue("masquerade"),
 	}
 	if (spec.Protocol == store.ProtoAnyTLS || spec.Protocol == store.ProtoHysteria2 || spec.Protocol == store.ProtoTUIC) && spec.ServerName == "" {
 		if n, err := s.svc.Node(nodeID); err == nil {
@@ -408,6 +427,12 @@ func (s *Server) inboundEditFields(data map[string]any, inbounds []*store.Inboun
 	data["EditHandshake"] = handshake
 	data["EditTLS"] = tls
 	data["EditHopping"] = in.Protocol == store.ProtoHysteria2
+	data["EditHysteria2"] = in.Protocol == store.ProtoHysteria2
+	data["Obfs"] = sb.Obfs != nil
+	data["Masquerade"] = ""
+	if sb.Masquerade != nil {
+		data["Masquerade"] = sb.Masquerade.URL
+	}
 	data["HopPorts"] = client.HopPorts
 	data["HopInterval"] = client.HopInterval
 	data["SNI"] = client.SNI
@@ -475,12 +500,25 @@ func (s *Server) updateInbound(w http.ResponseWriter, r *http.Request) {
 		ServerName:  strings.TrimSpace(r.FormValue("server_name")),
 		HopPorts:    strings.TrimSpace(r.FormValue("hop_ports")),
 		HopInterval: strings.TrimSpace(r.FormValue("hop_interval")),
+		Obfs:        r.FormValue("obfs") != "",
+		Masquerade:  r.FormValue("masquerade"),
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	s.renderInbounds(w, r, in.NodeID, http.StatusOK)
+}
+
+// checkHandshake answers the 检测 button beside a Reality handshake field.
+func (s *Server) checkHandshake(w http.ResponseWriter, r *http.Request) {
+	msg, err := service.CheckHandshake(r.FormValue("handshake"))
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err != nil {
+		s.render(w, "handshake-result", map[string]any{"OK": false, "Msg": err.Error()})
+		return
+	}
+	s.render(w, "handshake-result", map[string]any{"OK": true, "Msg": msg})
 }
 
 func relayForm(r *http.Request) (nodeID int64, port int) {

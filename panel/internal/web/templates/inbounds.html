@@ -44,7 +44,21 @@
         <input name="address" placeholder="{{.Node.Address}}" style="min-width:15rem"></label>
 
       <label id="f-handshake">Reality 握手站点
-        <input name="handshake" value="{{.DefaultHandshake}}"></label>
+        <span style="display:flex;gap:.4rem;align-items:center">
+          <input name="handshake" value="{{.DefaultHandshake}}" list="handshakes">
+          <button type="button" class="ghost" hx-get="{{panelPath "/inbounds/handshake-check"}}"
+                  hx-include="closest label" hx-target="#hs-new" hx-swap="innerHTML">检测</button>
+        </span>
+        <span id="hs-new" style="font-size:.75rem"></span></label>
+
+      <label id="f-obfs" hidden style="flex-direction:row;align-items:center;gap:.4rem">
+        <input type="checkbox" name="obfs" value="1" checked style="min-width:0">混淆（salamander）</label>
+      <label id="f-masq" hidden>伪装网站（留空 = 不伪装）
+        <span style="display:flex;gap:.4rem;align-items:center">
+          <input name="masquerade" value="{{.RandomMasq}}" placeholder="{{.DefaultMasq}}"
+                 list="masquerades" style="min-width:14rem">
+          <button type="button" class="ghost" onclick="randomMasq(this)">随机</button>
+        </span></label>
 
       <label id="f-cert" hidden>证书路径（节点上，留空即默认）
         <input name="cert_path" placeholder="{{.DefaultCertPath}}"></label>
@@ -60,6 +74,11 @@
       <button>新建</button>
     </form>
     <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
+      <strong>Hysteria2 混淆</strong>把每个数据包再包一层，看起来不再像 QUIC，适合会限速或干扰 QUIC 的网络；
+      密码自动生成并写进订阅，Clash Verge / mihomo、sing-box、Shadowrocket 都支持。
+      <strong>伪装网站</strong>是非客户端（浏览器、探测）访问这个端口时看到的网站，只影响服务器端，客户端不用变。
+      新建时随机挑一个，也可以从下拉列表选、点「随机」换，或者填任意 https 网址。不同入站最好用不同的网站。<br>
+      <strong>Reality 握手站点</strong>可以点「检测」，从面板确认它支持 TLS 1.3 和 HTTP/2；面板能通不代表每个地区都好用。<br>
       Hysteria2 跳端口仅支持直连 Linux 节点，需要放行对应 UDP 端口范围。
       TUIC 当前使用固定端口。跳跃间隔仅在 sing-box / Mihomo 配置中下发，分享链接导入使用客户端自身间隔。<br>
       密钥、short id、Shadowsocks 的服务端 PSK 都是自动生成的。
@@ -86,6 +105,7 @@ function onProto(v) {
   var tls = ['anytls', 'hysteria2', 'tuic'].includes(v);
   show('f-cert', tls); show('f-key', tls); show('f-sni', tls);
   show('f-hop', v === 'hysteria2'); show('f-hop-interval', v === 'hysteria2');
+  show('f-obfs', v === 'hysteria2'); show('f-masq', v === 'hysteria2');
   document.querySelector('input[name=hop_ports]').disabled = v !== 'hysteria2';
   document.querySelector('input[name=hop_interval]').disabled = v !== 'hysteria2';
   var port = document.querySelector('input[name=port]');
@@ -108,7 +128,21 @@ onRelay();
 {{template "foot" .}}
 {{end}}
 
+{{define "handshake-result"}}{{if .OK}}<span class="pill ok">可用</span> <span class="dim">{{.Msg}}</span>{{else}}<span class="pill bad">不可用</span> <span class="dim">{{.Msg}}</span>{{end}}{{end}}
+
 {{define "inbound-table"}}
+<datalist id="handshakes">{{range .Handshakes}}<option value="{{.}}">{{end}}</datalist>
+<datalist id="masquerades">{{range .Masquerades}}<option value="{{.}}">{{end}}</datalist>
+<script>
+// Fills the masquerade field beside the button with another site from the
+// list, never the one already there.
+function randomMasq(btn) {
+  var input = btn.parentNode.querySelector('input[name=masquerade]');
+  var all = Array.from(document.querySelectorAll('#masquerades option'), function (o) { return o.value; })
+    .filter(function (v) { return v !== input.value; });
+  if (all.length) input.value = all[Math.floor(Math.random() * all.length)];
+}
+</script>
 {{/* An inbound reaches the node asynchronously, so this table is rendered
      before the node can have applied it and every new row would read 未生效
      until someone reloaded. Ask again until the node's report catches up; the
@@ -173,7 +207,22 @@ onRelay();
                      placeholder="{{$.Node.Address}}" style="min-width:15rem"></label>
             {{if $.EditHandshake}}
               <label>Reality 握手站点
-                <input name="handshake" required value="{{$.HandshakeValue}}"></label>
+                <span style="display:flex;gap:.4rem;align-items:center">
+                  <input name="handshake" required value="{{$.HandshakeValue}}" list="handshakes">
+                  <button type="button" class="ghost" hx-get="{{panelPath "/inbounds/handshake-check"}}"
+                          hx-include="closest label" hx-target="#hs-edit" hx-swap="innerHTML">检测</button>
+                </span>
+                <span id="hs-edit" style="font-size:.75rem"></span></label>
+            {{end}}
+            {{if $.EditHysteria2}}
+              <label style="flex-direction:row;align-items:center;gap:.4rem">
+                <input type="checkbox" name="obfs" value="1" {{if $.Obfs}}checked{{end}} style="min-width:0">混淆（salamander）</label>
+              <label>伪装网站（留空 = 不伪装）
+                <span style="display:flex;gap:.4rem;align-items:center">
+                  <input name="masquerade" value="{{$.Masquerade}}" placeholder="{{$.DefaultMasq}}"
+                         list="masquerades" style="min-width:14rem">
+                  <button type="button" class="ghost" onclick="randomMasq(this)">随机</button>
+                </span></label>
             {{end}}
             {{if $.EditTLS}}
               <label>SNI<input name="server_name" required value="{{$.SNI}}"></label>
@@ -188,6 +237,15 @@ onRelay();
             <button type="button" class="ghost" hx-get="{{panelPath "/nodes/"}}{{$.Node.ID}}/inbounds"
                     hx-target="#inbounds" hx-swap="outerHTML">取消</button>
           </form>
+          {{if or $.EditHandshake $.EditHysteria2}}
+          <p style="margin:.6rem 0 0;font-size:.8rem">
+            <span class="pill warn-pill">注意</span>
+            {{if $.EditHandshake}}改<strong>握手站点</strong>{{end}}{{if and $.EditHandshake $.EditHysteria2}}或{{end}}{{if $.EditHysteria2}}开关<strong>混淆</strong>{{end}}后，
+            客户在<strong>刷新订阅之前会一直连不上</strong>。正在使用的入站建议不要直接改：
+            新建一个入站，和这个并行运行一两周，大部分客户刷新过订阅后再停用这个。
+            {{if $.EditHysteria2}}伪装网站只影响服务器端，可以随时改。{{end}}
+          </p>
+          {{end}}
           <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
             Reality 密钥对、short id、Shadowsocks 服务端 PSK 都会原样保留，
             排序数字越小越靠前，同值按名称排序；仅改排序不会重建监听。
@@ -231,8 +289,13 @@ onRelay();
                    read 已生效 while the port beside it is not the port being
                    listened on. That is the one word an operator relies on, so
                    it must not be said about a node running something else. */}}
+              {{/* A node new enough to report its config rev answers the
+                   settings question too: until its rev matches, the tag it
+                   serves still has the previous settings. */}}
               {{if and $.StateKnown (index $.Live .ID)}}
                 {{if $.NodeError}}<span class="pill warn-pill">跑的是旧配置</span>
+                {{else if and $.Stale $.Settle}}<span class="pill off">确认中…</span>
+                {{else if $.Stale}}<span class="pill warn-pill">等待节点应用</span>
                 {{else}}<span class="pill live">已生效</span>{{end}}
               {{else if $.Settle}}<span class="pill off">确认中…</span>
               {{else if $.StateKnown}}<span class="pill bad">未生效</span>

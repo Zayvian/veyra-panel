@@ -92,6 +92,30 @@ type Inbound struct {
 	// none of them. This is how one node relays another's inbound.
 	OverrideAddress string `json:"override_address,omitempty"`
 	OverridePort    int    `json:"override_port,omitempty"`
+
+	// Hysteria2 only.
+	//
+	// Obfs wraps every packet so the flow no longer looks like QUIC, for
+	// networks that throttle or block QUIC on sight. Clients must use the same
+	// password, so it is part of the subscription.
+	Obfs *Obfs `json:"obfs,omitempty"`
+	// Masquerade is what the port answers to anyone who is not a client — a
+	// browser, or someone probing — instead of an error that names a proxy.
+	// Server-side only: clients never see it.
+	Masquerade *Masquerade `json:"masquerade,omitempty"`
+}
+
+// Obfs is Hysteria2's salamander obfuscation.
+type Obfs struct {
+	Type     string `json:"type"` // always "salamander"
+	Password string `json:"password"`
+}
+
+// Masquerade proxies non-client requests to a real website.
+type Masquerade struct {
+	Type        string `json:"type"` // always "proxy"
+	URL         string `json:"url"`
+	RewriteHost bool   `json:"rewrite_host,omitempty"`
 }
 
 // User covers all three protocols. Name is the billing identity the node
