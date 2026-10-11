@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Zayvian/veyra-panel/internal/store"
 	"github.com/Zayvian/veyra-panel/internal/sub"
@@ -28,6 +29,11 @@ func (s *Server) getSubscription(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	// An inactive account gets one entry naming the reason rather than an empty
+	// list, which every client presents as a broken subscription.
+	if notice := sub.Notice(sb.User, time.Now()); notice != nil {
+		entries = notice
 	}
 
 	format := sub.Detect(r)
