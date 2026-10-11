@@ -8,6 +8,8 @@ package link
 
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -114,6 +116,42 @@ type Client struct {
 	// Last per-user activity sample, from the same tick. Counts only; see
 	// proto.Activity for why no destination is kept.
 	activity map[string]proto.Activity
+
+	// stateMu guards what follows. Separate from mu, which is held across a
+	// websocket write: the read loop and the report loop both consult this
+	// state and then send, and must not do so while holding the write lock.
+	stateMu sync.Mutex
+	// caps is what this session's panel agreed to in its welcome. Nil until a
+	// welcome arrives — which, from a panel older than protocol 2, it never
+	// does — and everything nil means is today's behaviour.
+	caps map[string]bool
+	// epoch names this process to the panel, and seq numbers its reports
+	// within it. Under stats_ack the panel remembers the last (epoch, seq) it
+	// committed and bills a report it has already seen only once. The epoch is
+	// per process rather than per connection: a report resent after a
+	// reconnect must carry the numbers the panel may already have recorded.
+	epoch string
+	seq   uint64
+	// outbox is the stats report waiting for the panel's ok. While it waits
+	// no new reading is taken: the next report would overlap it, and if the
+	// panel had in fact committed this one, the overlap would be billed twice.
+	// It survives reconnects; that is the point of it.
+	outbox *outgoing
+	// appliedRev is the rev of the configuration the engine last accepted,
+	// reported under config_rev.
+	appliedRev string
+}
+
+// outgoing is one stats report under stats_ack, kept exactly as first sent.
+type outgoing struct {
+	seq  uint64
+	data proto.StatsData
+}
+
+func (c *Client) has(capability string) bool {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	return c.caps[capability]
 }
 
 func (c *Client) lastSample() (map[string]int, map[string]proto.Activity) {
@@ -176,7 +214,11 @@ func New(cfg Config) (*Client, error) {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Client{cfg: cfg, log: log, wsURL: u.String()}, nil
+	var epoch [8]byte
+	if _, err := crand.Read(epoch[:]); err != nil {
+		return nil, fmt.Errorf("stats epoch: %w", err)
+	}
+	return &Client{cfg: cfg, log: log, wsURL: u.String(), epoch: hex.EncodeToString(epoch[:])}, nil
 }
 
 // isLoopback reports whether a host is this machine. Names as well as
@@ -244,6 +286,12 @@ func (c *Client) session(ctx context.Context) error {
 		c.mu.Unlock()
 	}()
 
+	// Every session negotiates afresh: the panel at the other end may have
+	// been upgraded or rolled back since the last one.
+	c.stateMu.Lock()
+	c.caps = nil
+	c.stateMu.Unlock()
+
 	hostname, _ := os.Hostname()
 	if err := c.send(ctx, proto.TypeHello, 0, proto.Hello{
 		Version:        c.cfg.Version,
@@ -251,6 +299,8 @@ func (c *Client) session(ctx context.Context) error {
 		Arch:           runtime.GOARCH,
 		Hostname:       hostname,
 		SingboxVersion: c.cfg.Engine.SingboxVersion(),
+		Proto:          proto.ProtoVersion,
+		Caps:           proto.NodeCaps,
 	}); err != nil {
 		return fmt.Errorf("hello: %w", err)
 	}
@@ -291,6 +341,39 @@ func (c *Client) handle(ctx context.Context, data []byte) {
 	}
 
 	switch env.Type {
+	case proto.TypeWelcome:
+		var w proto.Welcome
+		if err := json.Unmarshal(env.Data, &w); err != nil {
+			c.log.Warn("malformed welcome", "error", err)
+			return
+		}
+		agreed := map[string]bool{}
+		for _, offered := range w.Caps {
+			for _, mine := range proto.NodeCaps {
+				if offered == mine {
+					agreed[mine] = true
+				}
+			}
+		}
+		c.stateMu.Lock()
+		c.caps = agreed
+		c.stateMu.Unlock()
+		c.log.Info("panel protocol", "proto", w.Proto, "caps", w.Caps)
+
+	case proto.TypeOK:
+		// Under stats_ack the panel answers a stats report with its sequence
+		// number once the traffic is committed. That, and not the write
+		// succeeding, is when the report is done.
+		c.stateMu.Lock()
+		done := c.outbox != nil && c.outbox.seq == env.ID
+		if done {
+			c.outbox = nil
+		}
+		c.stateMu.Unlock()
+		if done {
+			c.cfg.Engine.StatsReported()
+		}
+
 	case proto.TypeConfig:
 		var cd proto.ConfigData
 		if err := json.Unmarshal(env.Data, &cd); err != nil {
@@ -302,12 +385,23 @@ func (c *Client) handle(ctx context.Context, data []byte) {
 			c.log.Error("apply config", "error", err)
 		} else {
 			c.log.Info("configuration applied")
+			c.stateMu.Lock()
+			c.appliedRev = cd.Rev
+			c.stateMu.Unlock()
 		}
 		c.reply(ctx, env.ID, err)
 		// Sent on success too. The panel has no other way to learn that a
 		// rolled-back node is serving the previous inbounds, and no way to
 		// learn that it has stopped doing so once the operator fixes it.
-		_ = c.send(ctx, proto.TypeState, 0, c.cfg.Engine.State())
+		st := c.cfg.Engine.State()
+		if c.has(proto.CapConfigRev) {
+			// On failure this is still the previous rev: the node keeps
+			// serving the configuration it had, and says which one that is.
+			c.stateMu.Lock()
+			st.AppliedRev = c.appliedRev
+			c.stateMu.Unlock()
+		}
+		_ = c.send(ctx, proto.TypeState, 0, st)
 
 	case proto.TypeUsers:
 		var ud proto.UsersData
@@ -357,22 +451,12 @@ func (c *Client) report(ctx context.Context) {
 			return
 
 		case <-statsTick.C:
-			users, system, err := c.cfg.Engine.Stats()
-			if err != nil {
-				c.log.Warn("read stats", "error", err)
-				continue
-			}
-			if len(users) == 0 && system == nil {
-				continue
-			}
-			if err := c.send(ctx, proto.TypeStats, 0,
-				proto.StatsData{Users: users, System: system}); err != nil {
+			if err := c.reportStats(ctx); err != nil {
 				// The session is gone; Run will reconnect. The baseline is
 				// deliberately not advanced, so this interval is carried into
 				// the next report rather than lost.
 				return
 			}
-			c.cfg.Engine.StatsReported()
 
 		case <-onlineTick.C:
 			names, err := c.cfg.Engine.Online()
@@ -400,6 +484,72 @@ func (c *Client) report(ctx context.Context) {
 			c.mu.Unlock()
 		}
 	}
+}
+
+// reportStats sends one stats report. An error means the channel is gone.
+//
+// Without stats_ack — an older panel — a report is done once it is written,
+// as it always was. That loses the interval if the connection dies between the
+// write and the panel's commit, but it never bills anything twice.
+//
+// With stats_ack the report is done when the panel says ok with its sequence
+// number. Until then it is resent unchanged on every tick, across reconnects,
+// and no new reading is taken; the panel commits each (epoch, seq) at most
+// once, so a resend after a lost ok is acknowledged without being billed.
+func (c *Client) reportStats(ctx context.Context) error {
+	ack := c.has(proto.CapStatsAck)
+
+	c.stateMu.Lock()
+	out := c.outbox
+	c.stateMu.Unlock()
+
+	if out == nil {
+		users, system, err := c.cfg.Engine.Stats()
+		if err != nil {
+			c.log.Warn("read stats", "error", err)
+			return nil
+		}
+		if len(users) == 0 && system == nil {
+			return nil
+		}
+		if !ack {
+			if err := c.send(ctx, proto.TypeStats, 0,
+				proto.StatsData{Users: users, System: system}); err != nil {
+				return err
+			}
+			c.cfg.Engine.StatsReported()
+			return nil
+		}
+		c.stateMu.Lock()
+		c.seq++
+		out = &outgoing{seq: c.seq,
+			data: proto.StatsData{Epoch: c.epoch, Users: users, System: system}}
+		c.outbox = out
+		c.stateMu.Unlock()
+	}
+
+	if !ack {
+		// A report left waiting by a session with a newer panel, and now an
+		// older one: the panel was rolled back while a report was in flight.
+		// The older panel cannot recognise a repeat, so if the newer one had
+		// committed this report before going away it is counted twice. That
+		// takes a rollback landing inside one report's round trip; dropping
+		// the report instead would lose it in every other case, so it goes
+		// out once more the old way and is done.
+		data := out.data
+		data.Epoch = ""
+		if err := c.send(ctx, proto.TypeStats, 0, data); err != nil {
+			return err
+		}
+		c.stateMu.Lock()
+		if c.outbox == out {
+			c.outbox = nil
+		}
+		c.stateMu.Unlock()
+		c.cfg.Engine.StatsReported()
+		return nil
+	}
+	return c.send(ctx, proto.TypeStats, out.seq, out.data)
 }
 
 func (c *Client) send(ctx context.Context, msgType string, id uint64, data any) error {

@@ -26,10 +26,36 @@ const (
 	TypePong   = "pong"
 
 	// panel -> node
-	TypeConfig = "config"
-	TypeUsers  = "users"
-	TypePing   = "ping"
+	TypeWelcome = "welcome"
+	TypeConfig  = "config"
+	TypeUsers   = "users"
+	TypePing    = "ping"
 )
+
+// Protocol 2 adds capability negotiation. This node says proto 2 and its caps
+// in the hello; a panel that understands answers with a welcome before the
+// configuration, and a panel that sends the configuration first is an older
+// one, spoken to exactly as before. A capability is used only when both sides
+// named it.
+const (
+	ProtoVersion = 2
+
+	// CapStatsAck: a stats report is resent unchanged until the panel answers
+	// ok with its sequence number, so traffic is neither lost to a dropped
+	// connection nor billed twice. See protocol/PROTOCOL.md.
+	CapStatsAck = "stats_ack"
+	// CapConfigRev: state reports the rev of the configuration running.
+	CapConfigRev = "config_rev"
+)
+
+// NodeCaps is what this node offers in its hello.
+var NodeCaps = []string{CapStatsAck, CapConfigRev}
+
+// Welcome is the panel's answer to a protocol-2 hello.
+type Welcome struct {
+	Proto int      `json:"proto"`
+	Caps  []string `json:"caps"`
+}
 
 // Envelope wraps every frame. ID correlates a command with its reply and is
 // zero on one-way reports.
@@ -45,6 +71,9 @@ type Hello struct {
 	Arch           string `json:"arch"`
 	Hostname       string `json:"hostname"`
 	SingboxVersion string `json:"singbox_version"`
+
+	Proto int      `json:"proto,omitempty"`
+	Caps  []string `json:"caps,omitempty"`
 }
 
 // ErrorData explains a command the node could not carry out. Reporting it
@@ -69,12 +98,16 @@ type ErrorData struct {
 type StateData struct {
 	Inbounds []string `json:"inbounds"`
 	Error    string   `json:"error,omitempty"`
+	// AppliedRev is the rev of the configuration running, under config_rev.
+	AppliedRev string `json:"applied_rev,omitempty"`
 }
 
 // ConfigData carries a full sing-box configuration. Inbound user lists are
 // empty; users arrive separately so that changing them is a hot swap rather
 // than a listener rebuild.
 type ConfigData struct {
+	// Rev identifies the configuration; echoed back in state under config_rev.
+	Rev    string          `json:"rev,omitempty"`
 	Config json.RawMessage `json:"config"`
 }
 
@@ -115,6 +148,9 @@ type User struct {
 // figure would make every user's usage appear to jump backwards — which the
 // panel cannot tell apart from a deliberate reset.
 type StatsData struct {
+	// Epoch names this node process; the envelope id is the report's sequence
+	// number within it. Set only under stats_ack.
+	Epoch  string           `json:"epoch,omitempty"`
 	Users  map[string]Usage `json:"users"`
 	System *SystemStats     `json:"system,omitempty"`
 }

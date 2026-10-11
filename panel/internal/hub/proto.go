@@ -25,10 +25,37 @@ const (
 	TypePong   = "pong"
 
 	// panel -> node
-	TypeConfig = "config"
-	TypeUsers  = "users"
-	TypePing   = "ping"
+	TypeWelcome = "welcome"
+	TypeConfig  = "config"
+	TypeUsers   = "users"
+	TypePing    = "ping"
 )
+
+// Protocol 2 adds capability negotiation. A node that says proto >= 2 in its
+// hello is answered with a welcome naming what this panel supports, before
+// anything else; a node that says nothing is an older one and is spoken to
+// exactly as before. Each capability is used only when both sides named it.
+const (
+	ProtoVersion = 2
+
+	// CapStatsAck: stats carry an epoch and a sequence number (the envelope
+	// id), the panel answers ok{id} once the report is committed, and a report
+	// the panel has already committed is acknowledged without being billed
+	// again. See protocol/PROTOCOL.md.
+	CapStatsAck = "stats_ack"
+	// CapConfigRev: config carries rev, and state reports the rev the node is
+	// actually running.
+	CapConfigRev = "config_rev"
+)
+
+// PanelCaps is what this panel offers in its welcome.
+var PanelCaps = []string{CapStatsAck, CapConfigRev}
+
+// Welcome answers a protocol-2 hello.
+type Welcome struct {
+	Proto int      `json:"proto"`
+	Caps  []string `json:"caps"`
+}
 
 // Envelope wraps every frame. ID correlates a command with its reply and is
 // zero for one-way reports.
@@ -44,6 +71,10 @@ type Hello struct {
 	Arch           string `json:"arch"`
 	Hostname       string `json:"hostname"`
 	SingboxVersion string `json:"singbox_version"`
+
+	// Proto and Caps are absent from nodes older than protocol 2.
+	Proto int      `json:"proto,omitempty"`
+	Caps  []string `json:"caps,omitempty"`
 }
 
 // ErrorData explains a rejected command. A node that cannot apply a config —
@@ -57,6 +88,10 @@ type ErrorData struct {
 // ConfigData carries the sing-box configuration. Inbound user lists are empty;
 // see UsersData.
 type ConfigData struct {
+	// Rev identifies this configuration (see service.ConfigRev). A node with
+	// config_rev reports back the rev it is running, which is how the panel
+	// tells a configuration that took effect from one still pending or refused.
+	Rev    string          `json:"rev,omitempty"`
 	Config *singbox.Config `json:"config"`
 }
 
@@ -85,6 +120,10 @@ type UsersData struct {
 // A node restart zeroes its own counters; deltas make that a gap rather than a
 // total that jumps backwards.
 type StatsData struct {
+	// Epoch names the node process that sent the report, and the envelope id
+	// is its sequence number within that process. Both are set only under
+	// stats_ack; see hub.applyStats.
+	Epoch  string           `json:"epoch,omitempty"`
 	Users  map[string]Usage `json:"users"`
 	System *SystemStats     `json:"system,omitempty"`
 }
@@ -131,6 +170,9 @@ type Activity struct {
 type StateData struct {
 	Inbounds []string `json:"inbounds"`
 	Error    string   `json:"error,omitempty"`
+	// AppliedRev is the rev of the configuration the node is running, under
+	// config_rev. Empty before the first configuration has been applied.
+	AppliedRev string `json:"applied_rev,omitempty"`
 }
 
 func encode(t string, id uint64, data any) ([]byte, error) {

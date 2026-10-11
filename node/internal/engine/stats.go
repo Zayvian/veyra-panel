@@ -2,12 +2,7 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/Zayvian/veyra-node/internal/proto"
 )
@@ -190,55 +185,21 @@ func (e *Engine) Stats() (map[string]proto.Usage, *proto.SystemStats, error) {
 // and is included again in the next report.
 func (e *Engine) StatsReported() { e.counters.commit() }
 
-// Online lists users with at least one live connection, read from the clash_api
-// connection table.
+// Online lists users with at least one live connection, from sing-box's own
+// connection table (see tracker).
 func (e *Engine) Online() ([]string, error) {
-	e.mu.Lock()
-	running := e.running
-	addr := e.apis.clash
-	e.mu.Unlock()
-
-	if !running || addr == "" {
-		return nil, nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
-		"http://"+addr+"/connections", nil)
+	conns, err := e.connections(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("clash api: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("clash api returned %s", resp.Status)
-	}
-
-	var body struct {
-		Connections []struct {
-			Metadata struct {
-				User string `json:"user"`
-			} `json:"metadata"`
-		} `json:"connections"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		return nil, fmt.Errorf("clash api response: %w", err)
-	}
-
 	seen := map[string]bool{}
 	var out []string
-	for _, c := range body.Connections {
-		name := strings.TrimSpace(c.Metadata.User)
-		if name == "" || seen[name] {
+	for _, c := range conns {
+		if c.User == "" || seen[c.User] {
 			continue
 		}
-		seen[name] = true
-		out = append(out, name)
+		seen[c.User] = true
+		out = append(out, c.User)
 	}
 	return out, nil
 }
