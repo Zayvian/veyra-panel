@@ -1,0 +1,1 @@
+{"t":"users","id":8,"d":{"by_tag":{"reality-443":[{"name":"alice","uuid":"6f1c7a52-2c43-4e8e-9d0b-6d6d1c1f0a11","flow":"xtls-rprx-vision"}],"东京 01":[{"name":"alice","password":"aGVsbG8gd29ybGQgaGVsbG8gd29ybGQgaGVsbG8hIQ=="}]},"stats_users":["alice"],"ip_limits":{"alice":3}}}
