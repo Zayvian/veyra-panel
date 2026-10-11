@@ -44,6 +44,12 @@ type Entry struct {
 
 	// Obfs is the Hysteria2 salamander password; empty when obfs is off.
 	Obfs string
+
+	// Info marks an entry that is a message, not a node — an announcement or
+	// an account notice. It is listed like any other so the user reads it,
+	// but kept out of automatic selection, which would only measure it as
+	// unreachable on every round.
+	Info bool
 }
 
 // Build assembles the entries for one user.

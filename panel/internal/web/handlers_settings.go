@@ -3,6 +3,9 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"strings"
+
+	"github.com/Zayvian/veyra-panel/internal/service"
 )
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +37,14 @@ func (s *Server) renderSettingsWith(w http.ResponseWriter, r *http.Request, save
 		"SubscriptionRefresh": refresh,
 		"NodeCount":           len(nodes),
 	}
+	lines, err := s.svc.Announcement()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	data["Announcement"] = strings.Join(lines, "\n")
+	data["AnnouncementLines"] = service.MaxAnnouncementLines
+	data["AnnouncementRunes"] = service.MaxAnnouncementRunes
 	if err := s.totpSettings(data); err != nil {
 		s.fail(w, r, err)
 		return
@@ -72,6 +83,14 @@ func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderSettings(w, r, "已保存")
+}
+
+func (s *Server) postAnnouncement(w http.ResponseWriter, r *http.Request) {
+	if err := s.svc.SetAnnouncement(r.FormValue("announcement")); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.renderSettings(w, r, "订阅公告已保存，客户更新订阅后就能看到")
 }
 
 func (s *Server) postForceSubscriptionRefresh(w http.ResponseWriter, r *http.Request) {

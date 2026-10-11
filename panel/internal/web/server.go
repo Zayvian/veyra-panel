@@ -272,6 +272,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /settings", s.auth(http.HandlerFunc(s.getSettings)))
 	mux.Handle("POST /settings", s.auth(s.requireCSRF(http.HandlerFunc(s.postSettings))))
 	mux.Handle("POST /settings/force-subscription-refresh", s.auth(s.requireCSRF(http.HandlerFunc(s.postForceSubscriptionRefresh))))
+	mux.Handle("POST /settings/announcement", s.auth(s.requireCSRF(http.HandlerFunc(s.postAnnouncement))))
 	mux.Handle("POST /settings/2fa/begin", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPBegin))))
 	mux.Handle("POST /settings/2fa/enable", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPEnable))))
 	mux.Handle("POST /settings/2fa/disable", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPDisable))))

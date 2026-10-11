@@ -25,6 +25,7 @@ const (
 func SingBox(entries []Entry) ([]byte, error) {
 	outbounds := make([]singbox.ClientOutbound, 0, len(entries)+3)
 	names := make([]string, 0, len(entries))
+	var nodes []string // names of real nodes, for the urltest
 
 	for _, e := range entries {
 		ob := singbox.ClientOutbound{
@@ -76,12 +77,19 @@ func SingBox(entries []Entry) ([]byte, error) {
 		}
 		outbounds = append(outbounds, ob)
 		names = append(names, e.Name)
+		if !e.Info {
+			nodes = append(nodes, e.Name)
+		}
 	}
 
 	// A selector with the urltest inside it gives both automatic choice and a
 	// manual override, which is what every client UI expects to find.
+	// The urltest measures real nodes only; see Clash for the empty case.
+	if len(nodes) == 0 {
+		nodes = names
+	}
 	auto := singbox.ClientOutbound{
-		Type: "urltest", Tag: tagAuto, Outbounds: names,
+		Type: "urltest", Tag: tagAuto, Outbounds: nodes,
 		URL: "https://www.gstatic.com/generate_204", Interval: "3m",
 	}
 	proxy := singbox.ClientOutbound{
