@@ -19,7 +19,7 @@ type Subscription struct {
 // It returns ErrNotFound for an unknown token and nothing else: whether a token
 // belongs to a disabled, expired or over-limit user is not something an
 // unauthenticated caller should be able to tell apart. An inactive user gets a
-// valid but empty subscription instead.
+// valid subscription holding only a notice entry instead (see sub.Notice).
 func (s *Service) Subscription(token string) (*Subscription, error) {
 	u, err := s.st.UserBySubToken(token)
 	if err != nil {
