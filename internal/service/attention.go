@@ -80,14 +80,15 @@ func attention(u *store.User, now time.Time) (Attention, bool) {
 	return Attention{}, false
 }
 
-// span is a duration in the unit that reads naturally: days, else hours,
-// else "不到 1 小时".
+// span is a duration in the unit that reads naturally, to the nearest one:
+// days, else hours, else "不到 1 小时". Nearest rather than truncated, so an
+// account sold for three days a minute ago reads 3 天, not 2.
 func span(d time.Duration) string {
 	switch {
 	case d >= 24*time.Hour:
-		return fmt.Sprintf("%d 天", int(d/(24*time.Hour)))
+		return fmt.Sprintf("%d 天", int(d.Round(24*time.Hour)/(24*time.Hour)))
 	case d >= time.Hour:
-		return fmt.Sprintf("%d 小时", int(d/time.Hour))
+		return fmt.Sprintf("%d 小时", int(d.Round(time.Hour)/time.Hour))
 	}
 	return "不到 1 小时"
 }
