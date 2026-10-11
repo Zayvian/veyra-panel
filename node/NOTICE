@@ -1,0 +1,44 @@
+Current distribution maintained by Zayvian.
+Source: https://github.com/kosje/skysbx-node
+Project: https://github.com/Zayvian/veyra-node
+Current changes and build instructions: README.md.
+Original notices follow.
+
+Veyra Node
+Copyright (C) 2026 kosje
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See LICENSE.
+
+--------------------------------------------------------------------------------
+
+This program embeds sing-box (https://github.com/SagerNet/sing-box), which is
+licensed under the GNU General Public License version 3 with an additional term
+under GPL-3.0 section 7:
+
+    In addition, no derivative work may use the name or imply association
+    with this application without prior consent.
+
+Veyra Node is a derivative work of sing-box. Accordingly:
+
+  * It is distributed under GPL-3.0, which is not a choice — linking sing-box
+    requires it.
+  * It is NOT affiliated with, endorsed by, or supported by the sing-box
+    project or its authors. Do not report Veyra Node problems to them.
+  * The name "skysbx" is not derived from, and does not imply association with,
+    sing-box.
+
+The sing-box build used here carries a small set of patches, documented in that
+repository's MODIFICATIONS.md. They exist because sing-box constructs an
+inbound's user set once, at startup, and never exposes a way to change it; the
+patches surface the update method its underlying services already have, so that
+adding or removing a user does not require restarting a listener and dropping
+every live connection.
+
+--------------------------------------------------------------------------------
+
+The panel that drives this node, Veyra Panel, is a separate program licensed
+separately. It communicates with this node over a network protocol and links
+none of this code. Nothing in this repository is a dependency of it.
