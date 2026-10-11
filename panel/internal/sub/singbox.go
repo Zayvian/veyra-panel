@@ -64,6 +64,9 @@ func SingBox(entries []Entry) ([]byte, error) {
 				ob.ServerPorts = strings.Split(strings.ReplaceAll(e.HopPorts, "-", ":"), ",")
 				ob.HopInterval = e.HopInterval
 			}
+			if e.Protocol == store.ProtoHysteria2 && e.Obfs != "" {
+				ob.Obfs = &singbox.Obfs{Type: "salamander", Password: e.Obfs}
+			}
 		case store.ProtoShadowsocks:
 			ob.Type = "shadowsocks"
 			ob.Method = e.Method

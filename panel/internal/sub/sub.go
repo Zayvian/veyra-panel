@@ -41,6 +41,9 @@ type Entry struct {
 	FP  string
 	PBK string // Reality public key
 	SID string // Reality short id
+
+	// Obfs is the Hysteria2 salamander password; empty when obfs is off.
+	Obfs string
 }
 
 // Build assembles the entries for one user.
@@ -137,6 +140,7 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 			FP:          client.FP,
 			PBK:         client.PBK,
 			SID:         client.SID,
+			Obfs:        client.Obfs,
 		}
 
 		switch in.Protocol {

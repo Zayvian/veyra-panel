@@ -39,6 +39,10 @@ type InboundEdit struct {
 	CertPath   string
 	KeyPath    string
 	ServerName string
+
+	// Hysteria2. Obfs keeps its password while it stays on; see applyHysteria2.
+	Obfs       bool
+	Masquerade string
 }
 
 // EditInbound changes an existing inbound in place.
@@ -123,6 +127,11 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		sb.TLS.CertificatePath = e.CertPath
 		sb.TLS.KeyPath = e.KeyPath
 		client.SNI = e.ServerName
+		if in.Protocol == store.ProtoHysteria2 {
+			if err := applyHysteria2(&sb, &client, e.Obfs, e.Masquerade); err != nil {
+				return nil, err
+			}
+		}
 
 	case store.ProtoShadowsocks:
 		// Nothing but the port. The method is fixed and the server PSK is the

@@ -317,6 +317,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("GET /nodes/{id}/inbounds", s.auth(http.HandlerFunc(s.listInbounds)))
 	mux.Handle("POST /nodes/{id}/inbounds", s.auth(s.requireCSRF(http.HandlerFunc(s.createInbound))))
+	mux.Handle("GET /inbounds/handshake-check", s.auth(http.HandlerFunc(s.checkHandshake)))
 	mux.Handle("GET /inbounds/{id}/edit", s.auth(http.HandlerFunc(s.editInbound)))
 	mux.Handle("POST /inbounds/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.updateInbound))))
 	mux.Handle("POST /inbounds/{id}/toggle", s.auth(s.requireCSRF(http.HandlerFunc(s.toggleInbound))))

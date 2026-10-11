@@ -85,6 +85,10 @@ func shareLink(e Entry) string {
 		} else if e.HopPorts != "" {
 			q.Set("mport", e.HopPorts)
 		}
+		if e.Protocol == store.ProtoHysteria2 && e.Obfs != "" {
+			q.Set("obfs", "salamander")
+			q.Set("obfs-password", e.Obfs)
+		}
 		return e.Protocol + "://" + userinfo + "@" + host + "/?" + q.Encode() + "#" + frag(e.display())
 	case store.ProtoShadowsocks:
 		// SIP002: the userinfo is websafe-base64 of "method:password". Padding

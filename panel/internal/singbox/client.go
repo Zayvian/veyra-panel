@@ -30,6 +30,7 @@ type ClientOutbound struct {
 	ServerPorts       []string `json:"server_ports,omitempty"`
 	HopInterval       string   `json:"hop_interval,omitempty"`
 	CongestionControl string   `json:"congestion_control,omitempty"`
+	Obfs              *Obfs    `json:"obfs,omitempty"` // Hysteria2
 
 	UUID string `json:"uuid,omitempty"` // VLESS
 	Flow string `json:"flow,omitempty"` // VLESS
