@@ -230,6 +230,26 @@ func (s *Service) ResetUserTraffic(id int64) error {
 	return nil
 }
 
+// MaxRenewDays bounds one renewal. Ten years is far past any real plan; the
+// bound is there so a typo cannot overflow the expiry.
+const MaxRenewDays = 3650
+
+// RenewUser is what a payment turns into: the account extended by days from
+// its current expiry or now, whichever is later, switched back on, and with
+// resetTraffic its counter zeroed. See store.RenewUser for the details.
+func (s *Service) RenewUser(id int64, days int, resetTraffic bool) (*store.User, error) {
+	if days < 1 || days > MaxRenewDays {
+		return nil, invalid("renewal must be between 1 and %d days", MaxRenewDays)
+	}
+	if err := s.st.RenewUser(id, days, resetTraffic, time.Now()); err != nil {
+		return nil, err
+	}
+	// Renewing can bring an expired, disabled or exhausted account back, and the
+	// node only serves users it has been told are active.
+	s.notify.UsersChanged()
+	return s.st.User(id)
+}
+
 // ── nodes ───────────────────────────────────────────────────────────────────
 
 // CreateNode returns the node and its join token. The token is shown once and

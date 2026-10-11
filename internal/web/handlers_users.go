@@ -297,6 +297,44 @@ func (s *Server) reissueUser(w http.ResponseWriter, r *http.Request) {
 	s.renderUsers(w, r, http.StatusOK)
 }
 
+// renewForm turns the user's row into the 续费 form, the same way editUser does.
+func (s *Server) renewForm(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, "bad user id")
+		return
+	}
+	u, err := s.svc.User(id)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	s.render(w, "user-renew-row", map[string]any{
+		"User":      u,
+		"Now":       nowFunc(),
+		"CSRFToken": s.csrf.csrfValue(r),
+	})
+}
+
+func (s *Server) renewUser(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, "bad user id")
+		return
+	}
+	days, err := strconv.Atoi(strings.TrimSpace(r.FormValue("days")))
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, "renewal must be a whole number of days")
+		return
+	}
+	if _, err := s.svc.RenewUser(id, days, r.FormValue("reset_traffic") != ""); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.renderUsers(w, r, http.StatusOK)
+}
+
 func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {

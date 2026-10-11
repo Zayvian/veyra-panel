@@ -85,6 +85,37 @@
 </tr>
 {{end}}
 
+{{/* The 续费 row: what a payment turns into, in one click instead of an edit
+     plus a 清零 plus a 启用. Days count from the later of the current expiry
+     and now, so renewing early loses nothing and renewing late does not refund
+     the lapsed days. */}}
+{{define "user-renew-row"}}
+<tr id="u-{{.User.ID}}">
+  <td colspan="8">
+    <form class="row" hx-post="{{panelPath "/users/"}}{{.User.ID}}/renew"
+          hx-target="#users" hx-swap="outerHTML" style="align-items:flex-end">
+      <div><strong>续费 {{.User.Name}}</strong>
+        <div class="dim" style="font-size:.8rem">当前到期：{{if .User.ExpiresAt}}{{date .User.ExpiresAt}}{{else}}不限{{end}}</div></div>
+      <label>续费天数<input name="days" type="number" min="1" max="3650" step="1" value="30"
+             required list="renew-days" style="min-width:7rem"></label>
+      <datalist id="renew-days">
+        <option value="30"><option value="90"><option value="180"><option value="365">
+      </datalist>
+      <label style="flex-direction:row;align-items:center;gap:.4rem">
+        <input type="checkbox" name="reset_traffic" value="1" checked>已用流量清零</label>
+      <button>确认续费</button>
+      <button type="button" class="ghost" hx-get="{{panelPath "/users"}}"
+              hx-target="#users" hx-swap="outerHTML">取消</button>
+    </form>
+    <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
+      {{if .User.ExpiresAt}}从<strong>当前到期时间和现在中较晚的那个</strong>往后加：提前续费不吃亏，过期后再续也不会把过期那几天补回去。
+      {{else}}该用户没有到期时间，续费不会加上到期，只会按下面的勾选清零流量。{{end}}
+      续费后账号会自动启用，节点马上生效，订阅链接不变。
+    </p>
+  </td>
+</tr>
+{{end}}
+
 {{define "user-table"}}
 <div class="card" id="users">
   {{if not .Users}}
@@ -149,6 +180,8 @@
         <td class="mobile-actions" style="text-align:right;white-space:nowrap">
           <button class="ghost" hx-get="{{panelPath "/users/"}}{{.ID}}/edit"
                   hx-target="closest tr" hx-swap="outerHTML">编辑</button>
+          <button class="ghost" hx-get="{{panelPath "/users/"}}{{.ID}}/renew"
+                  hx-target="closest tr" hx-swap="outerHTML">续费</button>
           <button class="ghost" hx-post="{{panelPath "/users/"}}{{.ID}}/toggle"
                   hx-target="#users" hx-swap="outerHTML">{{if .Enabled}}停用{{else}}启用{{end}}</button>
           <button class="ghost" hx-post="{{panelPath "/users/"}}{{.ID}}/reset"
