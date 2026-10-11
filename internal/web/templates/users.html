@@ -6,6 +6,15 @@
   <div class="card">
     <form class="row" hx-post="{{panelPath "/users"}}" hx-target="#users" hx-swap="outerHTML">
       <label>名称<input name="name" required placeholder="例如：张三" maxlength="32"></label>
+      {{if .Plans}}
+      <label>套餐
+        <select onchange="applyPlan(this)" style="min-width:9rem">
+          <option value="">不用套餐</option>
+          {{template "plan-options" .Plans}}
+        </select></label>
+      {{end}}
+      <label>有效天数<input name="days" type="number" step="1" min="0" max="3650"
+             placeholder="或填下面的到期" style="min-width:7rem"></label>
       <label>到期（服务器时间）<input name="expires_at" type="datetime-local"></label>
       <label>流量上限 GiB<input name="traffic_limit_gb" type="number" step="1" min="0"
              placeholder="留空 = 不限"></label>
@@ -26,12 +35,34 @@
     <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
       <strong>流量重置</strong>是月付套餐用的：在选定日期和时间已用流量归零，不用每个月手动清。
       选「每月最后一天」或 29–31 号时，短月会自动落到该月最后一天，二月不会被跳过。
-      到期和重置落在同一时刻时，到期优先，用户不会因重置恢复可用。所有日期时间按服务器本地时区解释。
+      到期和重置落在同一时刻时，到期优先，用户不会因重置恢复可用。所有日期时间按服务器本地时区解释。<br>
+      <strong>有效天数</strong>从创建这一刻算起；填了「到期」就以「到期」为准。选套餐会自动填好天数、流量、IP 和重置日，填好后仍然可以改。
     </p>
   </div>
+<script>
+// Copies a plan's values into the form it sits in. Only fields the form has
+// are touched, so the create form and the renew row can share it.
+function applyPlan(sel) {
+  const o = sel.selectedOptions[0], f = sel.form;
+  if (!o || !o.value) return;
+  const set = (name, v) => { if (f.elements[name]) f.elements[name].value = v; };
+  set('days', o.dataset.days);
+  if (o.dataset.days) set('expires_at', '');
+  set('traffic_limit_gb', o.dataset.gb);
+  set('ip_limit', o.dataset.ip);
+  set('reset_day', o.dataset.reset);
+}
+</script>
   {{template "user-table" .}}
 </main>
 {{template "foot" .}}
+{{end}}
+
+{{/* One option per plan, carrying its values for applyPlan. */}}
+{{define "plan-options"}}
+  {{range .}}<option value="{{.ID}}" data-days="{{if gt .Days 0}}{{.Days}}{{end}}"
+    data-gb="{{gibval .TrafficLimit}}" data-ip="{{if gt .IPLimit 0}}{{.IPLimit}}{{end}}"
+    data-reset="{{if eq .ResetDay -1}}created{{else}}{{.ResetDay}}{{end}}">{{.Name}}{{if .Note}}（{{.Note}}）{{end}}</option>{{end}}
 {{end}}
 
 {{/* The day-of-month choices, shared by the create form and the edit row so the
@@ -39,7 +70,7 @@
      as 「每月最后一天」 because that is what it does — short months clamp. */}}
 {{define "reset-day-options"}}
   <option value="0" {{if eq . 0}}selected{{end}}>不重置</option>
-  <option value="created">按创建日</option>
+  <option value="created" {{if eq . -1}}selected{{end}}>按创建日</option>
   {{range $d := days28}}<option value="{{$d}}" {{if eq $d $}}selected{{end}}>每月 {{$d}} 号</option>{{end}}
   <option value="29" {{if eq . 29}}selected{{end}}>每月 29 号（短月顺延到月底）</option>
   <option value="30" {{if eq . 30}}selected{{end}}>每月 30 号（短月顺延到月底）</option>
@@ -96,6 +127,13 @@
           hx-target="#users" hx-swap="outerHTML" style="align-items:flex-end">
       <div><strong>续费 {{.User.Name}}</strong>
         <div class="dim" style="font-size:.8rem">当前到期：{{if .User.ExpiresAt}}{{date .User.ExpiresAt}}{{else}}不限{{end}}</div></div>
+      {{if .Plans}}
+      <label>按套餐
+        <select onchange="applyPlan(this)" style="min-width:9rem">
+          <option value="">自己填天数</option>
+          {{template "plan-options" .Plans}}
+        </select></label>
+      {{end}}
       <label>续费天数<input name="days" type="number" min="1" max="3650" step="1" value="30"
              required list="renew-days" style="min-width:7rem"></label>
       <datalist id="renew-days">

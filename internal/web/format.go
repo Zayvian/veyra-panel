@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Zayvian/veyra-panel/internal/service"
+	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
 func templateFuncs() template.FuncMap {
@@ -33,6 +34,10 @@ func templateFuncs() template.FuncMap {
 		"days28":    func() []int { return daysTo28 },
 		"nextreset": nextResetLabel,
 
+		// Plans: a blank one for the create form, and the reset day in words.
+		"emptyplan": func() *store.Plan { return &store.Plan{} },
+		"plandesc":  planResetLabel,
+
 		// csrfField emits the hidden input that posts the CSRF token
 		// back to the server. The alternative — rendering {{ .CSRFToken }}
 		// directly — works for htmx (where the page reads it from a meta
@@ -55,6 +60,18 @@ func nextResetLabel(day, hour, minute int) string {
 		return ""
 	}
 	return service.NextScheduledResetAt(day, hour, minute, nowFunc()).Format("01-02 15:04")
+}
+
+func planResetLabel(day int) string {
+	switch {
+	case day == store.PlanResetOnCreation:
+		return "每月按创建日"
+	case day >= 31:
+		return "每月最后一天"
+	case day > 0:
+		return fmt.Sprintf("每月 %d 号", day)
+	}
+	return "不重置"
 }
 
 // dateTimeValue fills a datetime-local input in server-local time.

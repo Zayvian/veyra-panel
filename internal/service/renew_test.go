@@ -76,7 +76,7 @@ func TestRenewUserReenablesAndResetsTraffic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Store().AddTraffic(n.ID, 0,map[int64][2]int64{u.ID: {600, 600}, bob.ID: {10, 10}}); err != nil {
+	if _, err := svc.Store().AddTraffic(n.ID, 0, map[int64][2]int64{u.ID: {600, 600}, bob.ID: {10, 10}}); err != nil {
 		t.Fatal(err)
 	}
 	spy := &spyNotifier{}

@@ -285,10 +285,16 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /users/{id}/reissue", s.auth(s.requireCSRF(http.HandlerFunc(s.reissueUser))))
 	mux.Handle("GET /users/{id}/renew", s.auth(http.HandlerFunc(s.renewForm)))
 	mux.Handle("POST /users/{id}/renew", s.auth(s.requireCSRF(http.HandlerFunc(s.renewUser))))
-	mux.Handle("DELETE /users/{id}",s.auth(s.requireCSRF(http.HandlerFunc(s.deleteUser))))
+	mux.Handle("DELETE /users/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deleteUser))))
 	mux.Handle("GET /users/{id}/activity", s.auth(http.HandlerFunc(s.getUserActivity)))
 	mux.Handle("GET /users/{id}/access", s.auth(http.HandlerFunc(s.getUserAccess)))
 	mux.Handle("POST /users/{id}/access", s.auth(s.requireCSRF(http.HandlerFunc(s.setUserAccess))))
+
+	mux.Handle("GET /plans", s.auth(http.HandlerFunc(s.listPlans)))
+	mux.Handle("POST /plans", s.auth(s.requireCSRF(http.HandlerFunc(s.createPlan))))
+	mux.Handle("GET /plans/{id}/edit", s.auth(http.HandlerFunc(s.editPlan)))
+	mux.Handle("POST /plans/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.updatePlan))))
+	mux.Handle("DELETE /plans/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deletePlan))))
 
 	mux.Handle("GET /policy", s.auth(http.HandlerFunc(s.getPolicy)))
 	mux.Handle("POST /policy", s.auth(s.requireCSRF(http.HandlerFunc(s.setPolicy))))
