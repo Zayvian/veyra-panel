@@ -33,7 +33,15 @@ import (
 // Without it, a user who idles for a moment loses their place to whoever
 // connects next, and comes back to find themselves the one being cut off. With
 // it, a genuinely shared account still converges on the first N addresses.
-const ipGrace = 5 * time.Minute
+//
+// One minute rather than the original five. The cost of a long grace falls on
+// the honest user: a phone that moves from Wi-Fi to mobile data shows up from a
+// new address while the old one still holds its slot, and on an account at its
+// limit the new address — the same person — is refused until the old slot
+// expires. Five minutes of that read as the node being down. A minute still
+// covers a screen lock or a dropped connection reconnecting; a sharer has to
+// stay away longer than that to lose their place.
+const ipGrace = time.Minute
 
 // limiter tracks which addresses are using which account, and closes the ones
 // over the line.

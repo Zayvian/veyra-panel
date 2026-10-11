@@ -313,6 +313,8 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		"DefaultHandshake": service.DefaultHandshake,
 		"Handshakes":       service.HandshakeCandidates,
 		"DefaultMasq":      service.DefaultMasquerade,
+		"RandomMasq":       service.RandomMasquerade(),
+		"Masquerades":      service.MasqueradeCandidates,
 		"DefaultCertPath":  service.DefaultCertPath,
 		"DefaultKeyPath":   service.DefaultKeyPath,
 		"StateKnown":       known,

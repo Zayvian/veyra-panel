@@ -6,9 +6,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/Zayvian/veyra-panel/internal/singbox"
 	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
@@ -129,5 +131,28 @@ func TestCheckHandshake(t *testing.T) {
 	}
 	if _, err := CheckHandshake("bad:port:here"); err == nil {
 		t.Fatal("a malformed target passed")
+	}
+}
+
+// Every site the form offers, and every random pick, has to pass the
+// panel's own validation.
+func TestMasqueradeCandidatesAreAccepted(t *testing.T) {
+	for _, site := range MasqueradeCandidates {
+		var in singbox.Inbound
+		var client ClientParams
+		if err := applyHysteria2(&in, &client, false, site); err != nil {
+			t.Errorf("%s: %v", site, err)
+		}
+	}
+	seen := map[string]bool{}
+	for range 200 {
+		pick := RandomMasquerade()
+		if !slices.Contains(MasqueradeCandidates, pick) {
+			t.Fatalf("random pick %q is not a candidate", pick)
+		}
+		seen[pick] = true
+	}
+	if len(seen) < 2 {
+		t.Fatal("the random pick never varies")
 	}
 }
