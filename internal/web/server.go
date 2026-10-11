@@ -282,6 +282,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /users/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.updateUser))))
 	mux.Handle("POST /users/{id}/toggle", s.auth(s.requireCSRF(http.HandlerFunc(s.toggleUser))))
 	mux.Handle("POST /users/{id}/reset", s.auth(s.requireCSRF(http.HandlerFunc(s.resetUser))))
+	mux.Handle("POST /users/{id}/reissue", s.auth(s.requireCSRF(http.HandlerFunc(s.reissueUser))))
 	mux.Handle("DELETE /users/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deleteUser))))
 	mux.Handle("GET /users/{id}/activity", s.auth(http.HandlerFunc(s.getUserActivity)))
 	mux.Handle("GET /users/{id}/access", s.auth(http.HandlerFunc(s.getUserAccess)))
