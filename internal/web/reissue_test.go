@@ -2,6 +2,8 @@ package web
 
 import (
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -28,7 +30,7 @@ func TestReissueThroughAdminForm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := New(svc, &fakeChannel{}, nil, false)
+	srv, err := New(svc, &fakeChannel{}, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +93,7 @@ func TestReissueRequiresCSRF(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv, err := New(svc, &fakeChannel{}, nil, false)
+	srv, err := New(svc, &fakeChannel{}, slog.New(slog.NewTextHandler(io.Discard, nil)), false)
 	if err != nil {
 		t.Fatal(err)
 	}
