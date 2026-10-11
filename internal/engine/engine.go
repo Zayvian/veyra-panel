@@ -10,7 +10,9 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -46,6 +48,14 @@ type Engine struct {
 	// rejected and rolled back.
 	activeTags []string
 	applyErr   string
+
+	// Fingerprint of the last user list applied to this instance. The panel
+	// re-sends the full list on every reconnect and after every change anywhere
+	// on the panel, and an identical list need not be swapped in again. Cleared
+	// whenever the instance is rebuilt: a new instance starts with no users, so
+	// the same list must then be applied, not skipped.
+	usersHash    [sha256.Size]byte
+	usersHashSet bool
 
 	// Loopback API addresses this node chose for itself; see apis.go.
 	apis localAPIs
@@ -83,6 +93,22 @@ func (e *Engine) ApplyConfig(ctx context.Context, raw json.RawMessage) error {
 	if len(raw) == 0 {
 		return fmt.Errorf("empty configuration")
 	}
+	raw = compactJSON(raw)
+
+	// The panel sends the configuration on every reconnect, so a panel restart
+	// or a network blip would otherwise rebuild every listener on every node and
+	// drop every live connection, for a configuration that has not changed. An
+	// identical one is already being served; there is nothing to do.
+	e.mu.Lock()
+	if e.running && bytes.Equal(raw, e.current) {
+		// The panel has gone back to what is running, so whatever failed in
+		// between is no longer the panel's request.
+		e.applyErr = ""
+		e.mu.Unlock()
+		e.log.Debug("configuration unchanged; listeners kept")
+		return nil
+	}
+	e.mu.Unlock()
 
 	// Parse before stopping anything. A configuration the panel got wrong — a
 	// certificate path that does not exist, a port already taken — must leave
@@ -151,6 +177,19 @@ func (e *Engine) swapLocked(options option.Options, raw json.RawMessage) error {
 		return fmt.Errorf("build sing-box instance: %w", err)
 	}
 
+	// The old instance's counters go with it, so whatever it measured since the
+	// last report is read out first and carried into the next one. Only now,
+	// with the new instance built: a build failure leaves the old one running
+	// and its counters where they are.
+	if e.running {
+		final, err := e.readTotals(e.ctx)
+		if err != nil {
+			e.log.Warn("read traffic before rebuild; this interval is lost", "error", err)
+			final = nil
+		}
+		e.counters.retire(final)
+	}
+
 	e.stopLocked()
 
 	if err := instance.Start(); err != nil {
@@ -167,9 +206,9 @@ func (e *Engine) swapLocked(options option.Options, raw json.RawMessage) error {
 		e.activeTags = append(e.activeTags, in.Tag)
 	}
 
-	// Counters belong to an instance. Carrying them across a restart would
-	// report a delta measured against numbers that no longer exist.
-	e.counters.reset()
+	// A new instance has no users until the panel's next user list arrives, and
+	// that list may well be identical to the last one — it must be applied.
+	e.usersHashSet = false
 
 	e.log.Info("sing-box started", "inbounds", len(options.Inbounds))
 	return nil
@@ -240,6 +279,24 @@ func (e *Engine) UpdateUsers(_ context.Context, data proto.UsersData) error {
 	if !e.running {
 		return fmt.Errorf("sing-box is not running")
 	}
+
+	// Every swap has a cost — and, in sing-vmess and sing-shadowsocks, a narrow
+	// window where a connection can read a half-published user map (see the
+	// core's MODIFICATIONS.md). An identical list is skipped rather than paid
+	// for again. encoding/json sorts map keys, so equal data hashes equally.
+	encoded, err := json.Marshal(data)
+	if err != nil {
+		return fmt.Errorf("fingerprint users: %w", err)
+	}
+	hash := sha256.Sum256(encoded)
+	if e.usersHashSet && hash == e.usersHash {
+		e.log.Debug("user list unchanged; swap skipped")
+		return nil
+	}
+	// Forgotten until this update has fully succeeded: a list that failed
+	// halfway must be applied again when it is re-sent, not skipped.
+	e.usersHashSet = false
+
 	manager := service.FromContext[adapter.InboundManager](e.ctx)
 	if manager == nil {
 		return fmt.Errorf("inbound manager unavailable")
@@ -271,7 +328,20 @@ func (e *Engine) UpdateUsers(_ context.Context, data proto.UsersData) error {
 		known[name] = true
 	}
 	e.limits.forget(known)
+
+	e.usersHash, e.usersHashSet = hash, true
 	return nil
+}
+
+// compactJSON strips insignificant whitespace, so two encodings of the same
+// configuration compare equal. Invalid JSON is returned unchanged; the decoder
+// will reject it with a better message than this could.
+func compactJSON(raw json.RawMessage) json.RawMessage {
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, raw); err != nil {
+		return raw
+	}
+	return buf.Bytes()
 }
 
 // applyUsers dispatches on the inbound's protocol.
