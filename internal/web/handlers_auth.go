@@ -226,6 +226,7 @@ func (s *Server) getDashboard(w http.ResponseWriter, r *http.Request) {
 	s.page(w, r, "dashboard", map[string]any{
 		"Users":        len(users),
 		"ActiveUsers":  active,
+		"Attention":    len(service.NeedsAttention(users, nowFunc())),
 		"OnlineUsers":  len(online),
 		"Nodes":        len(nodes),
 		"NodesUp":      nodesUp,

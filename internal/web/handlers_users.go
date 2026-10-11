@@ -65,6 +65,7 @@ func (s *Server) renderUsers(w http.ResponseWriter, r *http.Request, code int) {
 		"Access":             access,
 		"InboundCount":       len(inbounds),
 		"Plans":              plans,
+		"Attention":          service.NeedsAttention(users, nowFunc()),
 		// CSRFToken is added by s.page below; renderUsers is the
 		// page- and fragment-level entry point, and htmx requests
 		// re-render the table without the layout. CSRF lives in

@@ -183,6 +183,25 @@ function applyPlan(sel) {
 
 {{define "user-table"}}
 <div class="card" id="users">
+  {{/* Inside the table's fragment rather than above it, so a renewal — which
+       re-renders the table — also takes the account off this list. */}}
+  {{if .Attention}}
+  <div style="border:1px solid rgba(240,160,32,.35);background:rgba(240,160,32,.06);border-radius:6px;padding:.6rem .8rem;margin-bottom:1rem">
+    <div style="font-weight:600;margin-bottom:.4rem">需要处理（{{len .Attention}}）</div>
+    {{range .Attention}}
+      <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;padding:.2rem 0">
+        <span style="min-width:6rem">{{.User.Name}}</span>
+        <span class="pill {{if .Lapsed}}bad{{else}}warn-pill{{end}}">{{.Reason}}</span>
+        <button class="ghost" style="font-size:.75rem;padding:.15rem .5rem"
+                hx-get="{{panelPath "/users/"}}{{.User.ID}}/renew"
+                hx-target="#row-{{.User.ID}}" hx-swap="outerHTML">续费</button>
+      </div>
+    {{end}}
+    <div class="dim" style="font-size:.75rem;margin-top:.3rem">
+      7 天内到期、30 天内已到期，或流量用到 90% 的启用账号。停用的账号不列出。
+    </div>
+  </div>
+  {{end}}
   {{if not .Users}}
     <p class="dim" style="margin:.5rem">还没有用户。</p>
   {{else}}
@@ -193,7 +212,7 @@ function applyPlan(sel) {
     </tr></thead>
     <tbody>
     {{range .Users}}
-      <tr>
+      <tr id="row-{{.ID}}">
         <td>
           {{.Name}}{{if .Note}}<div class="dim" style="font-size:.8rem">{{.Note}}</div>{{end}}
           <div style="font-size:.75rem;margin-top:.2rem">
