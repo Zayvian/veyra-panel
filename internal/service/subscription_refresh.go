@@ -71,6 +71,30 @@ func (s *Service) ForceSubscriptionRefresh(actor string) (SubscriptionRefresh, e
 	return SubscriptionRefresh{At: &at, UserCount: len(rotated), Actor: actor, NodeCount: len(nodes)}, nil
 }
 
+// ReissueUserSubscription gives one user a new subscription URL and new
+// connection credentials. It is the answer to one leaked or shared link: the
+// old URL stops resolving, and every client that already imported it stops
+// authenticating, while every other user is left alone.
+//
+// Pushed as a user change, not a config change. The node swaps the user list
+// in place, so nobody else's connection on that node is dropped; the old
+// credentials are simply no longer in it.
+func (s *Service) ReissueUserSubscription(id int64) (*store.User, error) {
+	if _, err := s.st.User(id); err != nil {
+		return nil, err
+	}
+	if err := s.st.ReissueUser(store.UserCredentials{
+		ID:         id,
+		VlessUUID:  NewUUID(),
+		Password:   NewPassword(),
+		SSPassword: NewSSPassword(),
+	}, NewSubToken()); err != nil {
+		return nil, err
+	}
+	s.notify.UsersChanged()
+	return s.st.User(id)
+}
+
 func (s *Service) SubscriptionRefreshStatus() (SubscriptionRefresh, error) {
 	rawAt, err := s.st.Setting(settingSubscriptionRefreshAt)
 	if err != nil {
