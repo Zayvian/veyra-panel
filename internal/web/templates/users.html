@@ -154,6 +154,33 @@ function applyPlan(sel) {
 </tr>
 {{end}}
 
+{{/* What gets sent to the customer: the link as a QR code and a message with
+     the terms, each one click from the clipboard. */}}
+{{define "user-share-row"}}
+<tr id="u-{{.User.ID}}">
+  <td colspan="8">
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-start">
+      <div style="text-align:center">
+        <img src="{{.QR}}" width="200" height="200" alt="订阅二维码"
+             style="background:#fff;border-radius:6px;padding:6px;display:block">
+        <div class="dim" style="font-size:.75rem;margin-top:.3rem">客户端扫码导入</div>
+      </div>
+      <div style="flex:1;min-width:16rem">
+        <label>发给用户的话术（可以先改再复制）
+          <textarea id="share-{{.User.ID}}" rows="10"
+            style="width:100%;background:#0c0e12;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.5rem;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical">{{.Message}}</textarea></label>
+        <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">
+          <button type="button" onclick="copyText(this, document.getElementById('share-{{.User.ID}}').value)">复制话术</button>
+          <button type="button" class="ghost" onclick="copyText(this, {{.Link}})">只复制链接</button>
+          <button type="button" class="ghost" hx-get="{{panelPath "/users"}}"
+                  hx-target="#users" hx-swap="outerHTML">收起</button>
+        </div>
+      </div>
+    </div>
+  </td>
+</tr>
+{{end}}
+
 {{define "user-table"}}
 <div class="card" id="users">
   {{if not .Users}}
@@ -174,6 +201,9 @@ function applyPlan(sel) {
             <a class="dim" href="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" target="_blank" rel="noopener">打开订阅</a>
             <button class="ghost" style="font-size:.7rem;padding:.1rem .35rem"
                     data-sub-url="{{$.SubscriptionOrigin}}/sub/{{.SubToken}}" onclick="copySub(this)">复制链接</button>
+            <button class="ghost" style="font-size:.7rem;padding:.1rem .35rem"
+                    hx-get="{{panelPath "/users/"}}{{.ID}}/share"
+                    hx-target="closest tr" hx-swap="outerHTML">二维码 / 话术</button>
           </div>
         </td>
         <td data-label="状态">
@@ -244,8 +274,10 @@ function applyPlan(sel) {
 <script>
 // The server supplies the configured subscription origin for pages and fragments.
 function copySub(btn) {
-  const url = new URL(btn.dataset.subUrl, location.origin).href;
-  navigator.clipboard.writeText(url).then(() => {
+  copyText(btn, new URL(btn.dataset.subUrl, location.origin).href);
+}
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
     const t = btn.textContent;
     btn.textContent = '已复制';
     setTimeout(() => btn.textContent = t, 1200);
