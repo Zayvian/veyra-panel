@@ -157,6 +157,24 @@ func (s *Store) RotateAllUserCredentials(credentials []UserCredentials, audit ma
 	return tx.Commit()
 }
 
+// ReissueUser replaces one user's subscription token and connection
+// credentials together, in one statement. Either alone leaves the account
+// open to whoever it was being reissued against: a new URL with the old
+// credentials still lets every client that already imported them connect, and
+// new credentials behind the old URL hand them straight back on the next
+// refresh.
+func (s *Store) ReissueUser(c UserCredentials, subToken string) error {
+	res, err := s.db.Exec(`UPDATE users SET vless_uuid = ?, password = ?, ss_password = ?, sub_token = ?
+		WHERE id = ?`, c.VlessUUID, c.Password, c.SSPassword, subToken, c.ID)
+	if err != nil {
+		return asConflict(fmt.Errorf("reissue user %d: %w", c.ID, err))
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) DeleteUser(id int64) error {
 	res, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, id)
 	if err != nil {

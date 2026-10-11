@@ -154,6 +154,12 @@
           <button class="ghost" hx-post="{{panelPath "/users/"}}{{.ID}}/reset"
                   hx-target="#users" hx-swap="outerHTML"
                   hx-confirm="把 {{.Name}} 的已用流量清零？">清零</button>
+          {{/* For one leaked or shared link. Changes the URL and the
+               credentials together: a new URL alone would leave every client
+               that already imported the old one still connecting. */}}
+          <button class="ghost" hx-post="{{panelPath "/users/"}}{{.ID}}/reissue"
+                  hx-target="#users" hx-swap="outerHTML"
+                  hx-confirm="重置 {{.Name}} 的订阅链接？旧链接和用旧链接导入的节点会立即失效，需要把新链接发给该用户重新导入。其他用户不受影响。">重置链接</button>
           <button class="ghost danger" hx-delete="{{panelPath "/users/"}}{{.ID}}"
                   hx-target="#users" hx-swap="outerHTML"
                   hx-confirm="删除 {{.Name}}？该用户的订阅会立即失效。">删除</button>
