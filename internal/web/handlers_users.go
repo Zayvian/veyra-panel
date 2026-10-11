@@ -284,6 +284,19 @@ func (s *Server) resetUser(w http.ResponseWriter, r *http.Request) {
 	s.renderUsers(w, r, http.StatusOK)
 }
 
+func (s *Server) reissueUser(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		s.errorBanner(w, http.StatusBadRequest, "bad user id")
+		return
+	}
+	if _, err := s.svc.ReissueUserSubscription(id); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.renderUsers(w, r, http.StatusOK)
+}
+
 func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)
 	if err != nil {
