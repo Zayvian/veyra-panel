@@ -9,10 +9,11 @@
 # installer finishes, then paste that one-time token when this script asks.
 set -eu
 
-PANEL_REPO=${VEYRA_PANEL_REPO:-${SKYSBX_REPO:-https://github.com/Zayvian/veyra-panel.git}}
-PANEL_REF=${VEYRA_PANEL_REF:-${SKYSBX_REF:-main}}
-NODE_REPO=${VEYRA_NODE_REPO:-${SKYSBX_NODE_REPO:-https://github.com/Zayvian/veyra-node.git}}
-NODE_REF=${VEYRA_NODE_REF:-${SKYSBX_NODE_REF:-main}}
+OWNER=${VEYRA_GH_OWNER:-${SKYSBX_GH_OWNER:-Zayvian}}
+# One repository holds both components now; VEYRA_PANEL_* are kept as aliases.
+REPO=${VEYRA_REPO:-${VEYRA_PANEL_REPO:-${SKYSBX_REPO:-https://github.com/$OWNER/veyra-panel.git}}}
+REF=${VEYRA_REF:-${VEYRA_PANEL_REF:-${SKYSBX_REF:-}}}
+RELEASE=${VEYRA_RELEASE:-}
 ROOT=${VEYRA_ROOT:-${SKYSBX_ROOT:-/opt/skysbx}}
 DOMAIN=""
 SUB_DOMAIN=""
@@ -21,6 +22,7 @@ SUB_DOMAIN_SET=0
 EMAIL_SET=0
 PANEL_URL=""
 TOKEN=""
+FROM_SOURCE=0
 ACTION=install
 
 RED=$(printf '\033[31m'); GRN=$(printf '\033[32m'); BLD=$(printf '\033[1m'); RST=$(printf '\033[0m')
@@ -42,7 +44,8 @@ join token when prompted (or provide it with --token).
   --panel <url>         Panel URL for the node (default: https://<panel-fqdn>).
   --token <token>       Node join token created in the panel UI.
   --version             Show the installed panel and node versions.
-  --upgrade             Rebuild and restart both services.
+  --upgrade             Install the current release of both and restart them.
+  --from-source         Compile both here instead of downloading binaries.
   --uninstall           Remove both services; keep their data and certificates.
   --purge               Remove both services and all data (cannot be undone).
   -h, --help            Show this help.
@@ -51,8 +54,9 @@ The node reuses the certificate already obtained by the local panel. Do not
 pass a node domain: requesting another HTTP-01 certificate would contend with
 the panel for port 80.
 
-Environment overrides: VEYRA_PANEL_REPO, VEYRA_PANEL_REF, VEYRA_NODE_REPO,
-VEYRA_NODE_REF (legacy SKYSBX_* aliases also work), GITHUB_TOKEN.
+Environment overrides: VEYRA_REPO, VEYRA_REF (a branch or tag to build from
+instead of the newest release), VEYRA_RELEASE, GITHUB_TOKEN. Legacy SKYSBX_*
+aliases also work.
 EOF
 }
 
@@ -67,6 +71,7 @@ while [ "$#" -gt 0 ]; do
         --upgrade) ACTION=upgrade; shift ;;
         --uninstall) ACTION=uninstall; shift ;;
         --purge) ACTION=purge; shift ;;
+        --from-source) FROM_SOURCE=1; shift ;;
         --node-domain|--cf-token)
             die "$1 is not supported for a same-host install; the node reuses the panel certificate" ;;
         -h|--help) usage; exit 0 ;;
@@ -107,29 +112,50 @@ if [ "$ACTION" = install ] && [ -z "$EMAIL" ] && [ "$EMAIL_SET" = 0 ] && [ -t 0 
 fi
 [ "$ACTION" != install ] || PANEL_URL=${PANEL_URL:-"https://$DOMAIN"}
 
-# 面板安装脚本会安装 git, curl, dnsutils, docker。这里只需要确保 git 存在
-# 以便 clone 面板源码。其他依赖由面板安装脚本统一处理，避免重复检查。
-if ! command -v git >/dev/null 2>&1; then
-    say 'installing git (needed to clone the panel sources)'
+# The component installers install everything else they need. This only needs
+# git and curl, to find the release and clone the repository.
+for tool in git curl; do
+    command -v "$tool" >/dev/null 2>&1 && continue
+    say "installing $tool"
     if command -v apt-get >/dev/null 2>&1; then
-        apt-get update -qq && apt-get install -y -qq git
+        apt-get update -qq && apt-get install -y -qq "$tool"
     elif command -v dnf >/dev/null 2>&1; then
-        dnf install -y -q git
+        dnf install -y -q "$tool"
     elif command -v yum >/dev/null 2>&1; then
-        yum install -y -q git
+        yum install -y -q "$tool"
     else
-        die 'install git first'
+        die "install $tool first"
     fi
-fi
+done
 command -v bash >/dev/null 2>&1 || die 'bash is required'
+
+# The newest release, by following GitHub's /releases/latest redirect. Both
+# components come from it, scripts and binaries alike. No release (or no
+# network to ask) leaves it empty, and both are built from main.
+if [ -z "$REF" ] && [ -z "$RELEASE" ]; then
+    latest=$(curl -fsSLI -o /dev/null -w '%{url_effective}' --max-time 20 \
+        "https://github.com/$OWNER/veyra-panel/releases/latest" 2>/dev/null || true)
+    case "$latest" in
+        */releases/tag/*) RELEASE=${latest##*/} ;;
+    esac
+fi
+REF=${REF:-${RELEASE:-main}}
 
 SRC=$(mktemp -d)
 # The token is typed with echo disabled below. Always restore it before
 # returning to the caller, including Ctrl-C or a failed node installation.
 trap 'stty echo >/dev/null 2>&1 || true; rm -rf "$SRC"' EXIT
-say "fetching $PANEL_REPO@$PANEL_REF"
-git clone -q --branch "$PANEL_REF" --depth 1 "$PANEL_REPO" "$SRC/veyra-panel" \
-    || die "cannot clone $PANEL_REPO"
+say "fetching $REPO@$REF"
+git clone -q --branch "$REF" --depth 1 "$REPO" "$SRC/veyra" \
+    || die "cannot clone $REPO@$REF"
+
+# Passed to both component installers.
+set_common() {
+    COMMON="--src $SRC/veyra"
+    [ -z "$RELEASE" ] || COMMON="$COMMON --release $RELEASE"
+    [ "$FROM_SOURCE" = 0 ] || COMMON="$COMMON --from-source"
+}
+set_common
 
 # Run the real panel installer from the checked-out source, rather than piping
 # it, so its administrator prompt keeps a usable stdin.
@@ -143,7 +169,8 @@ else
 fi
 [ "$ACTION" != upgrade ] || [ -z "$DOMAIN" ] || set -- "$@" --domain "$DOMAIN"
 [ -n "$SUB_DOMAIN" ] && set -- "$@" --sub-domain "$SUB_DOMAIN"
-bash "$SRC/veyra-panel/deploy/install-panel.sh" "$@"
+# shellcheck disable=SC2086 # COMMON is word-split on purpose; mktemp paths have no spaces
+bash "$SRC/veyra/panel/deploy/install-panel.sh" $COMMON "$@"
 
 if [ "$ACTION" = install ] || [ "$ACTION" = upgrade ]; then
 # The child installer resolves upgrade defaults and persists the effective
@@ -180,33 +207,26 @@ if [ "$ACTION" = install ] && [ -z "$TOKEN" ]; then
     [ -n "$TOKEN" ] || die 'a node join token is required; rerun with --token <token>'
 fi
 
-say "fetching $NODE_REPO@$NODE_REF installer"
-git clone -q --branch "$NODE_REF" --depth 1 "$NODE_REPO" "$SRC/veyra-node" \
-    || die "cannot clone $NODE_REPO"
-# Call the real installer directly instead of the node repository's launcher.
-# Its launcher deliberately reattaches /dev/tty for standalone interactive
-# use. All required node values are already supplied here, and leaving that
-# tty attached can keep this combined command alive after it prints success.
-NODE_INSTALL=$SRC/veyra-node/deploy/install-node.sh
-[ -f "$NODE_INSTALL" ] || die "node installer is missing from $NODE_REPO"
+# Call the real installer directly instead of the node launcher. The launcher
+# deliberately reattaches /dev/tty for standalone interactive use. All
+# required node values are already supplied here, and leaving that tty
+# attached can keep this combined command alive after it prints success.
+NODE_INSTALL=$SRC/veyra/node/deploy/install-node.sh
+[ -f "$NODE_INSTALL" ] || die "node installer is missing from $REPO@$REF"
 
 if [ "$ACTION" = install ]; then
-    set -- --panel "$PANEL_URL" --token "$TOKEN" --src "$SRC/veyra-node"
-elif [ "$ACTION" = upgrade ]; then
-    set -- "--$ACTION" --src "$SRC/veyra-node"
+    set -- --panel "$PANEL_URL" --token "$TOKEN"
 else
     set -- "--$ACTION"
 fi
 
-# install-panel.sh leaves these Docker-mounted caches under $ROOT. The node is
-# a separate repository, so its installer cannot otherwise see the panel
-# build's Go module cache. Put a tiny docker shim first in PATH only while the
-# node installer runs; every `docker run` it makes mounts the same caches.
-# System packages and the Docker daemon are already installed by the panel
-# installer, while shared Go modules now come from the local cache as well.
-if [ "$ACTION" = install ] || [ "$ACTION" = upgrade ]; then
-    REAL_DOCKER=$(command -v docker)
-    [ -n "$REAL_DOCKER" ] || die "docker disappeared after installing the panel"
+# When the panel was compiled here, install-panel.sh left its Docker-mounted Go
+# caches under $ROOT. A tiny docker shim, first in PATH only while the node
+# installer runs, mounts the same caches into every `docker run` it makes, so
+# modules shared by both are downloaded once. Installing release binaries
+# runs no Docker at all, and then there is nothing to shim.
+REAL_DOCKER=$(command -v docker 2>/dev/null || true)
+if { [ "$ACTION" = install ] || [ "$ACTION" = upgrade ]; } && [ -n "$REAL_DOCKER" ]; then
     GO_MOD_CACHE=$ROOT/go-mod-cache
     GO_BUILD_CACHE=$ROOT/go-build-cache
     install -d -m 0700 "$GO_MOD_CACHE" "$GO_BUILD_CACHE"
@@ -226,17 +246,15 @@ EOF
     chmod 700 "$DOCKER_SHIM_DIR/docker"
 fi
 
-# The standalone node installer accepts VEYRA_REPO and its legacy SKYSBX_REPO
-# alias. Set it explicitly here so a custom panel source cannot accidentally
-# be cloned as the node source.
-if [ "$ACTION" = install ] || [ "$ACTION" = upgrade ]; then
+# shellcheck disable=SC2086 # COMMON is word-split on purpose; mktemp paths have no spaces
+if [ -n "${DOCKER_SHIM_DIR:-}" ]; then
     PATH="$DOCKER_SHIM_DIR:$PATH" \
     SKYSBX_REAL_DOCKER=$REAL_DOCKER \
     SKYSBX_GO_MOD_CACHE=$GO_MOD_CACHE \
     SKYSBX_GO_BUILD_CACHE=$GO_BUILD_CACHE \
-    VEYRA_REPO=$NODE_REPO VEYRA_REF=$NODE_REF bash "$NODE_INSTALL" "$@" </dev/null
+    bash "$NODE_INSTALL" $COMMON "$@" </dev/null
 else
-    VEYRA_REPO=$NODE_REPO VEYRA_REF=$NODE_REF bash "$NODE_INSTALL" "$@" </dev/null
+    bash "$NODE_INSTALL" $COMMON "$@" </dev/null
 fi
 
 case "$ACTION" in

@@ -1,0 +1,1 @@
+{"t":"stats","d":{"users":{"alice":{"up":1024,"down":65536},"bob":{"up":0,"down":12}},"system":{"cpu":3.5,"mem_used":104857600,"mem_total":1073741824,"uptime":86400}}}

@@ -1,5 +1,10 @@
-/panel
-/panel.exe
+# Build outputs: local binaries and the CI release directory.
+/panel/panel
+/panel/panel.exe
+/node/node
+/node/node.exe
+/dist/
 *.db
 *.db-wal
 *.db-shm
+*.log

@@ -4,7 +4,7 @@ set -u
 
 OWNER="Zayvian"
 PANEL_INSTALL="https://raw.githubusercontent.com/${OWNER}/veyra-panel/main/install.sh"
-NODE_INSTALL="https://raw.githubusercontent.com/${OWNER}/veyra-node/main/install.sh"
+NODE_INSTALL="https://raw.githubusercontent.com/${OWNER}/veyra-panel/main/install-node.sh"
 
 if [ "$(id -u)" -ne 0 ]; then
     if command -v sudo >/dev/null 2>&1; then

@@ -45,14 +45,11 @@ sh /tmp/veyra-panel-install.sh --upgrade
 ### 每台节点服务器
 
 ```bash
-curl -fL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh -o /tmp/veyra-node-install.sh
-VEYRA_REPO=https://github.com/Zayvian/veyra-node.git \
-VEYRA_CORE_REPO=https://github.com/Zayvian/veyra-core.git \
-VEYRA_GH_OWNER=Zayvian VEYRA_REF=main \
+curl -fL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh -o /tmp/veyra-node-install.sh
 sh /tmp/veyra-node-install.sh --upgrade
 ```
 
-节点与内核从配套仓库重新编译。`--upgrade` 从 `node.env` 保留面板地址、token，并跳过重新签证书；不要把节点从面板删除重建。证书缺失时需要先恢复证书，升级不会自动补签。
+默认下载最新 Release 里编译好的程序（已内置 `node/core.lock` 指定的内核），核对 sha256 后替换；加 `--from-source` 则在本机编译。`--upgrade` 从 `node.env` 保留面板地址、token，并跳过重新签证书；不要把节点从面板删除重建。证书缺失时需要先恢复证书，升级不会自动补签。
 
 旧目录没有 `panel.env` 时，面板可从旧 unit 读取域名；如果连 unit 都没有，显式提供域名。节点升级必须能读取原 `node.env`，缺失时先恢复文件或使用原节点的有效 token 重新接入。
 

@@ -1,0 +1,8 @@
+# The veyra-core this node is built against. CI, the release build and the
+# installer's source build all check out exactly this commit, so a push to
+# veyra-core's main can no longer change what an upgrade installs.
+#
+# To move to a new core: tag it in veyra-core, then change both lines here in
+# the same commit. The installer refuses a checkout whose commit differs.
+CORE_REF=v1.14.0-veyra.1
+CORE_COMMIT=9b3d4fa3b094b64467866fd82ec09e97fb961431
