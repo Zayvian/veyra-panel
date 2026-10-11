@@ -30,10 +30,21 @@ func (s *Server) getSubscription(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	// The operator's announcement goes at the top of the list, where clients
+	// show it first.
+	lines, err := s.svc.Announcement()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	// An inactive account gets one entry naming the reason rather than an empty
-	// list, which every client presents as a broken subscription.
+	// list, which every client presents as a broken subscription. The reason
+	// comes first; the announcement after it, since it is often where to get
+	// in touch.
 	if notice := sub.Notice(sb.User, time.Now()); notice != nil {
-		entries = notice
+		entries = append(notice, sub.Announcement(lines, notice)...)
+	} else {
+		entries = append(sub.Announcement(lines, entries), entries...)
 	}
 
 	format := sub.Detect(r)

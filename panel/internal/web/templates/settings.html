@@ -21,6 +21,18 @@
       </p>
       <button>保存访问设置</button>
     </form>
+    <form class="card" hx-post="{{panelPath "/settings/announcement"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML">
+      <h2 style="margin-top:0">订阅公告</h2>
+      <p class="dim" style="margin:.2rem 0 .8rem;font-size:.85rem">
+        每行一条，会显示在每个客户订阅的<strong>节点列表最上面</strong>，比如「📢 官网：xxx」「续费请联系微信：xxx」。
+        最多 {{.AnnouncementLines}} 行，每行不超过 {{.AnnouncementRunes}} 个字，各行不能重复。<strong>留空保存就是关闭</strong>。<br>
+        公告是连不上的假节点，只用来显示文字；Clash、sing-box 的「自动选择」不会选到它。
+        客户要<strong>更新订阅</strong>才能看到新公告。已到期、停用或流量用完的客户，会先看到停用原因，再看到公告。
+      </p>
+      <textarea name="announcement" rows="4" placeholder="📢 官网：example.com&#10;续费请联系微信：xxx"
+        style="width:100%;background:#0c0e12;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.5rem;font:inherit;resize:vertical">{{.Announcement}}</textarea>
+      <button style="margin-top:.6rem">保存公告</button>
+    </form>
     {{template "totp-card" .}}
     <form class="card" hx-post="{{panelPath "/settings/force-subscription-refresh"}}" hx-target="#settings" hx-swap="innerHTML" hx-confirm="这会立即让所有用户的旧节点配置失效，并断开现有连接。用户须更新原订阅后才能恢复。确定继续吗？">
       <h2 style="margin-top:0">强制全员更新订阅</h2>

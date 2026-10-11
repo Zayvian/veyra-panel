@@ -72,6 +72,7 @@ type clashConfig struct {
 func Clash(entries []Entry) ([]byte, error) {
 	proxies := make([]clashProxy, 0, len(entries))
 	names := make([]string, 0, len(entries))
+	var nodes []string // names of real nodes, for AUTO
 
 	for _, e := range entries {
 		p := clashProxy{
@@ -117,6 +118,15 @@ func Clash(entries []Entry) ([]byte, error) {
 		}
 		proxies = append(proxies, p)
 		names = append(names, e.Name)
+		if !e.Info {
+			nodes = append(nodes, e.Name)
+		}
+	}
+	// AUTO measures real nodes only. With none — an inactive account, whose
+	// list is just its notice — it holds what there is, because a url-test
+	// group with no members fails the whole file.
+	if len(nodes) == 0 {
+		nodes = names
 	}
 
 	groups := []clashGroup{}
@@ -124,7 +134,7 @@ func Clash(entries []Entry) ([]byte, error) {
 	if len(names) > 0 {
 		groups = []clashGroup{
 			{Name: "PROXY", Type: "select", Proxies: append([]string{"AUTO"}, names...)},
-			{Name: "AUTO", Type: "url-test", Proxies: names,
+			{Name: "AUTO", Type: "url-test", Proxies: nodes,
 				URL: "https://www.gstatic.com/generate_204", Interval: 180},
 		}
 		rules = []string{"GEOIP,PRIVATE,DIRECT,no-resolve", "MATCH,PROXY"}

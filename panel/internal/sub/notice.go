@@ -28,7 +28,32 @@ func Notice(u *store.User, now time.Time) []Entry {
 	if msg == "" {
 		return nil
 	}
-	return []Entry{{
+	return []Entry{infoEntry(msg)}
+}
+
+// Announcement turns the operator's announcement lines into entries for the
+// top of the node list, skipping any line that would share its name with a
+// real entry: clients refuse a whole configuration over a duplicate name.
+func Announcement(lines []string, entries []Entry) []Entry {
+	taken := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		taken[e.Name] = true
+	}
+	out := make([]Entry, 0, len(lines))
+	for _, line := range lines {
+		if line == "" || taken[line] {
+			continue
+		}
+		taken[line] = true
+		out = append(out, infoEntry(line))
+	}
+	return out
+}
+
+// infoEntry is an entry whose name is a message. Like the notice, it points at
+// a closed loopback port, so selecting it fails at once and carries nothing.
+func infoEntry(msg string) Entry {
+	return Entry{
 		Name:     msg,
 		Label:    msg,
 		Protocol: store.ProtoShadowsocks,
@@ -36,7 +61,8 @@ func Notice(u *store.User, now time.Time) []Entry {
 		Port:     1,
 		Method:   service.SSMethod,
 		Password: noticeKey,
-	}}
+		Info:     true,
+	}
 }
 
 func noticeText(u *store.User, now time.Time) string {
