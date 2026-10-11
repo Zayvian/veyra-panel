@@ -2,7 +2,7 @@
 
 Veyra 的节点程序。每台代理服务器安装一份，主动连接面板，接收配置、更新用户、运行代理并上报流量。
 
-[![Node CI](https://github.com/Zayvian/veyra-node/actions/workflows/ci.yml/badge.svg)](https://github.com/Zayvian/veyra-node/actions/workflows/ci.yml)
+[![CI](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml)
 
 **新用户先安装 [Veyra Panel](https://github.com/Zayvian/veyra-panel)，再按本页安装节点。** [Veyra Core](https://github.com/Zayvian/veyra-core) 已编译进节点，不单独启动或安装。
 
@@ -37,7 +37,7 @@ Veyra 的节点程序。每台代理服务器安装一份，主动连接面板�
 
 ```bash
 apt-get update && apt-get install -y curl
-curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh | bash
 ```
 
 按提示输入面板地址、在面板复制的接入 token、节点域名和证书邮箱。token 输入不显示；填写后才下载节点与配套 core 源码、使用 Go 1.26.5 构建、签发证书并启动服务。普通使用者不用手动安装 Go 或单独克隆 core。
@@ -89,7 +89,7 @@ tag 是导出的入站名称，支持中文，例如「香港下载 01」。保�
 
 ```bash
 read -rsp 'Cloudflare DNS API token: ' cf_token; printf '\n'
-curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh | bash -s -- \
   --panel https://panel.example.com --domain hk.example.com \
   --email you@example.com --cf-token "$cf_token"
 unset cf_token
@@ -105,7 +105,7 @@ unset cf_token
 install -d -m 0700 /opt/skysbx
 install -m 0644 /你的路径/fullchain.pem /opt/skysbx/cert.pem
 install -m 0600 /你的路径/privkey.pem /opt/skysbx/key.pem
-curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh | bash -s -- \
   --panel https://panel.example.com \
   --domain hk.example.com --no-cert
 ```
@@ -117,22 +117,16 @@ curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh 
 先 [备份当前数据、证书和程序](https://github.com/Zayvian/veyra-panel/blob/main/docs/BACKUP.md)，再在每台节点执行：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh | bash -s -- --upgrade
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh | bash -s -- --upgrade
 ```
 
-更新从 `/opt/skysbx/node.env` 读取面板地址、token，不必重新登记节点。它会同时拉取配套内核并重新编译，保留证书，不重复签发。更新会重启节点，建议逐台进行。
+更新从 `/opt/skysbx/node.env` 读取面板地址、token，不必重新登记节点。它会下载 GitHub 自动编译好的程序（已经内置配套内核），核对 sha256 后替换，**不在服务器上编译**，配置很低的机器也只要几十秒。保留证书，不重复签发。更新会重启节点，建议逐台进行。
+
+需要在服务器上自己编译时（比如 CPU 架构不是 amd64 / arm64），加 `--from-source`；下载不到编译好的程序时也会自动改为本机编译。
 
 安装或更新完成后，输入 `veyra` 可打开交互式管理菜单，进行状态查看、升级、重启、日志查看和卸载；Node token 不会显示在菜单中。
 
-旧版迁移：先更新面板、再更新节点、最后使用新协议。若曾设置其他下载源环境变量，可显式指定：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh | \
-  VEYRA_REPO=https://github.com/Zayvian/veyra-node.git \
-  VEYRA_CORE_REPO=https://github.com/Zayvian/veyra-core.git \
-  VEYRA_GH_OWNER=Zayvian VEYRA_REF=main \
-  bash -s -- --upgrade
-```
+旧版迁移：先更新面板、再更新节点、最后使用新协议。旧的安装地址 `veyra-node/main/install.sh` 会自动转到这里，用旧命令升级也可以。
 
 自定义目录在每次操作加 `VEYRA_ROOT=实际目录`；旧的 `SKYSBX_ROOT` 仍兼容。手工或容器部署不要直接覆盖原 unit。`node.env` 丢失要先恢复；证书缺失不会因 `--upgrade` 自动补签。更多迁移、回退和 token 替换见 [维护说明](https://github.com/Zayvian/veyra-panel/blob/main/docs/UPGRADE.md)。
 
@@ -157,7 +151,7 @@ systemctl restart skysbx-node
 
 ```bash
 curl -4 -fL --retry 3 --connect-timeout 15 \
-  https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh \
+  https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh \
   -o /root/veyra-node-install.sh && \
 bash /root/veyra-node-install.sh --uninstall
 ```
@@ -168,7 +162,7 @@ bash /root/veyra-node-install.sh --uninstall
 
 ```bash
 curl -4 -fL --retry 3 --connect-timeout 15 \
-  https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh \
+  https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh \
   -o /root/veyra-node-install.sh && \
 bash /root/veyra-node-install.sh --purge
 ```
@@ -179,12 +173,12 @@ bash /root/veyra-node-install.sh --purge
 
 ## 开发者构建
 
-普通用户使用上面的安装器。开发者需把节点和 core 克隆为同级目录：
+普通用户使用上面的安装器。开发者需把本仓库和 core 克隆为同级目录，core 检出 `node/core.lock` 里写的版本：
 
 ```bash
-git clone https://github.com/Zayvian/veyra-node.git
-git clone https://github.com/Zayvian/veyra-core.git
-cd veyra-node
+git clone https://github.com/Zayvian/veyra-panel.git
+git clone --branch v1.14.0-veyra.1 https://github.com/Zayvian/veyra-core.git   # 以 node/core.lock 为准
+cd veyra-panel/node
 # 使用 Go 1.26.5；-race 检测还需要 C 编译器
 go test -race -tags 'with_clash_api,with_v2ray_api,with_utls,with_acme,with_quic' ./...
 CGO_ENABLED=0 go build -trimpath \
@@ -192,10 +186,10 @@ CGO_ENABLED=0 go build -trimpath \
   -o veyra-node ./cmd/node
 ```
 
-保留 go.mod 中 core 和 sing-quic 的本地 replace 指令；省略构建标签可能导致功能缺失。不要随意把配套 core 替换为其他内核版本。
+保留 go.mod 中 core 和 sing-quic 的本地 replace 指令；省略构建标签可能导致功能缺失。不要随意把配套 core 替换为其他内核版本。要换 core 版本，先在 veyra-core 打 tag，再在同一个提交里改 `node/core.lock` 的两行。
 
 ## 项目维护
 
-[提交问题](https://github.com/Zayvian/veyra-node/issues)时附程序版本、协议、部署方式和脱敏日志。测试覆盖真实 QUIC 连接、用户热更新、撤销、流量归属与 Linux 构建；实际服务器证书/网络需自行验收。
+[提交问题](https://github.com/Zayvian/veyra-panel/issues)时附程序版本、协议、部署方式和脱敏日志。测试覆盖真实 QUIC 连接、用户热更新、撤销、流量归属与 Linux 构建；实际服务器证书/网络需自行验收。
 
 许可证与来源见 [LICENSE](LICENSE)、[NOTICE](NOTICE)。

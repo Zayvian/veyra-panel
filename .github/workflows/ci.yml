@@ -1,4 +1,4 @@
-name: Panel CI
+name: CI
 on:
   push:
     branches: [main, 'codex/**']
@@ -6,17 +6,147 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+
+# The node links the patched sing-box in veyra-core, checked out beside this
+# repository at the commit node/core.lock names (node/go.mod replaces it with
+# ../../veyra-core). Go must be 1.26.x for the node: 1.27 fails to link,
+# because sing-box reaches an unexported http2 field through go:linkname.
+env:
+  PANEL_GO: '1.27.1'
+  NODE_GO: '1.26.5'
+  NODE_TAGS: 'with_clash_api,with_v2ray_api,with_utls,with_acme,with_quic'
+
 jobs:
-  test:
+  panel:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: panel
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.27.1'
+          go-version: ${{ env.PANEL_GO }}
+          cache-dependency-path: panel/go.sum
       - run: go test -race ./...
-      - run: bash -n deploy/install-panel.sh && bash -n deploy/veyra-menu.sh && sh -n install.sh && sh -n install-panel-and-node.sh
+      - run: node --check internal/web/static/access.js
+      # The panel is AGPL and must not link GPL-only code from the node side.
+      - name: panel does not depend on sing-box
+        run: |
+          if go list -deps ./... | grep -q 'sagernet/sing-box'; then
+            echo "the panel imports sing-box" >&2; exit 1
+          fi
+      - run: CGO_ENABLED=0 go build -trimpath -o /tmp/veyra-panel ./cmd/panel
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: veyra
+      - id: lock
+        run: sed -n 's/^CORE_REF=/ref=/p; s/^CORE_COMMIT=/commit=/p' veyra/node/core.lock >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: Zayvian/veyra-core
+          ref: ${{ steps.lock.outputs.ref }}
+          path: veyra-core
+      - name: core matches core.lock
+        run: test "$(git -C veyra-core rev-parse HEAD)" = "${{ steps.lock.outputs.commit }}"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.NODE_GO }}
+          cache-dependency-path: veyra/node/go.sum
+      - working-directory: veyra/node
+        run: go test -race -tags "$NODE_TAGS" ./...
+      - working-directory: veyra/node
+        run: CGO_ENABLED=0 go build -trimpath -tags "$NODE_TAGS" -o /tmp/veyra-node ./cmd/node
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sh -n install.sh && sh -n install-node.sh && sh -n install-panel-and-node.sh
+          bash -n panel/deploy/install-panel.sh && bash -n node/deploy/install-node.sh
+          bash -n deploy/veyra-menu.sh
       - run: python3 tests/test_same_host_upgrade.py
       - run: python3 tests/test_panel_unit_args.py
-      - run: node --check internal/web/static/access.js
-      - run: CGO_ENABLED=0 go build -trimpath -o dist/veyra-panel ./cmd/panel
+      - run: python3 tests/test_release_download.py
+
+  # Every push to main that passes the tests becomes a release with prebuilt
+  # binaries, so installing or upgrading a node downloads one instead of
+  # compiling sing-box on a machine that may take an hour to do it. Pushes to
+  # other branches build the same binaries, to catch a broken cross-compile
+  # before merge, but publish nothing.
+  release:
+    if: github.event_name == 'push'
+    needs: [panel, node, scripts]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: veyra
+      - id: lock
+        run: sed -n 's/^CORE_REF=/ref=/p; s/^CORE_COMMIT=/commit=/p' veyra/node/core.lock >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: Zayvian/veyra-core
+          ref: ${{ steps.lock.outputs.ref }}
+          path: veyra-core
+      - run: test "$(git -C veyra-core rev-parse HEAD)" = "${{ steps.lock.outputs.commit }}"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.PANEL_GO }}
+          cache-dependency-path: veyra/panel/go.sum
+      - name: build panel
+        working-directory: veyra/panel
+        run: |
+          ver=${GITHUB_SHA::7}
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X main.version=$ver" \
+              -o "$GITHUB_WORKSPACE/dist/veyra-panel-linux-$arch" ./cmd/panel
+          done
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.NODE_GO }}
+          cache-dependency-path: veyra/node/go.sum
+      - name: build node
+        working-directory: veyra/node
+        run: |
+          ver=${GITHUB_SHA::7}
+          core=$(printf '%s' "${{ steps.lock.outputs.ref }}" | sed 's/^v//; s/-veyra.*//')
+          for arch in amd64 arm64; do
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -tags "$NODE_TAGS" \
+              -ldflags "-s -w -X main.version=$ver -X github.com/sagernet/sing-box/constant.Version=$core" \
+              -o "$GITHUB_WORKSPACE/dist/veyra-node-linux-$arch" ./cmd/node
+          done
+
+      - name: publish
+        if: github.ref == 'refs/heads/main'
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          sha256sum veyra-* > sha256sums.txt
+          cat sha256sums.txt
+          tag="build-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          # Draft first, published once every file is up, so an installer that
+          # asks for the latest release never sees one with half its binaries.
+          gh release create "$tag" --draft --target "$GITHUB_SHA" \
+            --title "Veyra ${GITHUB_SHA::7}" \
+            --notes "Built from ${GITHUB_SHA} with veyra-core ${{ steps.lock.outputs.ref }}." \
+            veyra-* sha256sums.txt
+          gh release edit "$tag" --draft=false --latest
+          # Keep the ten newest builds; older ones are only clutter.
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '[.[] | select(.tagName | startswith("build-"))] | sort_by(.createdAt) | reverse | .[10:] | .[].tagName' \
+            | xargs -r -n1 gh release delete --yes --cleanup-tag

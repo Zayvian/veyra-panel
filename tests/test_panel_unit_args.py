@@ -5,7 +5,7 @@ import shlex
 import subprocess
 import unittest
 
-INSTALLER = Path(__file__).resolve().parents[1] / "deploy/install-panel.sh"
+INSTALLER = Path(__file__).resolve().parents[1] / "panel/deploy/install-panel.sh"
 
 
 class PanelUnitArguments(unittest.TestCase):

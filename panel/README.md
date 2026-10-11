@@ -2,12 +2,12 @@
 
 Veyra 的管理面板：管理节点、用户、套餐额度、节点倍率与订阅。
 
-[![Panel CI](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml)
+[![CI](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml)
 
 | 组件 | 作用 | 安装位置 |
 | --- | --- | --- |
 | **本仓库：Veyra Panel** | 管理用户、配置节点、生成订阅、计算扣量 | 面板服务器 |
-| [Veyra Node](https://github.com/Zayvian/veyra-node) | 运行代理、接收配置、上报流量 | 每台代理服务器安装一份 |
+| [Veyra Node](../node/)（同一仓库的 `node/` 目录） | 运行代理、接收配置、上报流量 | 每台代理服务器安装一份 |
 | [Veyra Core](https://github.com/Zayvian/veyra-core) | 节点内置协议内核 | 不单独安装；随节点编译、更新 |
 
 支持 VLESS Reality、AnyTLS、Shadowsocks 2022、Hysteria2、TUIC v5。Hysteria2 支持 UDP 端口跳跃，**TUIC 当前使用固定端口**。支持中文节点名称、0–100 倍流量计费和独立 HTTPS 订阅域名。
@@ -26,7 +26,7 @@ Veyra 的管理面板：管理节点、用户、套餐额度、节点倍率与�
 
 ## 1. 准备服务器和域名
 
-安装脚本面向 **Debian / Ubuntu + systemd**。以下命令在服务器 SSH 终端执行，先运行 `sudo -i` 切换到 root。首次构建需要访问 GitHub、Go 依赖源、Docker 镜像源；脚本会安装构建依赖，服务运行本身不在 Docker 内。
+安装脚本面向 **Debian / Ubuntu + systemd**。以下命令在服务器 SSH 终端执行，先运行 `sudo -i` 切换到 root。安装和升级默认从本仓库的 GitHub Release 下载编译好的程序（amd64 / arm64），核对 sha256 后安装，服务器上不编译；只需要能访问 GitHub。加 `--from-source`，或下载不到时，才会在服务器上用 Docker 编译，这时还需要访问 Go 依赖源和 Docker 镜像源。服务运行本身不在 Docker 内。
 
 从旧版升级到 Veyra 时，安装器会继续使用已有的 `/opt/skysbx`、`skysbx-panel.service` 和 `skysbx-node.service`，以保留数据库、节点 token 和证书；这些是兼容标识，不会出现在网页品牌或新的安装链接中。
 
@@ -110,7 +110,7 @@ https://panel.example.com/skypanel
 
 ```bash
 apt-get update && apt-get install -y curl
-curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh | bash
 ```
 
 按顺序填写面板地址、刚复制的接入 token（输入不回显）、节点域名和证书邮箱。输入完成后才会下载配套内核并编译。**AnyTLS、Hysteria2、TUIC 都需要节点证书**；只用 Reality 或 Shadowsocks 时在节点域名处直接回车。
@@ -125,7 +125,7 @@ ls -l /opt/skysbx/cert.pem /opt/skysbx/key.pem
 
 最后一条仅对使用 TLS 证书的节点适用。**在线不代表代理已可用**：还需添加入站。证书申请失败时节点服务可能仍在线，必须修复证书后再使用 TLS 协议。
 
-无法用 TCP 80 申请证书或已有自己的证书时，见 [节点证书选项](https://github.com/Zayvian/veyra-node#证书选项)。
+无法用 TCP 80 申请证书或已有自己的证书时，见 [节点证书选项](https://github.com/Zayvian/veyra-panel/tree/main/node#证书选项)。
 
 ## 4. 配置协议和端口
 
@@ -259,7 +259,7 @@ curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh
 ### 更新节点：在每台节点服务器执行
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh | bash -s -- --upgrade
+curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh | bash -s -- --upgrade
 ```
 
 读取 `/opt/skysbx/node.env` 的面板地址和 token，不必删除重建节点。**更新节点会同时编译配套内核**，不单独安装 core。节点会重启，造成短暂断连。
@@ -305,7 +305,7 @@ curl -4 -fL --retry 3 --connect-timeout 15 \
 bash /root/veyra-panel-install.sh --purge
 ```
 
-这会删除面板服务、程序、数据库、管理员、全部用户、节点记录、订阅 token 与面板证书。独立部署的节点机不会自动删除；请到每台节点机执行 [Node README 的 `--purge`](https://github.com/Zayvian/veyra-node#5-日常管理与卸载)。如果面板和节点同机，**先清理 Node，再清理 Panel**，以免共享目录中的节点文件或证书残留。
+这会删除面板服务、程序、数据库、管理员、全部用户、节点记录、订阅 token 与面板证书。独立部署的节点机不会自动删除；请到每台节点机执行 [Node README 的 `--purge`](https://github.com/Zayvian/veyra-panel/tree/main/node#5-日常管理与卸载)。如果面板和节点同机，**先清理 Node，再清理 Panel**，以免共享目录中的节点文件或证书残留。
 
 `--purge` 不会盲目移除 `curl`、`git`、`nftables` 或 `certbot` 等可能被其他服务使用的软件包；Docker 仅在该安装器确认由自己安装时才会删除。它已足以彻底移除 Veyra 本身，不需要为了卸载而重装 VPS 系统。
 

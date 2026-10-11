@@ -15,6 +15,8 @@ CF_TOKEN=""
 SKIP_CERT=0
 SRC_DIR=""
 FORK_DIR=""
+RELEASE=""
+FROM_SOURCE=0
 GH_TOKEN=${GITHUB_TOKEN:-}
 GH_OWNER=${VEYRA_GH_OWNER:-${SKYSBX_GH_OWNER:-Zayvian}}
 # Kept for compatibility with the original one-line installer. When set, this
@@ -38,10 +40,10 @@ Run it with no install options in a terminal for the guided setup.
 
 Actions (default: install)
   --version         What is installed, including the sing-box it embeds.
-  --upgrade         Rebuild from the current sources and restart. Reads the
-                    panel URL and token back from ${ROOT}/node.env, so it needs
-                    no arguments. This is also how the sing-box core is updated:
-                    the node links it, so a rebuild is the upgrade.
+  --upgrade         Install the current release and restart. Reads the panel
+                    URL and token back from ${ROOT}/node.env, so it needs no
+                    arguments. This is also how the sing-box core is updated:
+                    the node links it, so a new binary is the upgrade.
   --uninstall       Stop and remove the service and the binary. Keeps the
                     certificate and ${ROOT}/node.env, so a reinstall is a
                     no-argument --upgrade away.
@@ -62,8 +64,14 @@ Install options
                     is not reachable.
   --no-cert         Skip certificate issuance.
 
-  --src <dir>       Build from a checkout on disk instead of cloning.
-  --fork <dir>      Path to the patched sing-box; defaults to a sibling clone.
+  --release <tag>   Install the prebuilt binary from this GitHub release. The
+                    one-line installer passes the newest release itself.
+  --from-source     Compile here (in Docker) instead of downloading a binary.
+                    Slow on a small machine: it builds all of sing-box.
+  --src <dir>       A checkout of the whole repository, to take the scripts
+                    and, when compiling, the sources from.
+  --fork <dir>      When compiling, use this sing-box checkout instead of the
+                    veyra-core commit named in node/core.lock.
   -h, --help        This text.
 EOF
 }
@@ -82,6 +90,8 @@ while [ $# -gt 0 ]; do
         --no-cert)   SKIP_CERT=1; shift ;;
         --src)       SRC_DIR=$2; shift 2 ;;
         --fork)      FORK_DIR=$2; shift 2 ;;
+        --release)   RELEASE=$2; shift 2 ;;
+        --from-source) FROM_SOURCE=1; shift ;;
         -h|--help)   usage; exit 0 ;;
         *) die "unknown option: $1 (try --help)" ;;
     esac
@@ -114,7 +124,8 @@ if [ "$ACTION" = uninstall ] || [ "$ACTION" = purge ]; then
     rm -f "$ROOT/skysbx-node"
     # The build tree is this installer's scratch space, not data: it is a fresh
     # clone on every run.
-    rm -rf "$ROOT/build/skysbx-node" "$ROOT/build/skysbx-core"
+    rm -rf "$ROOT/build/skysbx-node" "$ROOT/build/skysbx-core" \
+        "$ROOT/build/veyra-node" "$ROOT/build/veyra-core"
     ok "binary and build cache removed"
 
     # Keep the shared command if the panel is still installed on this host.
@@ -269,8 +280,8 @@ install -d -m 0700 "$ROOT"
 BUILD=$ROOT/build
 mkdir -p "$BUILD"
 
-fetch() { # fetch <repo-name-or-url> <dest>
-    local repo=$1 dest=$2 url label
+fetch() { # fetch <repo-name-or-url> <dest> [ref]
+    local repo=$1 dest=$2 ref=${3:-$REF} url label
     case "$repo" in
         http://*|https://*|ssh://*|git@*)
             url=$repo
@@ -289,56 +300,95 @@ fetch() { # fetch <repo-name-or-url> <dest>
     if [ -n "$GH_TOKEN" ]; then
         git -c "http.extraHeader=Authorization: Basic $(printf 'x-access-token:%s' \
             "$GH_TOKEN" | base64 -w0)" \
-            clone -q --branch "$REF" --depth 1 "$url" "$dest" \
+            clone -q --branch "$ref" --depth 1 "$url" "$dest" \
             || die "cannot clone ${GH_OWNER}/${repo} (check GITHUB_TOKEN)"
     else
-        git clone -q --branch "$REF" --depth 1 "$url" "$dest" \
+        git clone -q --branch "$ref" --depth 1 "$url" "$dest" \
             || die "cannot clone ${GH_OWNER}/${repo} (a private repo needs GITHUB_TOKEN)"
     fi
     ok "${label}@$(git -C "$dest" rev-parse --short HEAD)"
 }
 
 say "sources"
+# The repository holds both the panel and the node; $BUILD/veyra-node is a copy
+# of all of it, and the node's own sources are in its node/ directory.
+#
+# Run from a checkout (the usual case: the launcher passes --src), the
+# repository this script sits in is the source.
+SELF_REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd || true)
+if [ -z "$SRC_DIR" ] && [ -f "$SELF_REPO/node/go.mod" ]; then
+    SRC_DIR=$SELF_REPO
+fi
 if [ -n "$SRC_DIR" ]; then
+    [ -f "$SRC_DIR/node/go.mod" ] \
+        || die "$SRC_DIR is not a checkout of the repository (no node/go.mod)"
     rm -rf "$BUILD/veyra-node"; cp -a "$SRC_DIR" "$BUILD/veyra-node"; ok "using $SRC_DIR"
 else
-    fetch veyra-node "$BUILD/veyra-node"
-fi
-if [ -n "$FORK_DIR" ]; then
-    rm -rf "$BUILD/veyra-core"; cp -a "$FORK_DIR" "$BUILD/veyra-core"; ok "using $FORK_DIR"
-else
-    fetch "$CORE_REPO" "$BUILD/veyra-core"
+    fetch veyra-panel "$BUILD/veyra-node"
 fi
 
 find "$BUILD" -type f -name '*.sh' -exec sed -i 's/\r$//' {} + 2>/dev/null || true
 
-if ! command -v docker >/dev/null; then
-    say "installing docker (used only to build; nothing runs in it)"
-    curl -fsSL https://get.docker.com | sh >/dev/null
-    # Remembered so --purge can remove Docker again without guessing. A host
-    # that already had it is running something in it.
-    touch "$ROOT/.docker-installed-by-skysbx"
+# shellcheck source=../../deploy/release.sh
+. "$BUILD/veyra-node/deploy/release.sh"
+
+# A prebuilt binary from the release when there is one: CI compiled it from
+# the same commit these scripts came from, against the core in core.lock.
+# Compiling here is the fallback, or what --from-source asks for — and on a
+# small machine it is the part that takes the better part of an hour.
+if [ "$FROM_SOURCE" = 0 ] && [ -n "$RELEASE" ] && [ -z "$FORK_DIR" ] \
+    && fetch_release_binary veyra-node "$RELEASE" "$BUILD/veyra-node/skysbx-node"; then
+    install -m 0755 "$BUILD/veyra-node/skysbx-node" "$ROOT/skysbx-node"
+    ok "node binary installed ($RELEASE)"
+else
+    if [ "$FROM_SOURCE" = 0 ] && [ -z "$FORK_DIR" ]; then
+        warn "no prebuilt binary to download; compiling here instead"
+    fi
+
+    # The core is pinned: node/go.mod replaces sing-box with ../../veyra-core,
+    # and node/core.lock says which commit that has to be.
+    LOCK=$BUILD/veyra-node/node/core.lock
+    CORE_REF=$(sed -n 's/^CORE_REF=//p' "$LOCK")
+    CORE_COMMIT=$(sed -n 's/^CORE_COMMIT=//p' "$LOCK")
+    [ -n "$CORE_REF" ] && [ -n "$CORE_COMMIT" ] || die "cannot read $LOCK"
+    if [ -n "$FORK_DIR" ]; then
+        rm -rf "$BUILD/veyra-core"; cp -a "$FORK_DIR" "$BUILD/veyra-core"
+        warn "using $FORK_DIR instead of veyra-core $CORE_REF"
+    else
+        fetch "$CORE_REPO" "$BUILD/veyra-core" "$CORE_REF"
+        [ "$(git -C "$BUILD/veyra-core" rev-parse HEAD)" = "$CORE_COMMIT" ] \
+            || die "veyra-core $CORE_REF is not commit $CORE_COMMIT named in core.lock; refusing to build"
+    fi
+
+    if ! command -v docker >/dev/null; then
+        say "installing docker (used only to build; nothing runs in it)"
+        curl -fsSL https://get.docker.com | sh >/dev/null
+        # Remembered so --purge can remove Docker again without guessing. A
+        # host that already had it is running something in it.
+        touch "$ROOT/.docker-installed-by-skysbx"
+    fi
+
+    # Stamped into the binary so `--version` can answer what is running
+    # without anyone reading a build log.
+    VER=$(git -C "$BUILD/veyra-node" rev-parse --short HEAD 2>/dev/null || echo unknown)
+    CORE_VER=$(printf '%s' "$CORE_REF" | sed 's/^v//; s/-veyra.*//')
+
+    say "building"
+    # The build tags are not optional: without them the binary compiles but
+    # exits at startup on "clash api is not included in this build". Go must
+    # be 1.26.x — 1.27 fails to link, because sing-box reaches an unexported
+    # http2 field through go:linkname.
+    docker run --rm -v "$BUILD:/src" -w /src/veyra-node/node \
+        -e GOFLAGS=-buildvcs=false -e CGO_ENABLED=0 -e GOOS=linux \
+        golang:1.26.5 \
+        go build -trimpath \
+            -tags 'with_clash_api,with_v2ray_api,with_utls,with_acme,with_quic' \
+            -ldflags "-s -w -X main.version=$VER \
+                      -X github.com/sagernet/sing-box/constant.Version=$CORE_VER" \
+            -o /src/veyra-node/skysbx-node ./cmd/node
+    install -m 0755 "$BUILD/veyra-node/skysbx-node" "$ROOT/skysbx-node"
+    ok "node binary installed (built from source)"
 fi
-
-# Stamped into the binary so `--version` can answer what is running without
-# anyone reading a build log.
-VER=$(git -C "$BUILD/veyra-node" rev-parse --short HEAD 2>/dev/null || echo unknown)
-
-say "building"
-# The build tags are not optional: without them the binary compiles but exits at
-# startup on "clash api is not included in this build". Go must be 1.26.x —
-# 1.27 fails to link, because sing-box reaches an unexported http2 field through
-# go:linkname.
-docker run --rm -v "$BUILD:/src" -w /src/veyra-node \
-    -e GOFLAGS=-buildvcs=false -e CGO_ENABLED=0 -e GOOS=linux \
-    golang:1.26.5 \
-    go build -trimpath \
-        -tags 'with_clash_api,with_v2ray_api,with_utls,with_acme,with_quic' \
-        -ldflags "-s -w -X main.version=$VER \
-                  -X github.com/sagernet/sing-box/constant.Version=1.14.0" \
-        -o /src/veyra-node/skysbx-node ./cmd/node
-install -m 0755 "$BUILD/veyra-node/skysbx-node" "$ROOT/skysbx-node"
-ok "node binary installed"
 
 # ────────────────────────────── certificate ───────────────────────────────
 

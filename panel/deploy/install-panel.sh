@@ -13,6 +13,8 @@ EMAIL=""
 SUB_DOMAIN_SET=0
 EMAIL_SET=0
 SRC_DIR=""
+RELEASE=""
+FROM_SOURCE=0
 GH_TOKEN=${GITHUB_TOKEN:-}
 GH_OWNER=${VEYRA_GH_OWNER:-${SKYSBX_GH_OWNER:-Zayvian}}
 REF=${VEYRA_REF:-${SKYSBX_REF:-main}}
@@ -47,7 +49,11 @@ Install options
   --domain <fqdn>   Panel domain. Must already resolve to this server.
   --sub-domain <fqdn> Separate HTTPS subscription domain (optional).
   --email <addr>    Contact address for Let's Encrypt (recommended).
-  --src <dir>       Build from a checkout already on disk instead of cloning.
+  --release <tag>   Install the prebuilt binary from this GitHub release. The
+                    one-line installer passes the newest release itself.
+  --from-source     Compile here (in Docker) instead of downloading a binary.
+  --src <dir>       A checkout of the whole repository, to take the scripts
+                    and, when compiling, the sources from.
   -h, --help        This text.
 
 Ports 80 and 443 must be free: the panel terminates its own TLS and answers the
@@ -65,6 +71,8 @@ while [ $# -gt 0 ]; do
         --sub-domain) SUB_DOMAIN=$2; SUB_DOMAIN_SET=1; shift 2 ;;
         --email)     EMAIL=$2; EMAIL_SET=1; shift 2 ;;
         --src)       SRC_DIR=$2; shift 2 ;;
+        --release)   RELEASE=$2; shift 2 ;;
+        --from-source) FROM_SOURCE=1; shift ;;
         -h|--help)   usage; exit 0 ;;
         *) die "unknown option: $1 (try --help)" ;;
     esac
@@ -98,7 +106,7 @@ if [ "$ACTION" = uninstall ] || [ "$ACTION" = purge ]; then
 
     rm -f "$ROOT/skysbx-panel"
     # The build tree is scratch space, not data: a fresh clone on every run.
-    rm -rf "$ROOT/build/skysbx-panel"
+    rm -rf "$ROOT/build/skysbx-panel" "$ROOT/build/veyra-panel"
     ok "binary and build cache removed"
 
     # The same command manages either component. Keep it while a node remains
@@ -223,7 +231,7 @@ if [ "$ACTION" = install ] && [ ! -f "$ROOT/skysbx.db" ]; then
         [ -t 0 ] || die "no terminal to ask for the administrator on.
   Set SKYSBX_ADMIN_USER and SKYSBX_ADMIN_PASSWORD, or run the script directly:
     git clone https://github.com/${GH_OWNER}/veyra-panel.git
-    sudo ./veyra-panel/deploy/install-panel.sh --domain $DOMAIN"
+    sudo ./veyra-panel/panel/deploy/install-panel.sh --domain $DOMAIN"
 
         printf '  Administrator username [admin]: '
         read -r ADMIN_USER || die "no administrator given"
@@ -311,7 +319,15 @@ GO_BUILD_CACHE=$ROOT/go-build-cache
 install -d -m 0700 "$GO_MOD_CACHE" "$GO_BUILD_CACHE"
 
 say "sources"
+# Run from a checkout (the usual case: the launcher passes --src), the
+# repository this script sits in is the source.
+SELF_REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd || true)
+if [ -z "$SRC_DIR" ] && [ -f "$SELF_REPO/panel/go.mod" ]; then
+    SRC_DIR=$SELF_REPO
+fi
 if [ -n "$SRC_DIR" ]; then
+    [ -f "$SRC_DIR/panel/go.mod" ] \
+        || die "$SRC_DIR is not a checkout of the repository (no panel/go.mod)"
     rm -rf "$BUILD/veyra-panel"
     cp -a "$SRC_DIR" "$BUILD/veyra-panel"
     ok "using $SRC_DIR"
@@ -337,26 +353,41 @@ fi
 # fails on "bad interpreter".
 find "$BUILD" -type f -name '*.sh' -exec sed -i 's/\r$//' {} + 2>/dev/null || true
 
-if ! command -v docker >/dev/null; then
-    say "installing docker (used only to build; nothing runs in it)"
-    curl -fsSL https://get.docker.com | sh >/dev/null
-    # Remembered so --purge can remove Docker again without guessing. A host
-    # that already had it is running something in it.
-    touch "$ROOT/.docker-installed-by-skysbx"
+# shellcheck source=../../deploy/release.sh
+. "$BUILD/veyra-panel/deploy/release.sh"
+
+# A prebuilt binary from the release when there is one: CI compiled it from
+# the same commit these scripts came from. Compiling here is the fallback, or
+# what --from-source asks for.
+if [ "$FROM_SOURCE" = 0 ] && [ -n "$RELEASE" ] \
+    && fetch_release_binary veyra-panel "$RELEASE" "$BUILD/veyra-panel/skysbx-panel"; then
+    install -m 0755 "$BUILD/veyra-panel/skysbx-panel" "$ROOT/skysbx-panel"
+    ok "panel binary installed ($RELEASE)"
+else
+    if [ "$FROM_SOURCE" = 0 ]; then
+        warn "no prebuilt binary to download; compiling here instead"
+    fi
+    if ! command -v docker >/dev/null; then
+        say "installing docker (used only to build; nothing runs in it)"
+        curl -fsSL https://get.docker.com | sh >/dev/null
+        # Remembered so --purge can remove Docker again without guessing. A host
+        # that already had it is running something in it.
+        touch "$ROOT/.docker-installed-by-skysbx"
+    fi
+
+    # Stamped into the binary so `--version` can answer what is running
+    # without anyone reading a build log.
+    VER=$(git -C "$BUILD/veyra-panel" rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+    say "building"
+    docker run --rm -v "$BUILD/veyra-panel:/src" -w /src/panel \
+        -v "$GO_MOD_CACHE:/go/pkg/mod" -v "$GO_BUILD_CACHE:/root/.cache/go-build" \
+        -e GOFLAGS=-buildvcs=false -e CGO_ENABLED=0 -e GOOS=linux \
+        golang:1.27 \
+        go build -trimpath -ldflags "-s -w -X main.version=$VER" -o /src/skysbx-panel ./cmd/panel
+    install -m 0755 "$BUILD/veyra-panel/skysbx-panel" "$ROOT/skysbx-panel"
+    ok "panel binary installed (built from source)"
 fi
-
-# Stamped into the binary so `--version` can answer what is running without
-# anyone reading a build log.
-VER=$(git -C "$BUILD/veyra-panel" rev-parse --short HEAD 2>/dev/null || echo unknown)
-
-say "building"
-docker run --rm -v "$BUILD/veyra-panel:/src" -w /src \
-    -v "$GO_MOD_CACHE:/go/pkg/mod" -v "$GO_BUILD_CACHE:/root/.cache/go-build" \
-    -e GOFLAGS=-buildvcs=false -e CGO_ENABLED=0 -e GOOS=linux \
-    golang:1.27 \
-    go build -trimpath -ldflags "-s -w -X main.version=$VER" -o /src/skysbx-panel ./cmd/panel
-install -m 0755 "$BUILD/veyra-panel/skysbx-panel" "$ROOT/skysbx-panel"
-ok "panel binary installed"
 
 # Before the service starts, so there is never a moment where the panel is
 # reachable without an administrator. The password goes in on stdin — printf is
@@ -414,7 +445,7 @@ systemctl enable -q skysbx-panel
 systemctl restart skysbx-panel
 ok "systemd unit installed"
 
-    install -m 0755 "$BUILD/veyra-panel/deploy/veyra-menu.sh" /usr/local/bin/veyra
+install -m 0755 "$BUILD/veyra-panel/deploy/veyra-menu.sh" /usr/local/bin/veyra
 ok "management command installed: veyra"
 
 printf '    waiting for a certificate '
