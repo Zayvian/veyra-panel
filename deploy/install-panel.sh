@@ -431,7 +431,7 @@ if [ "$NEED_ADMIN" = yes ]; then
     NEXT_LINE="Next: sign in, then add a node and copy its join token."
 else
     LOGIN_LINE="Sign in  https://${DOMAIN}/login"
-    NEXT_LINE="Next: sign in. Forgot the password? ${ROOT}/skysbx-panel -db ${ROOT}/skysbx.db -set-admin <user>"
+    NEXT_LINE="Next: sign in. Forgot the password? ${ROOT}/skysbx-panel -db ${ROOT}/skysbx.db -set-admin <user>; lost the 2FA phone? same with -reset-2fa"
 fi
 
 cat <<EOF

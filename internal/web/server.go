@@ -269,6 +269,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /settings", s.auth(http.HandlerFunc(s.getSettings)))
 	mux.Handle("POST /settings", s.auth(s.requireCSRF(http.HandlerFunc(s.postSettings))))
 	mux.Handle("POST /settings/force-subscription-refresh", s.auth(s.requireCSRF(http.HandlerFunc(s.postForceSubscriptionRefresh))))
+	mux.Handle("POST /settings/2fa/begin", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPBegin))))
+	mux.Handle("POST /settings/2fa/enable", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPEnable))))
+	mux.Handle("POST /settings/2fa/disable", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPDisable))))
+	mux.Handle("POST /settings/2fa/recovery", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPRecovery))))
 
 	// Everything else needs a session, and every state-changing route
 	// needs a CSRF token. The two gates stack: auth() first (so we know

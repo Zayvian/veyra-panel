@@ -10,6 +10,12 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, saved string) {
+	s.renderSettingsWith(w, r, saved, nil)
+}
+
+// renderSettingsWith adds extra to the page data — the recovery codes, which
+// exist only in the response that created them.
+func (s *Server) renderSettingsWith(w http.ResponseWriter, r *http.Request, saved string, extra map[string]any) {
 	path, redirect := s.accessSettings()
 	refresh, err := s.svc.SubscriptionRefreshStatus()
 	if err != nil {
@@ -21,13 +27,21 @@ func (s *Server) renderSettings(w http.ResponseWriter, r *http.Request, saved st
 		s.fail(w, r, err)
 		return
 	}
-	s.page(w, r, "settings", map[string]any{
+	data := map[string]any{
 		"AccessPath":          path,
 		"RootRedirect":        redirect,
 		"Saved":               saved,
 		"SubscriptionRefresh": refresh,
 		"NodeCount":           len(nodes),
-	})
+	}
+	if err := s.totpSettings(data); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	for k, v := range extra {
+		data[k] = v
+	}
+	s.page(w, r, "settings", data)
 }
 
 func (s *Server) postSettings(w http.ResponseWriter, r *http.Request) {

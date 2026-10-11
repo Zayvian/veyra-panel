@@ -24,6 +24,10 @@
     <form hx-post="{{panelPath "/login"}}" hx-target="#err">
       <label>用户名<input name="username" required autofocus></label>
       <label>密码<input name="password" type="password" required></label>
+      {{if .TOTP}}
+      <label>验证码<input name="code" required autocomplete="one-time-code" inputmode="numeric"
+             placeholder="手机上的 6 位数字，或恢复码"></label>
+      {{end}}
       <button>登录</button>
     </form>
   </div>

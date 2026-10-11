@@ -39,6 +39,9 @@ type Service struct {
 	// minute.
 	scheduleMu        sync.Mutex
 	lastScheduleCheck time.Time
+	// totpMu serialises second-factor checks, so one code or recovery code
+	// cannot be spent by two logins at once.
+	totpMu sync.Mutex
 }
 
 func New(st *store.Store) *Service {

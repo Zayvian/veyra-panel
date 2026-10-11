@@ -45,6 +45,8 @@ func main() {
 		setAdmin    = flag.String("set-admin", "",
 			"create or replace the administrator with this username, reading the "+
 				"password from stdin, then exit")
+		reset2FA = flag.Bool("reset-2fa", false,
+			"turn the administrator's two-step login off (for a lost phone and lost recovery codes), then exit")
 	)
 	flag.Parse()
 
@@ -88,6 +90,16 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("administrator %q is set\n", *setAdmin)
+		return
+	}
+	// Root on this host already owns the database, so there is nothing a code
+	// could protect here; this is the way back in when the phone is gone.
+	if *reset2FA {
+		if err := svc.ResetTOTP(); err != nil {
+			log.Error("reset two-step login", "error", err)
+			os.Exit(1)
+		}
+		fmt.Println("two-step login is off; sign in with the password and turn it on again from 设置")
 		return
 	}
 

@@ -30,20 +30,29 @@ func (s *Server) shareUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	link := s.subscriptionOrigin(r) + "/sub/" + u.SubToken
-	png, err := qrcode.Encode(link, qrcode.Medium, 240)
+	qr, err := qrDataURI(link)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	s.render(w, "user-share-row", map[string]any{
-		"User": u,
-		"Link": link,
-		// template.URL, because html/template rewrites any data: URI it is
-		// not told is safe. This one is a PNG the panel just drew.
-		"QR":      template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)),
+		"User":    u,
+		"Link":    link,
+		"QR":      qr,
 		"Message": shareMessage(u, link, nowFunc()),
 	})
+}
+
+// qrDataURI draws text as a QR code, inline as a PNG data URI. It is a
+// template.URL because html/template rewrites any data: URI it is not told is
+// safe; this one is an image the panel just drew.
+func qrDataURI(text string) (template.URL, error) {
+	png, err := qrcode.Encode(text, qrcode.Medium, 240)
+	if err != nil {
+		return "", err
+	}
+	return template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(png)), nil
 }
 
 // shareMessage is the text an operator pastes to a customer. Plain text, so it

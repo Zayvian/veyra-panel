@@ -102,6 +102,7 @@ panel_menu() {
 4) 查看实时日志（Ctrl+C 返回）
 5) 卸载 Panel 程序，保留数据和证书
 6) 彻底删除 Panel、用户、订阅和证书
+7) 关闭管理员两步验证（手机和恢复码都丢了时用）
 0) 返回
 EOF
         printf '请选择：'
@@ -113,6 +114,7 @@ EOF
             4) journalctl -u skysbx-panel -f --no-pager ;;
             5) confirm 'UNINSTALL PANEL' && run_installer panel --uninstall || printf '已取消。\n'; pause ;;
             6) confirm 'PURGE PANEL' && run_installer panel --purge || printf '已取消。\n'; pause ;;
+            7) root=$(panel_root); "$root/skysbx-panel" -db "$root/skysbx.db" -reset-2fa; pause ;;
             0) return ;;
             *) printf '无效选项。\n'; pause ;;
         esac

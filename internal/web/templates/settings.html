@@ -21,6 +21,7 @@
       </p>
       <button>保存访问设置</button>
     </form>
+    {{template "totp-card" .}}
     <form class="card" hx-post="{{panelPath "/settings/force-subscription-refresh"}}" hx-target="#settings" hx-swap="innerHTML" hx-confirm="这会立即让所有用户的旧节点配置失效，并断开现有连接。用户须更新原订阅后才能恢复。确定继续吗？">
       <h2 style="margin-top:0">强制全员更新订阅</h2>
       <p class="dim" style="margin:.45rem 0 1rem;font-size:.82rem">
@@ -40,4 +41,53 @@
   </div>
 </main>
 {{template "foot" .}}
+{{end}}
+
+{{/* Two-step login. The forms select #settings out of the re-rendered page, so
+     the whole block reflects what the service says after each step. */}}
+{{define "totp-card"}}
+<div class="card">
+  <h2 style="margin-top:0">两步验证</h2>
+  {{if .RecoveryCodes}}
+    <div class="token">
+      <strong>恢复码，只显示这一次：</strong>请抄下来或存进密码管理器。手机丢了时，每个恢复码可以代替验证码登录一次。
+      <code>{{range .RecoveryCodes}}{{.}}<br>{{end}}</code>
+    </div>
+  {{end}}
+  {{if .TOTP.Enabled}}
+    <p><span class="pill ok">已开启</span>
+      <span class="dim" style="font-size:.85rem">登录时需要密码加手机上的 6 位验证码。剩余恢复码 {{.TOTP.RecoveryRemaining}} 个。</span></p>
+    <form class="row" hx-post="{{panelPath "/settings/2fa/recovery"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML">
+      <label>当前验证码<input name="code" required autocomplete="one-time-code" inputmode="numeric" placeholder="6 位数字或恢复码"></label>
+      <button class="ghost">重新生成恢复码</button>
+    </form>
+    <form class="row" style="margin-top:.6rem" hx-post="{{panelPath "/settings/2fa/disable"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML"
+          hx-confirm="关闭两步验证？之后只凭密码就能登录。">
+      <label>当前验证码<input name="code" required autocomplete="one-time-code" inputmode="numeric" placeholder="6 位数字或恢复码"></label>
+      <button class="ghost danger">关闭两步验证</button>
+    </form>
+  {{else if .TOTPQR}}
+    <p class="dim" style="font-size:.85rem;margin-top:0">用手机上的验证器（Google Authenticator、Microsoft Authenticator、1Password 等）扫描下面的二维码，
+      然后输入它显示的 6 位数字。输对之前不会生效，扫错了也不会把你锁在外面。</p>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end">
+      <img src="{{.TOTPQR}}" width="200" height="200" alt="两步验证二维码"
+           style="background:#fff;border-radius:6px;padding:6px">
+      <div>
+        <div class="dim" style="font-size:.8rem">没法扫码时手动输入密钥：</div>
+        <code class="mono" style="word-break:break-all">{{.TOTPSecret}}</code>
+        <form class="row" style="margin-top:.6rem" hx-post="{{panelPath "/settings/2fa/enable"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML">
+          <label>验证码<input name="code" required autocomplete="one-time-code" inputmode="numeric" pattern="[0-9 ]{6,7}" placeholder="6 位数字"></label>
+          <button>确认开启</button>
+        </form>
+      </div>
+    </div>
+  {{else}}
+    <p class="dim" style="font-size:.85rem;margin-top:0">开启后，登录除了密码还要输入手机验证器上的 6 位数字。密码泄露时，别人仍然登不进来。
+      手机和恢复码都丢了时，在面板服务器上用 root 执行 <code class="mono">/opt/skysbx/skysbx-panel -db /opt/skysbx/skysbx.db -reset-2fa</code>
+      （或运行 <code class="mono">veyra</code> 菜单 → Panel → 7）即可关闭。</p>
+    <form hx-post="{{panelPath "/settings/2fa/begin"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML">
+      <button>开启两步验证</button>
+    </form>
+  {{end}}
+</div>
 {{end}}
