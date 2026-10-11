@@ -114,10 +114,12 @@ jobs:
               -o "$GITHUB_WORKSPACE/dist/veyra-panel-linux-$arch" ./cmd/panel
           done
 
+      # No cache here: the panel's setup-go above already restored one into
+      # the same directories, and a second restore only fails on every file.
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.NODE_GO }}
-          cache-dependency-path: veyra/node/go.sum
+          cache: false
       - name: build node
         working-directory: veyra/node
         run: |
@@ -129,6 +131,7 @@ jobs:
               -o "$GITHUB_WORKSPACE/dist/veyra-node-linux-$arch" ./cmd/node
           done
 
+      - run: ls -l dist
       - name: publish
         if: github.ref == 'refs/heads/main'
         working-directory: dist
