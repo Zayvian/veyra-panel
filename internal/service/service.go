@@ -167,13 +167,19 @@ func (s *Service) DeleteUser(id int64) error {
 	return nil
 }
 
-// UserIPLimits is every active user's cap on concurrent source addresses,
-// keyed by the name the node knows them by. Users with no cap are omitted, so
-// the common case sends nothing.
+// UserIPLimits is the cap on concurrent source addresses for every active user
+// this node serves, keyed by the name the node knows them by. Users with no cap
+// are omitted, so the common case sends nothing.
 //
-// Only active users: an expired or over-quota account is not in the node's user
-// list at all, and a limit for a name the node has never heard of is noise.
-func (s *Service) UserIPLimits() (map[string]int, error) {
+// Only active users, and only this node's: an expired or over-quota account is
+// not in the node's user list at all, and neither is one restricted to other
+// nodes. A limit for a name the node has never heard of is noise — and it hands
+// every node, rented machines included, the panel's whole customer list.
+func (s *Service) UserIPLimits(nodeID int64) (map[string]int, error) {
+	onNode, err := s.nodeUserIDs(nodeID)
+	if err != nil {
+		return nil, err
+	}
 	users, err := s.st.Users()
 	if err != nil {
 		return nil, err
@@ -181,6 +187,9 @@ func (s *Service) UserIPLimits() (map[string]int, error) {
 	now := time.Now()
 	out := map[string]int{}
 	for _, u := range users {
+		if _, ok := onNode[u.Name]; !ok {
+			continue
+		}
 		if u.IPLimit > 0 && u.Active(now) {
 			out[u.Name] = u.IPLimit
 		}
