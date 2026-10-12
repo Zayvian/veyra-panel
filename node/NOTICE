@@ -1,7 +1,7 @@
 Current distribution maintained by Zayvian.
 Source: https://github.com/kosje/skysbx-node
-Project: https://github.com/Zayvian/veyra-node
-Current changes and build instructions: README.md.
+Project: https://github.com/Zayvian/veyra-panel (the node/ directory)
+Build instructions: docs/en/maintenance.md in that repository.
 Original notices follow.
 
 Veyra Node
