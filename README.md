@@ -1,48 +1,65 @@
+**简体中文** | [繁體中文](README.zh-TW.md) | [English](README.en.md)
+
 # Veyra
 
-自建代理面板：一个面板管理多台节点、用户、套餐和订阅。面板和节点都在这个仓库里。
+自建的代理管理面板：用一个网页后台管理多台代理服务器（节点）、客户账号、套餐和订阅链接。适合自己用，也适合小规模地给别人开账号。
 
 [![CI](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/Zayvian/veyra-panel/actions/workflows/ci.yml)
 
-| 目录 | 是什么 | 装在哪里 | 许可证 |
-| --- | --- | --- | --- |
-| [`panel/`](panel/) | 管理面板：用户、节点、订阅、计费 | 面板服务器 | AGPL-3.0（[`panel/LICENSE`](panel/LICENSE)） |
-| [`node/`](node/) | 节点：内置 sing-box，接收面板下发的配置并上报流量 | 每台代理服务器 | GPL-3.0（[`node/LICENSE`](node/LICENSE)） |
-| [`protocol/`](protocol/) | 面板和节点之间的控制协议说明和样例 | — | 随两边 |
-| [`deploy/`](deploy/) | 两边共用的 `veyra` 管理菜单和下载校验脚本 | — | — |
+## 功能
 
-节点内置的协议内核是 [veyra-core](https://github.com/Zayvian/veyra-core)（打了热更新补丁的 sing-box，GPL-3.0）。它单独一个仓库，用 [`node/core.lock`](node/core.lock) 锁定具体版本。
+- **协议**：VLESS Reality、Hysteria2（混淆、伪装网站、跳端口）、AnyTLS、Shadowsocks 2022、TUIC v5
+- **用户**：到期时间、流量上限、每月自动重置、同时在线 IP 限制、按入站分配权限、一键续费、套餐模板
+- **订阅**：Clash / mihomo、sing-box、Shadowrocket、通用分享链接，自动识别客户端；二维码和可直接发给客户的话术；订阅公告；账号失效时显示原因
+- **节点**：流量倍率（如 0.5 倍、不扣流量）、站内中转、每台节点的流量统计
+- **不断线**：增删用户、续费、改密码都是热更新，不会断开其他人的连接；升级面板也不影响客户
+- **安全**：管理后台可隐藏路径、两步验证、单个用户重置链接、紧急时全员更换密码
+- **安装简单**：一条命令安装，直接下载编译好的程序（amd64 / arm64），服务器上不编译
 
-## 安装
+## 快速开始
 
-面板（在面板服务器上）：
+需要 Debian / Ubuntu 服务器、root 权限，以及解析到服务器的域名。
+
+**面板**（在面板服务器上）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh | bash
 ```
 
-节点（在每台代理服务器上，先在面板里登记节点拿到 token）：
+**节点**（在每台代理服务器上，先在面板「节点」页新建节点、复制接入 token）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install-node.sh | bash
 ```
 
-升级都是同一条命令加 `-s -- --upgrade`。安装和升级默认下载 [Release](https://github.com/Zayvian/veyra-panel/releases) 里 CI 编译好的程序，核对 sha256 后安装，**服务器上不编译**。加 `--from-source` 才在服务器上编译。
+**升级**：同样的命令后面加 `-s -- --upgrade`。
 
-面板和节点装在同一台机器上、卸载、证书、故障排查等，见 [面板说明](panel/README.md) 和 [节点说明](node/README.md)。
+## 文档
 
-旧的节点安装地址 `https://raw.githubusercontent.com/Zayvian/veyra-node/main/install.sh` 会自动转到新地址，已经装好的节点照常升级。
+| 文档 | 内容 |
+| --- | --- |
+| [安装](docs/zh-CN/install.md) | 准备域名和端口、安装面板和节点、证书、面板和节点同机 |
+| [使用指南](docs/zh-CN/guide.md) | 每个页面、每个功能怎么用：用户、套餐、节点、入站、限制、设置、订阅 |
+| [维护](docs/zh-CN/maintenance.md) | 升级、备份恢复、忘记密码、卸载、排查问题 |
+| [通信协议](protocol/PROTOCOL.md) | 面板和节点之间的消息格式（开发者） |
 
-## 发布
+## 仓库结构
 
-每次合并到 `main` 并通过测试后，CI 会自动：
+| 目录 | 内容 | 许可证 |
+| --- | --- | --- |
+| [`panel/`](panel/) | 管理面板 | AGPL-3.0 |
+| [`node/`](node/) | 节点程序，内置 sing-box | GPL-3.0 |
+| [`protocol/`](protocol/) | 面板和节点之间的协议说明和样例 | — |
+| [`deploy/`](deploy/) | 共用的 `veyra` 管理菜单和下载校验脚本 | — |
 
-1. 按 `node/core.lock` 检出 veyra-core；
-2. 编译面板和节点的 linux amd64 / arm64 版本；
-3. 发布为一个新的 Release（`build-日期-提交号`），附带 `sha256sums.txt`。
+节点内置的协议内核是 [veyra-core](https://github.com/Zayvian/veyra-core)：加了「改用户不用重启」等补丁的 sing-box。它单独一个仓库，由 [`node/core.lock`](node/core.lock) 锁定版本。
 
-只保留最近 10 个 Release。
+**发布**：每次合并到 `main` 并通过测试后，CI 会按 `core.lock` 编译面板和节点的 linux amd64 / arm64 版本，发布为一个新的 [Release](https://github.com/Zayvian/veyra-panel/releases)，附带 `sha256sums.txt`。安装脚本下载后会先校验再安装。
 
 ## 许可证
 
-两个目录的许可证不同：`panel/` 是 AGPL-3.0，`node/` 是 GPL-3.0，各自的 `LICENSE` 和 `NOTICE` 在各自目录里。面板不链接任何 sing-box 代码，CI 里有一条检查保证这一点；两边只通过 [`protocol/`](protocol/PROTOCOL.md) 描述的 JSON 消息通信。
+`panel/` 使用 AGPL-3.0，`node/` 使用 GPL-3.0，各自的 `LICENSE` 和 `NOTICE` 在各自目录里。面板不包含任何 sing-box 代码（CI 会检查），两者只通过网络消息通信。
+
+本项目基于 [kosje/skysbx-panel](https://github.com/kosje/skysbx-panel) 和 [kosje/skysbx-node](https://github.com/kosje/skysbx-node) 开发，保留原作者署名，不代表原作者参与或认可本版本。与 sing-box 项目无关，请不要把本项目的问题报告给 sing-box。
+
+问题和建议请提交到 [Issues](https://github.com/Zayvian/veyra-panel/issues)。

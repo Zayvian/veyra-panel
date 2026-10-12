@@ -14,9 +14,6 @@
 #   ... | sh -s -- --uninstall    remove the service; keep the certificate
 #   ... | sh -s -- --purge        remove everything this installer created
 #
-# The old address, veyra-node/main/install.sh, forwards here, so nodes
-# installed before the repositories were merged upgrade the same way.
-#
 # This file only fetches the repository and hands over. It takes the scripts
 # from the newest release, so they match the prebuilt binary they install;
 # VEYRA_REF=<branch or tag> overrides that and builds from those sources.
