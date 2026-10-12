@@ -45,7 +45,7 @@
 
       <label id="f-handshake">Reality 握手站点
         <span style="display:flex;gap:.4rem;align-items:center">
-          <input name="handshake" value="{{.DefaultHandshake}}" list="handshakes">
+          <input name="handshake" value="{{.DefaultHandshake}}">{{template "site-picker" $.Handshakes}}
           <button type="button" class="ghost" hx-get="{{panelPath "/inbounds/handshake-check"}}"
                   hx-include="closest label" hx-target="#hs-new" hx-swap="innerHTML">检测</button>
         </span>
@@ -56,8 +56,8 @@
       <label id="f-masq" hidden>伪装网站（留空 = 不伪装）
         <span style="display:flex;gap:.4rem;align-items:center">
           <input name="masquerade" value="{{.RandomMasq}}" placeholder="{{.DefaultMasq}}"
-                 list="masquerades" style="min-width:14rem">
-          <button type="button" class="ghost" onclick="randomMasq(this)">随机</button>
+                 style="min-width:14rem">
+          {{template "site-picker" $.Masquerades}}<button type="button" class="ghost" onclick="randomMasq(this)">随机</button>
         </span></label>
 
       <label id="f-cert" hidden>证书路径（节点上，留空即默认）
@@ -131,18 +131,32 @@ onRelay();
 {{template "foot" .}}
 {{end}}
 
+{{/* A dropdown of suggested sites that fills the text field beside it; see
+     pickSite. The argument is the list. */}}
+{{define "site-picker"}}<select class="site-pick" onchange="pickSite(this)" style="min-width:0;width:auto">
+  <option value="">常用站点…</option>
+  {{range .}}<option value="{{.}}">{{.}}</option>{{end}}
+</select>{{end}}
+
 {{define "handshake-result"}}{{if .OK}}<span class="pill ok">可用</span> <span class="dim">{{.Msg}}</span>{{else}}<span class="pill bad">不可用</span> <span class="dim">{{.Msg}}</span>{{end}}{{end}}
 
 {{define "inbound-table"}}
-<datalist id="handshakes">{{range .Handshakes}}<option value="{{.}}">{{end}}</datalist>
-<datalist id="masquerades">{{range .Masquerades}}<option value="{{.}}">{{end}}</datalist>
 <script>
+// A site picker fills the field beside it and goes back to its prompt, so the
+// same site can be picked again later. A <datalist> did this badly: browsers
+// only offer the options that match what is already typed, and the field is
+// never empty, so it showed one choice or none.
+function pickSite(sel) {
+  if (!sel.value) return;
+  sel.parentNode.querySelector('input').value = sel.value;
+  sel.value = '';
+}
 // Fills the masquerade field beside the button with another site from the
-// list, never the one already there.
+// picker beside it, never the one already there.
 function randomMasq(btn) {
   var input = btn.parentNode.querySelector('input[name=masquerade]');
-  var all = Array.from(document.querySelectorAll('#masquerades option'), function (o) { return o.value; })
-    .filter(function (v) { return v !== input.value; });
+  var all = Array.from(btn.parentNode.querySelectorAll('select.site-pick option'), function (o) { return o.value; })
+    .filter(function (v) { return v && v !== input.value; });
   if (all.length) input.value = all[Math.floor(Math.random() * all.length)];
 }
 </script>
@@ -211,7 +225,7 @@ function randomMasq(btn) {
             {{if $.EditHandshake}}
               <label>Reality 握手站点
                 <span style="display:flex;gap:.4rem;align-items:center">
-                  <input name="handshake" required value="{{$.HandshakeValue}}" list="handshakes">
+                  <input name="handshake" required value="{{$.HandshakeValue}}">{{template "site-picker" $.Handshakes}}
                   <button type="button" class="ghost" hx-get="{{panelPath "/inbounds/handshake-check"}}"
                           hx-include="closest label" hx-target="#hs-edit" hx-swap="innerHTML">检测</button>
                 </span>
@@ -223,8 +237,8 @@ function randomMasq(btn) {
               <label>伪装网站（留空 = 不伪装）
                 <span style="display:flex;gap:.4rem;align-items:center">
                   <input name="masquerade" value="{{$.Masquerade}}" placeholder="{{$.DefaultMasq}}"
-                         list="masquerades" style="min-width:14rem">
-                  <button type="button" class="ghost" onclick="randomMasq(this)">随机</button>
+                         style="min-width:14rem">
+                  {{template "site-picker" $.Masquerades}}<button type="button" class="ghost" onclick="randomMasq(this)">随机</button>
                 </span></label>
             {{end}}
             {{if $.EditTLS}}

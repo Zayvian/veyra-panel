@@ -51,6 +51,10 @@ td.num,th.num{text-align:right}
 td.num{font-variant-numeric:tabular-nums}
 form.row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
 label{display:flex;flex-direction:column;gap:.25rem;font-size:.8rem;color:var(--dim)}
+/* The hidden attribute is only a user-agent display:none, and any display set
+   here overrides it — the label rule above did, so on wide screens every field
+   the protocol switch hid stayed visible. Make hidden mean hidden. */
+[hidden]{display:none!important}
 input,select{background:#0c0e12;color:var(--fg);border:1px solid var(--line);
              border-radius:6px;padding:.45rem .55rem;font:inherit;min-width:9rem}
 input:focus,select:focus{outline:none;border-color:var(--accent)}
@@ -104,7 +108,6 @@ code.mono{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim)
   form.row>label{min-width:0;width:100%}
   form.row input,form.row select{min-width:0!important;width:100%!important;max-width:100%}
   form.row>button{min-height:42px}
-  label[hidden]{display:none!important}
   .stat{min-width:calc(50% - .5rem)}
   .stat .n{font-size:1.35rem}
   .mobile-cards,.mobile-cards tbody{display:block;width:100%}
