@@ -268,11 +268,11 @@ func TestSingBoxAndClashKeepStableNames(t *testing.T) {
 	u.TrafficLimit = 10 << 30
 	entries, _ := Build(u, nodes, inbounds, nil)
 
-	sb, err := SingBox(entries)
+	sb, err := SingBox(entries, testRules)
 	if err != nil {
 		t.Fatalf("singbox: %v", err)
 	}
-	cl, err := Clash(entries)
+	cl, err := Clash(entries, testRules)
 	if err != nil {
 		t.Fatalf("clash: %v", err)
 	}
@@ -292,7 +292,7 @@ func TestSingBoxConfigIsUsable(t *testing.T) {
 	u, nodes, inbounds := fixture(t)
 	entries, _ := Build(u, nodes, inbounds, nil)
 
-	data, err := SingBox(entries)
+	data, err := SingBox(entries, testRules)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -308,7 +308,7 @@ func TestSingBoxConfigIsUsable(t *testing.T) {
 		types[m["tag"].(string)] = m
 	}
 	for _, tag := range []string{"vless-tokyo", "anytls-tokyo", "ss-tokyo",
-		tagAuto, tagProxy, tagDirect} {
+		tagProxy, groupAI, groupFinal, tagDirect} {
 		if _, ok := types[tag]; !ok {
 			t.Errorf("outbound %q missing", tag)
 		}
@@ -330,7 +330,7 @@ func TestSingBoxConfigIsUsable(t *testing.T) {
 // empty selector makes it refuse to launch, which looks like a broken client
 // rather than an expired account.
 func TestSingBoxWithNoEntriesStillStarts(t *testing.T) {
-	data, err := SingBox(nil)
+	data, err := SingBox(nil, testRules)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -357,7 +357,7 @@ func TestClashConfigIsUsable(t *testing.T) {
 	u, nodes, inbounds := fixture(t)
 	entries, _ := Build(u, nodes, inbounds, nil)
 
-	data, err := Clash(entries)
+	data, err := Clash(entries, testRules)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestClashCredentialsSurviveYAML(t *testing.T) {
 	u, nodes, inbounds := fixture(t)
 	entries, _ := Build(u, nodes, inbounds, nil)
 
-	data, err := Clash(entries)
+	data, err := Clash(entries, testRules)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -502,7 +502,7 @@ func TestSingBoxDNSUsesTheCurrentServerFormat(t *testing.T) {
 	u, nodes, inbounds := fixture(t)
 	entries, _ := Build(u, nodes, inbounds, nil)
 
-	data, err := SingBox(entries)
+	data, err := SingBox(entries, testRules)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -555,7 +555,8 @@ func TestSingBoxDNSUsesTheCurrentServerFormat(t *testing.T) {
 		if r["server"] != "local" {
 			continue
 		}
-		for _, d := range r["domain"].([]any) {
+		domains, _ := r["domain"].([]any)
+		for _, d := range domains {
 			got = append(got, d.(string))
 		}
 	}

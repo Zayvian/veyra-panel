@@ -33,7 +33,8 @@ func Notice(u *store.User, now time.Time) []Entry {
 
 // Announcement turns the operator's announcement lines into entries for the
 // top of the node list, skipping any line that would share its name with a
-// real entry: clients refuse a whole configuration over a duplicate name.
+// real entry or a proxy group: clients refuse a whole configuration over a
+// duplicate name.
 func Announcement(lines []string, entries []Entry) []Entry {
 	taken := make(map[string]bool, len(entries))
 	for _, e := range entries {
@@ -41,7 +42,7 @@ func Announcement(lines []string, entries []Entry) []Entry {
 	}
 	out := make([]Entry, 0, len(lines))
 	for _, line := range lines {
-		if line == "" || taken[line] {
+		if line == "" || taken[line] || reservedNames[line] {
 			continue
 		}
 		taken[line] = true

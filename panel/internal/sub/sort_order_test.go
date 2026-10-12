@@ -49,7 +49,7 @@ func TestSubscriptionSortAcrossFormats(t *testing.T) {
 	if !reflect.DeepEqual(names, want) || !reflect.DeepEqual(ins, original) {
 		t.Fatalf("wrong order or mutated input: %v", names)
 	}
-	clash, err := Clash(entries)
+	clash, err := Clash(entries, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestSubscriptionSortAcrossFormats(t *testing.T) {
 	if err := yaml.Unmarshal(clash, &c); err != nil {
 		t.Fatal(err)
 	}
-	sing, err := SingBox(entries)
+	sing, err := SingBox(entries, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}

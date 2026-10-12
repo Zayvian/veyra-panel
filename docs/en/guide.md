@@ -288,7 +288,7 @@ See [Installation: hide the admin URL](install.md#hide-the-admin-url-recommended
 
 「订阅公告」: one line per entry (up to 5 lines of 60 characters), shown **at the top of every customer's node list** — e.g. "📢 Website: example.com", "Renewals: contact …". Save it empty to turn it off.
 
-Each line is a placeholder entry that cannot connect, there only to be read. Automatic selection in Clash and sing-box never picks it, and imports still default to automatic selection. Customers see a new announcement after updating their subscription. A customer who manually selects an announcement entry simply has to pick a real node again.
+Each line is a placeholder entry that cannot connect, there only to be read. In Clash and sing-box, announcements sit in their own "公告" group at the top and are **never in a group that carries traffic**, so customers cannot connect to one by mistake. Customers see a new announcement after updating their subscription. A line with the same name as a group (such as "AI" or "节点选择") is skipped.
 
 ### Two-step login
 
@@ -342,11 +342,33 @@ Opened in a browser, a subscription is a block of Base64 text. That is expected.
 ### What a subscription contains
 
 - every inbound the user may use, ordered by the nodes' subscription order and each node's inbound order;
-- in Clash and sing-box formats, an **automatic selection (AUTO)** group that tests the nodes and picks the fastest; it is the default;
+- in Clash and sing-box formats, a ready-made set of groups and routing rules, see [Groups and routing](#groups-and-routing) below;
 - used traffic, total traffic and expiry, which most clients display (Shadowrocket as "upload / download / total / expiry");
 - the [announcement](#subscription-announcement), first, if you set one.
 
 A disabled, expired or exhausted account still gets a valid subscription, holding one entry that states the reason (e.g. "expired on 2026-11-10, please renew", in Chinese) followed by the announcement — so the customer knows to contact you rather than assuming their app is broken.
+
+### Groups and routing
+
+Clash and sing-box subscriptions come with these groups, each of which the customer can switch in their client. Group names are shown as they appear (in Chinese):
+
+| Group | Default | Traffic it carries |
+| --- | --- | --- |
+| 公告 (announcement) | — | Only present when an announcement is set; for reading only |
+| 节点选择 (node selection) | First node | The main switch, listing every node |
+| AI | Follows 节点选择 | ChatGPT, Claude, Gemini and similar |
+| YouTube | Follows 节点选择 | |
+| Netflix | Follows 节点选择 | |
+| 谷歌 (Google) | Follows 节点选择 | Search, Gmail, Google Play and so on |
+| 苹果 (Apple) | Direct | App Store, iCloud, system updates |
+| 微软 (Microsoft) | Direct | Windows Update, Office, Bing and so on |
+| 漏网之鱼 (everything else) | Follows 节点选择 | Any traffic none of the above matched |
+
+- **Mainland China sites and IP addresses always go direct**: not through a node, and not counted against the plan. Local network addresses go direct too. GitHub follows 节点选择.
+- There is no automatic selection: if a node fails, nothing switches over; the customer picks another one.
+- Each group chooses its own node for its own traffic. With AI on a US node, Netflix on Singapore and everything else on Hong Kong, all three are in use at once; traffic is counted on each node at that node's multiplier and taken from the same plan.
+- The rules come from [MetaCubeX/meta-rules-dat](https://github.com/MetaCubeX/meta-rules-dat). Clients download the rule files from the panel, under `/sub/rules/` on the subscription address, and refresh them daily; the panel syncs them from GitHub every 12 hours. Customers who cannot reach GitHub are unaffected, and there are no lists for you to maintain.
+- Shadowrocket and v2rayN use share links, which cannot carry groups or rules; routing there follows the client's own settings (v2rayN has a built-in "bypass mainland" mode; Shadowrocket can add a rule configuration separately).
 
 ### Security
 

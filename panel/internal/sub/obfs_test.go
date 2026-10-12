@@ -27,7 +27,7 @@ func TestHysteria2ObfsInEveryFormat(t *testing.T) {
 		t.Fatalf("share link lacks obfs: %s", link)
 	}
 
-	raw, err := Clash([]Entry{e})
+	raw, err := Clash([]Entry{e}, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestHysteria2ObfsInEveryFormat(t *testing.T) {
 		t.Fatalf("clash proxy lacks obfs: %+v", p)
 	}
 
-	raw, err = SingBox([]Entry{e})
+	raw, err = SingBox([]Entry{e}, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}

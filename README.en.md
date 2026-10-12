@@ -12,7 +12,7 @@ A self-hosted proxy panel: one web admin for several proxy servers (nodes), cust
 
 - **Protocols**: VLESS Reality, Hysteria2 (obfs, masquerade, port hopping), AnyTLS, Shadowsocks 2022, TUIC v5
 - **Users**: expiry, traffic limits, monthly resets, concurrent-IP limits, per-inbound access, one-click renewal, plan presets
-- **Subscriptions**: Clash / mihomo, sing-box, Shadowrocket and plain share links, detected per client; QR codes and a ready-to-send message; an announcement at the top of every list; inactive accounts see why
+- **Subscriptions**: Clash / mihomo, sing-box, Shadowrocket and plain share links, detected per client; Clash and sing-box come with groups (AI, YouTube, Netflix and more) and mainland-China-direct rules; QR codes and a ready-to-send message; an announcement at the top of every list; inactive accounts see why
 - **Nodes**: traffic rates (half price, free…), relaying through another node, per-node traffic statistics
 - **No needless disconnects**: adding or removing users, renewals and new passwords are hot-swapped without dropping anyone else; upgrading the panel does not touch customers
 - **Security**: a hidden admin path, two-step login, per-user link reissue, an emergency credential rotation for everyone
