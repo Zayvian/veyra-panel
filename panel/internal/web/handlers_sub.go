@@ -65,7 +65,7 @@ func (s *Server) getSubscription(w http.ResponseWriter, r *http.Request) {
 
 	switch format {
 	case sub.FormatSingBox:
-		data, err := sub.SingBox(entries)
+		data, err := sub.SingBox(entries, s.subscriptionOrigin(r))
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -73,7 +73,7 @@ func (s *Server) getSubscription(w http.ResponseWriter, r *http.Request) {
 		w.Write(data)
 
 	case sub.FormatClash:
-		data, err := sub.Clash(entries)
+		data, err := sub.Clash(entries, s.subscriptionOrigin(r))
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -90,6 +90,23 @@ func (s *Server) getSubscription(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(sub.Base64(entries)))
 		}
 	}
+}
+
+// getRuleFile serves one of the routing lists a Clash or sing-box subscription
+// downloads. They are public data; only the names routing.go uses exist.
+func (s *Server) getRuleFile(w http.ResponseWriter, r *http.Request) {
+	data, err := s.rules.Get(r.Context(), r.PathValue("file"))
+	if errors.Is(err, sub.ErrUnknownRuleFile) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.log.Warn("rule file unavailable", "file", r.PathValue("file"), "err", err)
+		http.Error(w, "rule file temporarily unavailable", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Write(data)
 }
 
 // subURL reconstructs the absolute URL this subscription was fetched from, so

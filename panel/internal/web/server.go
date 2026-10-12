@@ -24,6 +24,7 @@ import (
 	"github.com/Zayvian/veyra-panel/internal/ratelimit"
 	"github.com/Zayvian/veyra-panel/internal/service"
 	"github.com/Zayvian/veyra-panel/internal/store"
+	"github.com/Zayvian/veyra-panel/internal/sub"
 )
 
 //go:embed templates/*.html static/*
@@ -118,6 +119,7 @@ func (s *Server) setupOpen(now time.Time) (bool, error) {
 
 type Server struct {
 	subscriptionDomain string
+	rules              *sub.RuleFiles
 	svc                *service.Service
 	log                *slog.Logger
 	tpl                *template.Template
@@ -214,6 +216,7 @@ func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookie
 	}
 
 	srv := &Server{
+		rules:         &sub.RuleFiles{Client: &http.Client{}, Refresh: 12 * time.Hour},
 		svc:           svc,
 		nodes:         nodes,
 		log:           log,
@@ -258,6 +261,8 @@ func (s *Server) Handler() http.Handler {
 	// The token in the path is the credential; this is the one
 	// unauthenticated route that returns anything.
 	mux.HandleFunc("GET /sub/{token}", s.getSubscription)
+	// The routing lists those subscriptions refer to; see sub.RulesPath.
+	mux.HandleFunc("GET /sub/rules/{file}", s.getRuleFile)
 
 	// The node control channel. Nodes authenticate with their own bearer
 	// token, so this sits outside the session gate.

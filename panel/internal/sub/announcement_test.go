@@ -16,6 +16,14 @@ func node(name string) Entry {
 		Password: "a:b"}
 }
 
+// A line named like a group would collide with it and fail the whole file.
+func TestAnnouncementSkipsGroupNames(t *testing.T) {
+	got := Announcement([]string{groupAI, "联系 abc"}, nil)
+	if len(got) != 1 || got[0].Name != "联系 abc" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
 func TestAnnouncementEntries(t *testing.T) {
 	nodes := []Entry{node("东京 01")}
 	got := Announcement([]string{"📢 公告", "", "东京 01", "联系 abc"}, nodes)
@@ -32,11 +40,11 @@ func TestAnnouncementEntries(t *testing.T) {
 	}
 }
 
-// Listed for the user to read, but never measured or picked automatically.
+// Listed for the user to read, in a group of its own that no traffic uses.
 func TestInfoEntriesStayOutOfAutomaticSelection(t *testing.T) {
 	entries := append(Announcement([]string{"📢 公告"}, nil), node("东京 01"), node("大阪 01"))
 
-	raw, err := Clash(entries)
+	raw, err := Clash(entries, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,18 +63,21 @@ func TestInfoEntriesStayOutOfAutomaticSelection(t *testing.T) {
 	}
 	for _, g := range clash.ProxyGroups {
 		switch g.Name {
-		case "PROXY":
-			if g.Proxies[0] != "AUTO" || !slices.Contains(g.Proxies, "📢 公告") {
-				t.Fatalf("PROXY = %q: AUTO must stay the default, the announcement listed", g.Proxies)
+		case groupNotice:
+			if !slices.Equal(g.Proxies, []string{"📢 公告"}) {
+				t.Fatalf("%s = %q, want the announcement alone", g.Name, g.Proxies)
 			}
-		case "AUTO":
-			if slices.Contains(g.Proxies, "📢 公告") || len(g.Proxies) != 2 {
-				t.Fatalf("AUTO = %q, want only the two nodes", g.Proxies)
+		default:
+			if slices.Contains(g.Proxies, "📢 公告") {
+				t.Fatalf("%s = %q: traffic could be sent to the announcement", g.Name, g.Proxies)
 			}
 		}
 	}
+	if clash.ProxyGroups[0].Name != groupNotice {
+		t.Fatalf("the announcement group is not first: %s", clash.ProxyGroups[0].Name)
+	}
 
-	raw, err = SingBox(entries)
+	raw, err = SingBox(entries, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,15 +91,8 @@ func TestInfoEntriesStayOutOfAutomaticSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, ob := range sb.Outbounds {
-		switch ob.Type {
-		case "urltest":
-			if slices.Contains(ob.Outbounds, "📢 公告") {
-				t.Fatalf("sing-box urltest includes the announcement: %q", ob.Outbounds)
-			}
-		case "selector":
-			if ob.Default == "📢 公告" || !slices.Contains(ob.Outbounds, "📢 公告") {
-				t.Fatalf("sing-box selector: default %q, members %q", ob.Default, ob.Outbounds)
-			}
+		if ob.Type == "selector" && ob.Tag != groupNotice && slices.Contains(ob.Outbounds, "📢 公告") {
+			t.Fatalf("sing-box %s includes the announcement: %q", ob.Tag, ob.Outbounds)
 		}
 	}
 
@@ -98,11 +102,11 @@ func TestInfoEntriesStayOutOfAutomaticSelection(t *testing.T) {
 	}
 }
 
-// An inactive account's list is info entries only. Automatic selection then
-// keeps them rather than going empty, which would fail the whole file.
+// An inactive account's list is info entries only. The groups then hold them
+// rather than going empty, which would fail the whole file.
 func TestOnlyInfoEntriesStillMakeAValidConfig(t *testing.T) {
 	entries := append(Notice(&store.User{Enabled: false}, nowFunc()), Announcement([]string{"联系 abc"}, nil)...)
-	raw, err := Clash(entries)
+	raw, err := Clash(entries, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}

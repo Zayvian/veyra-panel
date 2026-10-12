@@ -10,6 +10,17 @@ type ClientConfig struct {
 	Inbounds  []ClientInbound  `json:"inbounds"`
 	Outbounds []ClientOutbound `json:"outbounds"`
 	Route     *Route           `json:"route,omitempty"`
+	// Experimental holds the cache file, which keeps downloaded rule sets
+	// across restarts so a client does not refetch them on every launch.
+	Experimental *ClientExperimental `json:"experimental,omitempty"`
+}
+
+type ClientExperimental struct {
+	CacheFile *CacheFile `json:"cache_file,omitempty"`
+}
+
+type CacheFile struct {
+	Enabled bool `json:"enabled"`
 }
 
 // ClientInbound is the local listener the client exposes to the machine it runs
@@ -85,14 +96,16 @@ type DNSServer struct {
 }
 
 type DNSRule struct {
-	Domain []string `json:"domain,omitempty"`
-	Server string   `json:"server"`
+	Domain  []string `json:"domain,omitempty"`
+	RuleSet []string `json:"rule_set,omitempty"`
+	Server  string   `json:"server"`
 }
 
 type Route struct {
-	Rules []RouteRule `json:"rules,omitempty"`
-	Final string      `json:"final,omitempty"`
-	Auto  bool        `json:"auto_detect_interface,omitempty"`
+	Rules   []RouteRule `json:"rules,omitempty"`
+	RuleSet []RuleSet   `json:"rule_set,omitempty"`
+	Final   string      `json:"final,omitempty"`
+	Auto    bool        `json:"auto_detect_interface,omitempty"`
 	// Required since sing-box 1.14: a config without it does not start, it
 	// refuses with a migration notice.
 	DefaultDomainResolver *DomainResolver `json:"default_domain_resolver,omitempty"`
@@ -102,9 +115,23 @@ type DomainResolver struct {
 	Server string `json:"server"`
 }
 
+// RouteRule matches a connection. A rule with an Action other than the default
+// "route" (sniff, resolve) carries no outbound and matching carries on past it.
 type RouteRule struct {
 	Protocol string   `json:"protocol,omitempty"`
 	IPIsPriv bool     `json:"ip_is_private,omitempty"`
-	Outbound string   `json:"outbound"`
+	RuleSet  []string `json:"rule_set,omitempty"`
 	Inbound  []string `json:"inbound,omitempty"`
+	Action   string   `json:"action,omitempty"`
+	Outbound string   `json:"outbound,omitempty"`
+}
+
+// RuleSet is a remote binary rule set, fetched by the client and cached.
+type RuleSet struct {
+	Type           string `json:"type"` // always "remote"
+	Tag            string `json:"tag"`
+	Format         string `json:"format"` // always "binary"
+	URL            string `json:"url"`
+	DownloadDetour string `json:"download_detour,omitempty"`
+	UpdateInterval string `json:"update_interval,omitempty"`
 }

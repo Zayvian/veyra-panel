@@ -47,21 +47,30 @@ type clashRealityOpts struct {
 }
 
 type clashGroup struct {
-	Name     string   `yaml:"name"`
-	Type     string   `yaml:"type"`
-	Proxies  []string `yaml:"proxies"`
-	URL      string   `yaml:"url,omitempty"`
-	Interval int      `yaml:"interval,omitempty"`
+	Name    string   `yaml:"name"`
+	Type    string   `yaml:"type"`
+	Proxies []string `yaml:"proxies"`
+}
+
+// clashProvider is a rule list mihomo downloads and keeps on disk.
+type clashProvider struct {
+	Type     string `yaml:"type"`
+	Behavior string `yaml:"behavior"`
+	Format   string `yaml:"format"`
+	URL      string `yaml:"url"`
+	Path     string `yaml:"path"`
+	Interval int    `yaml:"interval"`
 }
 
 type clashConfig struct {
-	MixedPort   int          `yaml:"mixed-port"`
-	AllowLAN    bool         `yaml:"allow-lan"`
-	Mode        string       `yaml:"mode"`
-	LogLevel    string       `yaml:"log-level"`
-	Proxies     []clashProxy `yaml:"proxies"`
-	ProxyGroups []clashGroup `yaml:"proxy-groups"`
-	Rules       []string     `yaml:"rules"`
+	MixedPort     int                      `yaml:"mixed-port"`
+	AllowLAN      bool                     `yaml:"allow-lan"`
+	Mode          string                   `yaml:"mode"`
+	LogLevel      string                   `yaml:"log-level"`
+	Proxies       []clashProxy             `yaml:"proxies"`
+	ProxyGroups   []clashGroup             `yaml:"proxy-groups"`
+	RuleProviders map[string]clashProvider `yaml:"rule-providers,omitempty"`
+	Rules         []string                 `yaml:"rules"`
 }
 
 // Clash renders a mihomo configuration.
@@ -69,10 +78,11 @@ type clashConfig struct {
 // AnyTLS is included. mihomo supports it; the older Clash forks do not and will
 // reject the file outright rather than skip the proxy. Anyone on one of those
 // should use the sing-box or share-link format instead.
-func Clash(entries []Entry) ([]byte, error) {
+//
+// rulesBase is the origin the rule lists are downloaded from: the panel.
+func Clash(entries []Entry, rulesBase string) ([]byte, error) {
 	proxies := make([]clashProxy, 0, len(entries))
-	names := make([]string, 0, len(entries))
-	var nodes []string // names of real nodes, for AUTO
+	kept := make([]Entry, 0, len(entries))
 
 	for _, e := range entries {
 		p := clashProxy{
@@ -117,31 +127,63 @@ func Clash(entries []Entry) ([]byte, error) {
 			continue
 		}
 		proxies = append(proxies, p)
-		names = append(names, e.Name)
-		if !e.Info {
-			nodes = append(nodes, e.Name)
-		}
-	}
-	// AUTO measures real nodes only. With none — an inactive account, whose
-	// list is just its notice — it holds what there is, because a url-test
-	// group with no members fails the whole file.
-	if len(nodes) == 0 {
-		nodes = names
+		kept = append(kept, e)
 	}
 
 	groups := []clashGroup{}
 	rules := []string{"MATCH,DIRECT"}
-	if len(names) > 0 {
-		groups = []clashGroup{
-			{Name: "PROXY", Type: "select", Proxies: append([]string{"AUTO"}, names...)},
-			{Name: "AUTO", Type: "url-test", Proxies: nodes,
-				URL: "https://www.gstatic.com/generate_204", Interval: 180},
-		}
-		rules = []string{"GEOIP,PRIVATE,DIRECT,no-resolve", "MATCH,PROXY"}
+	var providers map[string]clashProvider
+	if len(kept) > 0 {
+		groups, rules, providers = clashRouting(kept, rulesBase)
 	}
 
 	return yaml.Marshal(clashConfig{
 		MixedPort: 7890, AllowLAN: false, Mode: "rule", LogLevel: "warning",
-		Proxies: proxies, ProxyGroups: groups, Rules: rules,
+		Proxies: proxies, ProxyGroups: groups, RuleProviders: providers, Rules: rules,
 	})
+}
+
+// clashRouting builds the groups, rules and rule lists of routing.go.
+func clashRouting(kept []Entry, rulesBase string) ([]clashGroup, []string, map[string]clashProvider) {
+	nodes, info := splitInfo(kept)
+
+	var groups []clashGroup
+	// Announcements get a group of their own, listed first so the client
+	// shows them on top, and out of every group traffic actually uses.
+	if len(info) > 0 {
+		groups = append(groups, clashGroup{Name: groupNotice, Type: "select", Proxies: info})
+	}
+	groups = append(groups, clashGroup{Name: groupProxy, Type: "select", Proxies: nodes})
+	for _, g := range serviceGroups {
+		groups = append(groups, clashGroup{Name: g.name, Type: "select", Proxies: groupMembers(g, nodes)})
+	}
+	groups = append(groups, clashGroup{Name: groupFinal, Type: "select",
+		Proxies: groupMembers(routeGroup{name: groupFinal}, nodes)})
+
+	providers := map[string]clashProvider{}
+	rules := []string{"GEOIP,PRIVATE,DIRECT,no-resolve"}
+	for _, r := range routeRules {
+		for _, set := range r.sets {
+			behavior := "domain"
+			if set.kind == "geoip" {
+				behavior = "ipcidr"
+			}
+			providers[set.tag()] = clashProvider{
+				Type: "http", Behavior: behavior, Format: "mrs",
+				URL:      ruleFileURL(rulesBase, set, "mrs"),
+				Path:     "./ruleset/" + set.tag() + ".mrs",
+				Interval: 86400,
+			}
+			rule := "RULE-SET," + set.tag() + "," + r.target
+			// An address list only needs resolving for China, where an
+			// unlisted domestic name should still go direct. For the others,
+			// matching apps that dial addresses outright is enough.
+			if set.kind == "geoip" && set.name != "cn" {
+				rule += ",no-resolve"
+			}
+			rules = append(rules, rule)
+		}
+	}
+	rules = append(rules, "MATCH,"+groupFinal)
+	return groups, rules, providers
 }

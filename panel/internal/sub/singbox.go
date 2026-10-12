@@ -9,23 +9,23 @@ import (
 	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
-// Tags for the outbounds the panel always emits.
+// Tags for the outbounds the panel always emits. The main group is the shared
+// groupProxy; tagProxy names it here for the DNS detour and the empty case.
 const (
-	tagProxy  = "proxy"
-	tagAuto   = "auto"
+	tagProxy  = groupProxy
 	tagDirect = "direct"
 )
 
 // SingBox renders a complete sing-box client configuration.
 //
-// The proxy outbounds are the point of this file; the DNS, inbound and route
-// blocks are a deliberately small working default rather than an opinion about
-// how anyone should route their traffic. A user who wants more is better served
-// editing the result than having the panel grow a template language.
-func SingBox(entries []Entry) ([]byte, error) {
-	outbounds := make([]singbox.ClientOutbound, 0, len(entries)+3)
-	names := make([]string, 0, len(entries))
-	var nodes []string // names of real nodes, for the urltest
+// The proxy outbounds are the point of this file; the DNS and inbound blocks
+// are a small working default, and the routing is the shared one of
+// routing.go.
+//
+// rulesBase is the origin the rule sets are downloaded from: the panel.
+func SingBox(entries []Entry, rulesBase string) ([]byte, error) {
+	outbounds := make([]singbox.ClientOutbound, 0, len(entries)+12)
+	kept := make([]Entry, 0, len(entries))
 
 	for _, e := range entries {
 		ob := singbox.ClientOutbound{
@@ -76,36 +76,23 @@ func SingBox(entries []Entry) ([]byte, error) {
 			continue
 		}
 		outbounds = append(outbounds, ob)
-		names = append(names, e.Name)
-		if !e.Info {
-			nodes = append(nodes, e.Name)
-		}
+		kept = append(kept, e)
 	}
 
-	// A selector with the urltest inside it gives both automatic choice and a
-	// manual override, which is what every client UI expects to find.
-	// The urltest measures real nodes only; see Clash for the empty case.
-	if len(nodes) == 0 {
-		nodes = names
-	}
-	auto := singbox.ClientOutbound{
-		Type: "urltest", Tag: tagAuto, Outbounds: nodes,
-		URL: "https://www.gstatic.com/generate_204", Interval: "3m",
-	}
-	proxy := singbox.ClientOutbound{
-		Type: "selector", Tag: tagProxy,
-		Outbounds: append([]string{tagAuto}, names...), Default: tagAuto,
-	}
-	if len(names) == 0 {
+	var rules []singbox.RouteRule
+	var sets []singbox.RuleSet
+	if len(kept) == 0 {
 		// An inactive or unassigned user still gets a parseable config. A
 		// selector with no members makes sing-box refuse to start, which looks
 		// to the user like a broken client rather than an expired account.
-		auto.Outbounds = []string{tagDirect}
-		proxy.Outbounds = []string{tagDirect}
-		proxy.Default = tagDirect
+		outbounds = append(outbounds, singbox.ClientOutbound{
+			Type: "selector", Tag: tagProxy, Outbounds: []string{tagDirect}, Default: tagDirect})
+	} else {
+		var groups []singbox.ClientOutbound
+		groups, rules, sets = singBoxRouting(kept, rulesBase)
+		outbounds = append(outbounds, groups...)
 	}
-	outbounds = append(outbounds, auto, proxy,
-		singbox.ClientOutbound{Type: tagDirect, Tag: tagDirect})
+	outbounds = append(outbounds, singbox.ClientOutbound{Type: tagDirect, Tag: tagDirect})
 
 	dns := &singbox.DNS{
 		Servers: []singbox.DNSServer{
@@ -121,6 +108,10 @@ func SingBox(entries []Entry) ([]byte, error) {
 	if hosts := serverDomains(entries); len(hosts) > 0 {
 		dns.Rules = []singbox.DNSRule{{Domain: hosts, Server: "local"}}
 	}
+	// Domestic names resolve at home, so they get domestic CDN addresses.
+	if len(sets) > 0 {
+		dns.Rules = append(dns.Rules, singbox.DNSRule{RuleSet: []string{"geosite-cn"}, Server: "local"})
+	}
 
 	cfg := singbox.ClientConfig{
 		Log: &singbox.Log{Level: "warn"},
@@ -130,18 +121,85 @@ func SingBox(entries []Entry) ([]byte, error) {
 		}},
 		Outbounds: outbounds,
 		Route: &singbox.Route{
-			Rules: []singbox.RouteRule{
-				{IPIsPriv: true, Outbound: tagDirect},
-			},
-			Final: tagProxy,
-			Auto:  true,
+			Rules:   append([]singbox.RouteRule{{IPIsPriv: true, Outbound: tagDirect}}, rules...),
+			RuleSet: sets,
+			Final:   final(len(sets) > 0),
+			Auto:    true,
 			// Which resolver turns a dialled name into an address. "local" so
 			// that a node addressed by name is resolved outside the tunnel that
 			// name is the far end of.
 			DefaultDomainResolver: &singbox.DomainResolver{Server: "local"},
 		},
 	}
+	if len(sets) > 0 {
+		// Keeps the downloaded rule sets, so a restart does not depend on
+		// fetching them again.
+		cfg.Experimental = &singbox.ClientExperimental{CacheFile: &singbox.CacheFile{Enabled: true}}
+	}
 	return json.MarshalIndent(cfg, "", "  ")
+}
+
+func final(routed bool) string {
+	if routed {
+		return groupFinal
+	}
+	return tagProxy
+}
+
+// singBoxRouting builds the groups, rules and rule sets of routing.go.
+func singBoxRouting(kept []Entry, rulesBase string) ([]singbox.ClientOutbound, []singbox.RouteRule, []singbox.RuleSet) {
+	nodes, info := splitInfo(kept)
+	tag := func(t string) string {
+		if t == targetDirect {
+			return tagDirect
+		}
+		return t
+	}
+	selector := func(name string, members []string) singbox.ClientOutbound {
+		out := make([]string, len(members))
+		for i, m := range members {
+			out[i] = tag(m)
+		}
+		return singbox.ClientOutbound{Type: "selector", Tag: name, Outbounds: out, Default: out[0]}
+	}
+
+	var groups []singbox.ClientOutbound
+	if len(info) > 0 {
+		groups = append(groups, selector(groupNotice, info))
+	}
+	groups = append(groups, selector(groupProxy, nodes))
+	for _, g := range serviceGroups {
+		groups = append(groups, selector(g.name, groupMembers(g, nodes)))
+	}
+	groups = append(groups, selector(groupFinal, groupMembers(routeGroup{name: groupFinal}, nodes)))
+
+	// Sniffing recovers the domain of a connection that arrives as a bare
+	// address (a TUN inbound), so the domain lists can match it.
+	rules := []singbox.RouteRule{{Action: "sniff"}}
+	var sets []singbox.RuleSet
+	for _, r := range routeRules {
+		var tags []string
+		for _, set := range r.sets {
+			tags = append(tags, set.tag())
+			sets = append(sets, singbox.RuleSet{
+				Type: "remote", Tag: set.tag(), Format: "binary",
+				URL: ruleFileURL(rulesBase, set, "srs"),
+				// Straight to the panel. Left unset, sing-box downloads
+				// through the first outbound — a node, which may be down.
+				// Deprecated in 1.14 for http_client, which clients older
+				// than 1.14 reject; removed in 1.16, by when it must move.
+				DownloadDetour: tagDirect,
+				UpdateInterval: "1d",
+			})
+		}
+		if r.sets[0] == (ruleSet{"geoip", "cn"}) {
+			// A domestic site missing from the domain list should still go
+			// direct; its address is what gives it away.
+			rules = append(rules, singbox.RouteRule{Action: "resolve"})
+		}
+		rules = append(rules, singbox.RouteRule{RuleSet: tags, Outbound: tag(r.target)})
+	}
+	return groups, rules, sets
 }
 
 // serverDomains is the set of node addresses that are names rather than

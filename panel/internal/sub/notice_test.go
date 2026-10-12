@@ -69,7 +69,7 @@ func TestNoticeRendersInEveryFormat(t *testing.T) {
 		t.Fatalf("notice does not point at the closed loopback port: %s", links[0])
 	}
 
-	raw, err := Clash(entries)
+	raw, err := Clash(entries, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestNoticeRendersInEveryFormat(t *testing.T) {
 		t.Fatal("clash has no proxy group to show the notice in")
 	}
 
-	raw, err = SingBox(entries)
+	raw, err = SingBox(entries, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}

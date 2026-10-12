@@ -50,7 +50,7 @@ func TestQUICSubscriptionFormats(t *testing.T) {
 	if tu.User.Username() != user.VlessUUID || password != user.Password || tu.Query().Get("mport") != "" {
 		t.Fatal("broken TUIC URI")
 	}
-	raw, err := SingBox(entries)
+	raw, err := SingBox(entries, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestQUICSubscriptionFormats(t *testing.T) {
 	if found != 2 {
 		t.Fatal("missing sing-box QUIC proxies")
 	}
-	raw, err = Clash(entries)
+	raw, err = Clash(entries, testRules)
 	if err != nil {
 		t.Fatal(err)
 	}
