@@ -97,6 +97,11 @@ type Config struct {
 	Token    string
 	Version  string
 
+	// EnvFile is where SKYSBX_PANEL is kept (node.env), rewritten when the
+	// panel moves to a new domain so the next start uses it too. Empty, or a
+	// file that does not exist, means the move lasts until the process exits.
+	EnvFile string
+
 	Engine Engine
 	Log    *slog.Logger
 }
@@ -105,7 +110,9 @@ type Client struct {
 	cfg Config
 	log *slog.Logger
 
-	wsURL string
+	// probe checks a new panel address before the node commits to it.
+	// Replaced in tests, which cannot get a certificate for a real name.
+	probe func(ctx context.Context, panelURL string) error
 
 	mu sync.Mutex
 	ws *websocket.Conn
@@ -140,6 +147,10 @@ type Client struct {
 	// appliedRev is the rev of the configuration the engine last accepted,
 	// reported under config_rev.
 	appliedRev string
+	// panelURL and wsURL are where the panel is. They change only when the
+	// panel says it has moved (panel_url).
+	panelURL string
+	wsURL    string
 }
 
 // outgoing is one stats report under stats_ack, kept exactly as first sent.
@@ -184,9 +195,28 @@ func New(cfg Config) (*Client, error) {
 	if cfg.Engine == nil {
 		return nil, errors.New("engine is required")
 	}
-	u, err := url.Parse(strings.TrimRight(cfg.PanelURL, "/"))
+	wsURL, err := controlURL(cfg.PanelURL)
 	if err != nil {
-		return nil, fmt.Errorf("panel URL %q: %w", cfg.PanelURL, err)
+		return nil, err
+	}
+
+	log := cfg.Log
+	if log == nil {
+		log = slog.Default()
+	}
+	var epoch [8]byte
+	if _, err := crand.Read(epoch[:]); err != nil {
+		return nil, fmt.Errorf("stats epoch: %w", err)
+	}
+	return &Client{cfg: cfg, log: log, probe: probePanel,
+		panelURL: cfg.PanelURL, wsURL: wsURL, epoch: hex.EncodeToString(epoch[:])}, nil
+}
+
+// controlURL turns a panel base URL into the control channel's address.
+func controlURL(panelURL string) (string, error) {
+	u, err := url.Parse(strings.TrimRight(panelURL, "/"))
+	if err != nil {
+		return "", fmt.Errorf("panel URL %q: %w", panelURL, err)
 	}
 	switch u.Scheme {
 	case "https":
@@ -200,25 +230,17 @@ func New(cfg Config) (*Client, error) {
 		// Allowed only against loopback, which is how the protocol is developed
 		// and tested and where there is no network to read it off.
 		if !isLoopback(u.Hostname()) {
-			return nil, fmt.Errorf(
+			return "", fmt.Errorf(
 				"panel URL %q is plain HTTP: the node token would be sent in the "+
-					"clear on every reconnect. Use https://", cfg.PanelURL)
+					"clear on every reconnect. Use https://", panelURL)
 		}
 		u.Scheme = "ws"
 	default:
-		return nil, fmt.Errorf("panel URL %q must be http or https", cfg.PanelURL)
+		return "", fmt.Errorf("panel URL %q must be http or https", panelURL)
 	}
 	u.Path = strings.TrimRight(u.Path, "/") + "/api/v1/node/connect"
 
-	log := cfg.Log
-	if log == nil {
-		log = slog.Default()
-	}
-	var epoch [8]byte
-	if _, err := crand.Read(epoch[:]); err != nil {
-		return nil, fmt.Errorf("stats epoch: %w", err)
-	}
-	return &Client{cfg: cfg, log: log, wsURL: u.String(), epoch: hex.EncodeToString(epoch[:])}, nil
+	return u.String(), nil
 }
 
 // isLoopback reports whether a host is this machine. Names as well as
@@ -268,11 +290,14 @@ func (c *Client) session(ctx context.Context) error {
 	dialCtx, dialCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer dialCancel()
 
-	ws, _, err := websocket.Dial(dialCtx, c.wsURL, &websocket.DialOptions{
+	c.stateMu.Lock()
+	wsURL, panelURL := c.wsURL, c.panelURL
+	c.stateMu.Unlock()
+	ws, _, err := websocket.Dial(dialCtx, wsURL, &websocket.DialOptions{
 		HTTPHeader: http.Header{"Authorization": {"Bearer " + c.cfg.Token}},
 	})
 	if err != nil {
-		return fmt.Errorf("dial %s: %w", c.wsURL, err)
+		return fmt.Errorf("dial %s: %w", wsURL, err)
 	}
 	ws.SetReadLimit(maxFrame)
 	defer ws.Close(websocket.StatusNormalClosure, "")
@@ -304,7 +329,7 @@ func (c *Client) session(ctx context.Context) error {
 	}); err != nil {
 		return fmt.Errorf("hello: %w", err)
 	}
-	c.log.Info("control channel up", "panel", c.cfg.PanelURL)
+	c.log.Info("control channel up", "panel", panelURL)
 
 	reportDone := make(chan struct{})
 	go func() {
@@ -416,6 +441,29 @@ func (c *Client) handle(ctx context.Context, data []byte) {
 			c.log.Debug("users updated", "tags", len(ud.ByTag), "stats", len(ud.StatsUsers))
 		}
 		c.reply(ctx, env.ID, err)
+
+	case proto.TypePanelURL:
+		var pu proto.PanelURLData
+		if err := json.Unmarshal(env.Data, &pu); err != nil {
+			c.reply(ctx, env.ID, fmt.Errorf("panel_url payload: %w", err))
+			return
+		}
+		moved, err := c.movePanel(ctx, pu.URL)
+		if err != nil {
+			c.log.Warn("panel moved, but the new address does not work yet; staying",
+				"url", pu.URL, "error", err)
+		}
+		c.reply(ctx, env.ID, err)
+		if moved {
+			// The session still runs on the old name. Closing it makes Run
+			// dial the new one, which is the only way to be sure it works.
+			c.mu.Lock()
+			ws := c.ws
+			c.mu.Unlock()
+			if ws != nil {
+				ws.Close(websocket.StatusNormalClosure, "panel moved")
+			}
+		}
 
 	case proto.TypePing:
 		if err := c.send(ctx, proto.TypePong, env.ID, nil); err != nil {

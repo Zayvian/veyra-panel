@@ -77,6 +77,18 @@ func main() {
 
 	svc := service.New(st)
 
+	// A domain changed from the settings page outranks the unit's flags until
+	// the next upgrade rewrites them; see web.PanelDomains.
+	domains, err := web.ResolveDomains(st, *domain, *subDomain)
+	if err != nil {
+		log.Warn("panel domains", "error", err)
+	}
+	if domains.Domain != *domain || domains.SubDomain != *subDomain {
+		log.Info("using the domain set in the panel", "domain", domains.Domain,
+			"sub_domain", domains.SubDomain, "unit_says", *domain)
+	}
+	*domain, *subDomain = domains.Domain, domains.SubDomain
+
 	// Seeding the administrator before the panel ever listens is what closes
 	// the first-run window: until one exists, /setup belongs to whoever reaches
 	// it first, and that is a race against the whole internet.
@@ -108,6 +120,7 @@ func main() {
 	// it the service quietly talks to a no-op and nothing ever reaches a node.
 	nodeHub := hub.New(svc, log)
 	svc.SetNotifier(nodeHub)
+	nodeHub.SetPanelHost(*domain)
 
 	// A Secure cookie is discarded by the browser over plain HTTP, so binding
 	// to localhost for development implies insecure cookies. Anything else has
@@ -128,7 +141,12 @@ func main() {
 			"url", "http://"+*addr+"/setup")
 	}
 
-	srv.SetSubscriptionDomain(*subDomain)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Restarting after a domain change is a clean exit: the unit's
+	// Restart=always starts the panel again, and it comes up on the new names.
+	srv.SetPanelDomains(domains, filepath.Dir(*dbPath), stop)
 	listenAddr := *addr
 	if *domain != "" {
 		listenAddr = ":443"
@@ -140,9 +158,6 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
 	var redirectSrv *http.Server
 	if *domain != "" {
 		autoTLS, err := web.NewAutoTLS(*domain, *acmeEmail, filepath.Dir(*dbPath), *subDomain)
@@ -150,6 +165,7 @@ func main() {
 			log.Error("automatic TLS", "domain", *domain, "error", err)
 			os.Exit(1)
 		}
+		autoTLS.KeepServing(domains.Old()...)
 		httpSrv.TLSConfig = autoTLS.TLSConfig()
 
 		// Port 80 answers the ACME challenge and redirects everything else, and
@@ -188,6 +204,7 @@ func main() {
 		} else {
 			log.Info("certificate ready", "domain", *domain)
 		}
+		go web.FinishDomainMove(ctx, svc, filepath.Dir(*dbPath), domains, log)
 	}
 
 	// The activity digest grows with users × nodes × hours and nothing else in

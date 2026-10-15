@@ -21,6 +21,42 @@
       </p>
       <button>保存访问设置</button>
     </form>
+    {{if .DomainChangeEnable}}
+    <form class="card" hx-post="{{panelPath "/settings/domain"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML"
+          hx-confirm="确定更换域名吗？面板会自动重启，十几秒后用新域名打开。旧域名会继续保留，节点和客户不会断。">
+      <h2 style="margin-top:0">更换域名</h2>
+      <p class="dim" style="margin:.2rem 0 .8rem;font-size:.85rem">
+        现在的面板域名：<code class="mono">{{.PanelDomain}}</code>
+        {{if .SubDomain}}，订阅域名：<code class="mono">{{.SubDomain}}</code>{{else}}（订阅链接也用这个域名）{{end}}<br>
+        先在域名服务商那里把新域名的 <strong>A 记录指向这台服务器</strong>，再在下面填新域名。保存后面板会自动重启、自动申请新证书，
+        节点会自动改连新域名，新发给客户的订阅链接也会换成新域名。<br>
+        <strong>旧域名会继续保留</strong>：已经发出去的旧订阅链接照样能用，节点在切换完之前也不会断。等节点都切好、客户都换了新链接，再到下面停用旧域名。
+      </p>
+      <label>新面板域名
+        <input name="domain" value="{{.PanelDomain}}" placeholder="panel.example.com" autocomplete="off" required>
+      </label>
+      <label>新订阅域名（可选）
+        <input name="sub_domain" value="{{.SubDomain}}" placeholder="留空 = 订阅也用面板域名" autocomplete="off">
+      </label>
+      <label style="display:flex;gap:.4rem;align-items:center;margin:.6rem 0;font-size:.85rem">
+        <input type="checkbox" name="skip_dns" style="width:auto"> 跳过解析检查（用了 CDN 或检查误报时才勾）
+      </label>
+      <button>更换域名</button>
+    </form>
+    {{if .OldDomains}}
+    <form class="card" hx-post="{{panelPath "/settings/domain/retire"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML"
+          hx-confirm="停用后，旧域名上的订阅链接和还连着旧域名的节点都会失效。确定停用吗？">
+      <h2 style="margin-top:0">旧域名</h2>
+      <p class="dim" style="margin:.2rem 0 .8rem;font-size:.85rem">
+        这些旧域名还在继续服务：{{range $i, $d := .OldDomains}}{{if $i}}、{{end}}<code class="mono">{{$d}}</code>{{end}}。<br>
+        {{if .NodesOnOldDomain}}<strong>还有 {{.NodesOnOldDomain}} 个节点连着旧域名</strong>，新域名证书签好后它们会自动切换。如果一直不切换，节点可能是旧版本，先升级节点。
+        {{else}}在线的节点都已经连到新域名了。{{end}}<br>
+        停用后，旧域名上的订阅链接会失效，客户需要用新链接。旧域名不再续证书。
+      </p>
+      <button class="danger">停用旧域名</button>
+    </form>
+    {{end}}
+    {{end}}
     <form class="card" hx-post="{{panelPath "/settings/announcement"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML">
       <h2 style="margin-top:0">订阅公告</h2>
       <p class="dim" style="margin:.2rem 0 .8rem;font-size:.85rem">
@@ -50,6 +86,29 @@
       <p class="dim" style="margin:.45rem 0 1rem;font-size:.82rem">请输入 <code class="mono">全部断连</code> 后再执行。该操作不能撤回。</p>
       <button class="danger">强制全员更新订阅</button>
     </form>
+  </div>
+</main>
+{{template "foot" .}}
+{{end}}
+
+{{define "domain-moving"}}
+{{template "head" .}}
+{{template "nav" .}}
+<main>
+  <h1>设置</h1>
+  <div id="settings">
+    <div class="card" style="border-color:rgba(62,207,142,.4)">
+      {{if .Retired}}
+      <p><span class="pill ok">旧域名已停用</span></p>
+      <p>面板正在重启，十几秒后刷新即可：<a href="{{.NewURL}}">{{.NewURL}}</a></p>
+      {{else}}
+      <p><span class="pill ok">已保存，面板正在重启</span></p>
+      <p>面板会在十几秒到一两分钟内用新域名启动（第一次要申请证书）。到时打开：<br>
+        <a href="{{.NewURL}}"><code class="mono">{{.NewURL}}</code></a></p>
+      <p class="dim" style="font-size:.85rem">新域名打不开的话，可能是解析还没生效或证书还在申请，旧地址
+        <a href="{{.OldURL}}"><code class="mono">{{.OldURL}}</code></a> 仍然可以登录。节点会在新证书签好后自动切到新域名。</p>
+      {{end}}
+    </div>
   </div>
 </main>
 {{template "foot" .}}

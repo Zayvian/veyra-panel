@@ -13,17 +13,18 @@ import (
 // must encode them back unchanged; see protocol/PROTOCOL.md.
 func TestProtocolSamplesRoundTrip(t *testing.T) {
 	payload := map[string]func() any{
-		TypeHello:   func() any { return new(Hello) },
-		TypeWelcome: func() any { return new(Welcome) },
-		TypeConfig:  func() any { return new(ConfigData) },
-		TypeUsers:   func() any { return new(UsersData) },
-		TypeError:   func() any { return new(ErrorData) },
-		TypeState:   func() any { return new(StateData) },
-		TypeStats:   func() any { return new(StatsData) },
-		TypeOnline:  func() any { return new(OnlineData) },
-		TypeOK:      nil,
-		TypePing:    nil,
-		TypePong:    nil,
+		TypeHello:    func() any { return new(Hello) },
+		TypeWelcome:  func() any { return new(Welcome) },
+		TypeConfig:   func() any { return new(ConfigData) },
+		TypeUsers:    func() any { return new(UsersData) },
+		TypeError:    func() any { return new(ErrorData) },
+		TypeState:    func() any { return new(StateData) },
+		TypeStats:    func() any { return new(StatsData) },
+		TypeOnline:   func() any { return new(OnlineData) },
+		TypePanelURL: func() any { return new(PanelURLData) },
+		TypeOK:       nil,
+		TypePing:     nil,
+		TypePong:     nil,
 	}
 	files, err := filepath.Glob(filepath.Join("..", "..", "..", "protocol", "testdata", "*.json"))
 	if err != nil || len(files) == 0 {

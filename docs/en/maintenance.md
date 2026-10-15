@@ -85,6 +85,8 @@ curl -fsSL https://raw.githubusercontent.com/Zayvian/veyra-panel/main/install.sh
 
 From then on subscriptions are served only on that domain, and links using the panel domain return 404. The users page copies the new links; **links already handed out must be replaced**.
 
+Or skip the command: enter the subscription domain under 「设置 → 更换域名」 in the panel. Done that way, the old links keep working; see [Guide: Changing the domain](guide.md#changing-the-domain). Changing the panel domain is done there too.
+
 ---
 
 ## 2. Backup and restore

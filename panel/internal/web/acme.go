@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/caddyserver/certmagic"
@@ -26,8 +27,10 @@ import (
 type AutoTLS struct {
 	domain  string
 	domains []string
-	cfg     *certmagic.Config
-	issuer  *certmagic.ACMEIssuer
+	// old names kept after a domain change; see KeepServing.
+	old    []string
+	cfg    *certmagic.Config
+	issuer *certmagic.ACMEIssuer
 }
 
 // NewAutoTLS prepares ACME for domain but does not talk to the CA yet — call
@@ -90,7 +93,7 @@ func (a *AutoTLS) ChallengeAndRedirect() http.Handler {
 			if h, _, err := net.SplitHostPort(requested); err == nil {
 				requested = h
 			}
-			for _, d := range a.domains {
+			for _, d := range append(slices.Clone(a.domains), a.old...) {
 				if strings.EqualFold(requested, d) {
 					host = d
 					break
@@ -109,6 +112,14 @@ func (a *AutoTLS) ChallengeAndRedirect() http.Handler {
 // failures, and burning the hour's budget is a worse state to be in than being
 // down while someone reads the log.
 func (a *AutoTLS) Obtain(ctx context.Context) error {
+	// Old names are managed in the background and never waited for. Their
+	// certificates are normally already on disk; one that no longer resolves
+	// here must not hold up the panel's start for the minutes it takes to fail.
+	if len(a.old) > 0 {
+		if err := a.cfg.ManageAsync(context.WithoutCancel(ctx), a.old); err != nil {
+			return fmt.Errorf("keep certificates for old domains: %w", err)
+		}
+	}
 	if err := a.cfg.ManageSync(ctx, a.domains); err != nil {
 		if aerr := a.cfg.ManageAsync(context.WithoutCancel(ctx), a.domains); aerr != nil {
 			return fmt.Errorf("obtain certificate for %s: %w", a.domain, err)
@@ -117,6 +128,16 @@ func (a *AutoTLS) Obtain(ctx context.Context) error {
 			a.domain, err)
 	}
 	return nil
+}
+
+// KeepServing adds names the panel has moved away from but still answers to,
+// so nodes and subscriptions that hold them keep working for now.
+func (a *AutoTLS) KeepServing(names ...string) {
+	for _, n := range names {
+		if n != "" && !slices.Contains(a.domains, n) && !slices.Contains(a.old, n) {
+			a.old = append(a.old, n)
+		}
+	}
 }
 
 // TLSConfig is what to serve HTTPS with. Valid before Obtain succeeds, but

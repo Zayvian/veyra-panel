@@ -45,6 +45,9 @@ func (s *Server) renderSettingsWith(w http.ResponseWriter, r *http.Request, save
 	data["Announcement"] = strings.Join(lines, "\n")
 	data["AnnouncementLines"] = service.MaxAnnouncementLines
 	data["AnnouncementRunes"] = service.MaxAnnouncementRunes
+	for k, v := range s.domainSettings() {
+		data[k] = v
+	}
 	if err := s.totpSettings(data); err != nil {
 		s.fail(w, r, err)
 		return

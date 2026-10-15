@@ -26,10 +26,11 @@ const (
 	TypePong   = "pong"
 
 	// panel -> node
-	TypeWelcome = "welcome"
-	TypeConfig  = "config"
-	TypeUsers   = "users"
-	TypePing    = "ping"
+	TypeWelcome  = "welcome"
+	TypeConfig   = "config"
+	TypeUsers    = "users"
+	TypePing     = "ping"
+	TypePanelURL = "panel_url"
 )
 
 // Protocol 2 adds capability negotiation. This node says proto 2 and its caps
@@ -46,10 +47,18 @@ const (
 	CapStatsAck = "stats_ack"
 	// CapConfigRev: state reports the rev of the configuration running.
 	CapConfigRev = "config_rev"
+	// CapPanelURL: the panel may name a new address for itself, which the node
+	// checks, remembers and reconnects to. See protocol/PROTOCOL.md.
+	CapPanelURL = "panel_url"
 )
 
 // NodeCaps is what this node offers in its hello.
-var NodeCaps = []string{CapStatsAck, CapConfigRev}
+var NodeCaps = []string{CapStatsAck, CapConfigRev, CapPanelURL}
+
+// PanelURLData is the panel's new base URL, after its domain was changed.
+type PanelURLData struct {
+	URL string `json:"url"`
+}
 
 // Welcome is the panel's answer to a protocol-2 hello.
 type Welcome struct {
