@@ -35,5 +35,10 @@ func (s *Server) subscriptionOrigin(r *http.Request) string {
 	if s.subscriptionDomain != "" {
 		return "https://" + s.subscriptionDomain
 	}
+	// Links are handed out on the current name even to an administrator who
+	// signed in through an old one.
+	if s.domains.Domain != "" {
+		return "https://" + s.domains.Domain
+	}
 	return strings.TrimSuffix(subURL(r), r.URL.Path)
 }

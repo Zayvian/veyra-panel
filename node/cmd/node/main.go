@@ -32,6 +32,8 @@ func main() {
 			"node token issued by the panel")
 		logLevel = flag.String("log", envOr("SKYSBX_LOG", "info"),
 			"log level: debug, info, warn, error")
+		envFile = flag.String("env-file", envOr("SKYSBX_ENV_FILE", "node.env"),
+			"environment file holding SKYSBX_PANEL; rewritten when the panel moves to a new domain")
 		showVersion = flag.Bool("version", false, "print the version and exit")
 	)
 	flag.Parse()
@@ -58,6 +60,7 @@ func main() {
 		PanelURL: *panelURL,
 		Token:    *token,
 		Version:  version,
+		EnvFile:  *envFile,
 		Engine:   eng,
 		Log:      log,
 	})

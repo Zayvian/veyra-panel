@@ -102,7 +102,7 @@ func TestNewNodeIsWelcomedFirst(t *testing.T) {
 	if err := json.Unmarshal(first.Data, &w); err != nil {
 		t.Fatal(err)
 	}
-	if w.Proto != ProtoVersion || len(w.Caps) != 2 {
+	if w.Proto != ProtoVersion || len(w.Caps) != len(PanelCaps) {
 		t.Fatalf("welcome = %+v", w)
 	}
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -53,6 +54,10 @@ type Hub struct {
 	pendTimer  *time.Timer
 	pendSince  time.Time // when the oldest pending notification arrived
 
+	// panelHost is the domain the panel serves now. A node that dialled any
+	// other name is told about this one (see CapPanelURL). Empty disables it.
+	panelHost atomic.Pointer[string]
+
 	// Guards the pre-index authentication path, which is the only expensive
 	// thing this unauthenticated endpoint can be made to do. Three attempts,
 	// then one a minute: a node upgrading from a token minted before the index
@@ -85,6 +90,11 @@ type conn struct {
 	// a node older than protocol 2, which is spoken to as it always was.
 	statsAck  atomic.Bool
 	configRev atomic.Bool
+	panelURL  atomic.Bool
+
+	// host is the name the node dialled, from the request's Host. It is how
+	// the panel tells a node still on an old domain from one that has moved.
+	host string
 
 	lastSeen atomic.Int64 // unix seconds, for pong tracking
 	online   atomic.Pointer[[]string]
@@ -134,7 +144,11 @@ func (h *Hub) Handler() http.HandlerFunc {
 		}
 		ws.SetReadLimit(maxFrame)
 
-		h.serve(r.Context(), nodeID, ws)
+		host := r.Host
+		if hn, _, err := net.SplitHostPort(host); err == nil {
+			host = hn
+		}
+		h.serve(r.Context(), nodeID, strings.ToLower(host), ws)
 	}
 }
 
@@ -160,11 +174,11 @@ func bearer(r *http.Request) string {
 	return ""
 }
 
-func (h *Hub) serve(ctx context.Context, nodeID int64, ws *websocket.Conn) {
+func (h *Hub) serve(ctx context.Context, nodeID int64, host string, ws *websocket.Conn) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	c := &conn{nodeID: nodeID, ws: ws}
+	c := &conn{nodeID: nodeID, ws: ws, host: host}
 	c.lastSeen.Store(time.Now().Unix())
 
 	// One connection per node. A reconnect after a network drop arrives before
@@ -267,6 +281,8 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 					c.statsAck.Store(true)
 				case CapConfigRev:
 					c.configRev.Store(true)
+				case CapPanelURL:
+					c.panelURL.Store(true)
 				}
 			}
 			if err := h.send(ctx, c, TypeWelcome, 0,
@@ -277,7 +293,10 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 		// A node has no state of its own worth keeping across a reconnect, so
 		// it is brought up to date immediately rather than waiting for the next
 		// edit in the UI.
-		return h.pushTo(ctx, c, true, true)
+		if err := h.pushTo(ctx, c, true, true); err != nil {
+			return err
+		}
+		return h.redirectIfMoved(ctx, c)
 
 	case TypeOK:
 		return nil
@@ -399,6 +418,38 @@ func (h *Hub) usage(nodeID int64, s StatsData) map[string]service.Usage {
 }
 
 // ── outbound pushes ─────────────────────────────────────────────────────────
+
+// SetPanelHost names the domain the panel serves now. Nodes that dial in
+// through any other name — an old domain kept alive after a change — are told
+// the new one, and switch over once they have checked it works.
+func (h *Hub) SetPanelHost(host string) {
+	host = strings.ToLower(host)
+	h.panelHost.Store(&host)
+}
+
+// redirectIfMoved sends panel_url to a node that reached the panel through a
+// name other than its current domain. A node that cannot reach the new
+// address answers with an error and stays where it is; the next reconnect
+// asks again.
+func (h *Hub) redirectIfMoved(ctx context.Context, c *conn) error {
+	p := h.panelHost.Load()
+	if p == nil || *p == "" || c.host == "" || c.host == *p || !c.panelURL.Load() {
+		return nil
+	}
+	h.log.Info("telling node about the new panel domain", "node", c.nodeID, "from", c.host, "to", *p)
+	return h.send(ctx, c, TypePanelURL, h.nextID.Add(1), PanelURLData{URL: "https://" + *p})
+}
+
+// DialedHost is the domain a connected node used to reach the panel, or "" if
+// it is not connected.
+func (h *Hub) DialedHost(nodeID int64) string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if c, ok := h.conns[nodeID]; ok {
+		return c.host
+	}
+	return ""
+}
 
 func (h *Hub) send(ctx context.Context, c *conn, t string, id uint64, data any) error {
 	frame, err := encode(t, id, data)

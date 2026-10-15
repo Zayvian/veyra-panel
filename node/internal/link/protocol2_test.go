@@ -44,7 +44,7 @@ func TestHelloOffersProtocol2(t *testing.T) {
 	p := newFakePanel(t)
 	start(t, p, &fakeEngine{})
 	h := welcomed(t, p)
-	if h.Proto != proto.ProtoVersion || len(h.Caps) != 2 {
+	if h.Proto != proto.ProtoVersion || len(h.Caps) != len(proto.NodeCaps) {
 		t.Fatalf("hello = %+v, want proto 2 with caps", h)
 	}
 }

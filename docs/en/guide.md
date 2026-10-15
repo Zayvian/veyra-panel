@@ -290,6 +290,18 @@ See [Installation: hide the admin URL](install.md#hide-the-admin-url-recommended
 
 Each line is a placeholder entry that cannot connect, there only to be read. In Clash and sing-box, announcements sit in their own "公告" group at the top and are **never in a group that carries traffic**, so customers cannot connect to one by mistake. Customers see a new announcement after updating their subscription. A line with the same name as a group (such as "AI" or "节点选择") is skipped.
 
+### Changing the domain
+
+「更换域名」 (under 设置): enter the new panel domain, and optionally a subscription domain, then click 「更换域名」.
+
+1. **First** point the new domain's A record at the panel server. The panel checks the DNS and will not save if the name does not resolve to this server. Tick 「跳过解析检查」 only behind a CDN or if the check is wrong;
+2. After saving, the panel restarts by itself and comes up on the new domain within a few seconds to a couple of minutes (it obtains a certificate first). Until the new domain works, the old address still lets you sign in;
+3. Nodes switch to the new domain by themselves and write it into their own configuration, so **there is no need to log in to the node servers**. Nodes must be on this version or newer; upgrade older ones first;
+4. The node on the panel server itself, if its address is the panel domain, moves to the new domain and the new certificate. Customers using its AnyTLS, Hysteria2 or TUIC need to **update their subscription once**;
+5. Subscription links copied from now on use the new domain. **The old domain stays in service**, so links already handed out keep working.
+
+Once every node has moved (the page shows how many still connect through the old domain) and customers have their new links, click 「停用旧域名」. Links on the old domain then stop working and the panel stops renewing its certificate. Keeping an old domain that is blocked or has expired does no harm.
+
 ### Two-step login
 
 「两步验证」: signing in then needs, besides the password, the 6-digit code from an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…).

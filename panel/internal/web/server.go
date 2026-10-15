@@ -8,6 +8,7 @@
 package web
 
 import (
+	"context"
 	"embed"
 	"encoding/base64"
 	"errors"
@@ -119,6 +120,10 @@ func (s *Server) setupOpen(now time.Time) (bool, error) {
 
 type Server struct {
 	subscriptionDomain string
+	domains            PanelDomains
+	dataDir            string
+	restart            func()
+	lookupHost         func(ctx context.Context, host string) ([]string, error) // tests
 	rules              *sub.RuleFiles
 	svc                *service.Service
 	log                *slog.Logger
@@ -277,6 +282,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /settings", s.auth(http.HandlerFunc(s.getSettings)))
 	mux.Handle("POST /settings", s.auth(s.requireCSRF(http.HandlerFunc(s.postSettings))))
 	mux.Handle("POST /settings/force-subscription-refresh", s.auth(s.requireCSRF(http.HandlerFunc(s.postForceSubscriptionRefresh))))
+	mux.Handle("POST /settings/domain", s.auth(s.requireCSRF(http.HandlerFunc(s.postDomain))))
+	mux.Handle("POST /settings/domain/retire", s.auth(s.requireCSRF(http.HandlerFunc(s.postRetireOldDomains))))
 	mux.Handle("POST /settings/announcement", s.auth(s.requireCSRF(http.HandlerFunc(s.postAnnouncement))))
 	mux.Handle("POST /settings/2fa/begin", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPBegin))))
 	mux.Handle("POST /settings/2fa/enable", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPEnable))))
@@ -334,13 +341,15 @@ func (s *Server) Handler() http.Handler {
 		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
-		if s.subscriptionDomain != "" {
-			isSubscriptionHost := strings.EqualFold(host, s.subscriptionDomain)
-			isSubscriptionPath := strings.HasPrefix(r.URL.Path, "/sub/")
-			if isSubscriptionHost != isSubscriptionPath {
-				http.NotFound(w, r)
-				return
-			}
+		// A subscription domain serves /sub/ and nothing else, and takes /sub/
+		// off the panel's own name. Old names kept after a domain change do
+		// whichever of the two they did before.
+		isSubscriptionPath := strings.HasPrefix(r.URL.Path, "/sub/")
+		servesSubscriptions := s.subscriptionDomain == "" || s.isSubscriptionHost(host)
+		subscriptionsOnly := s.isSubscriptionHost(host) && !s.isOldPanelHost(host)
+		if (subscriptionsOnly && !isSubscriptionPath) || (isSubscriptionPath && !servesSubscriptions) {
+			http.NotFound(w, r)
+			return
 		}
 
 		// Nodes and subscriptions are stable public machine endpoints.  Do not
