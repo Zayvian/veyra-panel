@@ -101,10 +101,12 @@ func TestChangingTheDomainFromSettings(t *testing.T) {
 func TestDomainChangeChecksDNSFirst(t *testing.T) {
 	h := newDomainHarness(t,
 		PanelDomains{Domain: "panel.old.com", FlagDomain: "panel.old.com"},
-		map[string][]string{"panel.old.com": {"203.0.113.7"}, "elsewhere.net": {"198.51.100.1"}})
+		map[string][]string{"panel.old.com": {"203.0.113.7"}, "elsewhere.net": {"198.51.100.1"},
+			"parked.net": {"203.0.113.7", "198.49.23.144"}})
 
 	for _, tc := range []struct{ domain, want string }{
 		{"elsewhere.net", "不是这台服务器"},
+		{"parked.net", "198.49.23.144"},
 		{"nowhere.net", "查不到"},
 		{"https://x.net", "格式不对"},
 		{"panel.old.com", "没有变化"},

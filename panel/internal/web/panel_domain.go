@@ -192,10 +192,21 @@ func (s *Server) pointsHere(ctx context.Context, name string) ([]string, error) 
 			}
 		}
 	}
+	// Every address, not just one. A visitor — and the certificate authority —
+	// gets any of them, so a leftover record from a registrar's parking page
+	// fails most requests while one correct record would pass a weaker check.
+	var elsewhere []string
 	for _, a := range addrs {
-		if here[a] {
-			return addrs, nil
+		if !here[a] {
+			elsewhere = append(elsewhere, a)
 		}
+	}
+	if len(elsewhere) == 0 {
+		return addrs, nil
+	}
+	if len(elsewhere) < len(addrs) {
+		return addrs, fmt.Errorf("%s 除了这台服务器，还解析到 %s。请在 DNS 里删掉这些多余的记录（常见于域名商默认的建站记录），等几分钟生效后再试",
+			name, strings.Join(elsewhere, "、"))
 	}
 	return addrs, fmt.Errorf("%s 解析到 %s，不是这台服务器。请先把它的 A 记录改成这台服务器的 IP，等几分钟生效后再试",
 		name, strings.Join(addrs, "、"))
