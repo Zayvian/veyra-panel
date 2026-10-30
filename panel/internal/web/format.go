@@ -33,6 +33,9 @@ func templateFuncs() template.FuncMap {
 		// 号" would be a promise February cannot keep.
 		"days28":    func() []int { return daysTo28 },
 		"nextreset": nextResetLabel,
+		// Nodes keep their own day/hour/minute and have no ResetSchedule,
+		// so they need the plain form.
+		"nextresetat": nextResetAtLabel,
 
 		// Plans: a blank one for the create form, and the reset day in words.
 		"emptyplan": func() *store.Plan { return &store.Plan{} },
@@ -56,7 +59,11 @@ var daysTo28 = func() []int {
 
 // nextResetLabel is when this user's counter next goes to zero.
 func nextResetLabel(u *store.User) string {
-	day, hour, minute := u.ResetSchedule()
+	return nextResetAtLabel(u.ResetSchedule())
+}
+
+// nextResetAtLabel is when a day/hour/minute schedule next fires.
+func nextResetAtLabel(day, hour, minute int) string {
 	if day < 1 {
 		return ""
 	}
