@@ -51,7 +51,7 @@ func TestAnnouncementHeadsTheSubscription(t *testing.T) {
 	}
 
 	got := names()
-	if len(got) != 3 || got[0] != "📢 官网：example.com" || got[1] != "续费请联系：abc" || got[2] != "东京 01 [1×]" {
+	if len(got) != 3 || got[0] != "📢 官网：example.com" || got[1] != "续费请联系：abc" || got[2] != "东京 01" {
 		t.Fatalf("active subscription = %q", got)
 	}
 
@@ -70,7 +70,7 @@ func TestAnnouncementHeadsTheSubscription(t *testing.T) {
 	if err := svc.UpdateUser(u); err != nil {
 		t.Fatal(err)
 	}
-	if got := names(); len(got) != 1 || got[0] != "东京 01 [1×]" {
+	if got := names(); len(got) != 1 || got[0] != "东京 01" {
 		t.Fatalf("after clearing = %q", got)
 	}
 }
