@@ -82,7 +82,7 @@
           <td class="num dim" data-label="周期上行">{{bytes .Node.StatsUp}}</td>
           <td class="num dim" data-label="周期下行">{{bytes .Node.StatsDown}}</td>
           <td class="num" data-label="本周期">{{bytes .Period}}</td>
-          <td class="dim" data-label="下次重置" style="font-size:.75rem">{{if gt .Node.StatsResetDay 0}}{{nextreset .Node.StatsResetDay .Node.StatsResetHour .Node.StatsResetMinute}}{{else}}不重置{{end}}</td>
+          <td class="dim" data-label="下次重置" style="font-size:.75rem">{{if gt .Node.StatsResetDay 0}}{{nextresetat .Node.StatsResetDay .Node.StatsResetHour .Node.StatsResetMinute}}{{else}}不重置{{end}}</td>
           <td class="num" data-label="近 {{$.Days}} 天">{{bytes .Recent}}</td>
           <td class="num" data-label="累计">{{bytes .Total}}</td>
           <td class="num dim" data-label="占比">{{pct .Total $.LedgerTotal}}</td>
