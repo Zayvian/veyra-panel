@@ -55,7 +55,8 @@ var daysTo28 = func() []int {
 }()
 
 // nextResetLabel is when this user's counter next goes to zero.
-func nextResetLabel(day, hour, minute int) string {
+func nextResetLabel(u *store.User) string {
+	day, hour, minute := u.ResetSchedule()
 	if day < 1 {
 		return ""
 	}

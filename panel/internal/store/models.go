@@ -61,6 +61,25 @@ type User struct {
 	CreatedAt time.Time
 }
 
+// ResetSchedule is the monthly schedule the counter actually follows, with a
+// day of zero meaning none.
+//
+// An explicit ResetDay wins. An account with neither a reset day nor an expiry
+// resets on the monthly anniversary of its creation instead: with nothing else
+// to end a period, its usage would otherwise only ever grow. An account with an
+// expiry and no reset day keeps no schedule; its counter is cleared when it
+// expires.
+func (u *User) ResetSchedule() (day, hour, minute int) {
+	if u.ResetDay >= 1 && u.ResetDay <= 31 {
+		return u.ResetDay, u.ResetHour, u.ResetMinute
+	}
+	if u.ExpiresAt == nil && !u.CreatedAt.IsZero() {
+		c := u.CreatedAt.In(time.Local)
+		return c.Day(), c.Hour(), c.Minute()
+	}
+	return 0, 0, 0
+}
+
 // Active reports whether the user should currently be present in the user list
 // pushed to nodes. Everything that can revoke access is decided here, in one
 // place, so the hub never has to reimplement it.

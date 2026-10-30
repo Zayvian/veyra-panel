@@ -153,7 +153,12 @@ func (s *Service) UpdateUser(u *store.User) error {
 	// has been running for months would be measured against a boundary in the
 	// past, be found overdue, and lose its counter on the next sweep — which is
 	// not what "from now on, reset monthly" means to whoever just asked for it.
-	if (prev.ResetDay != u.ResetDay || prev.ResetHour != u.ResetHour || prev.ResetMinute != u.ResetMinute) && u.ResetDay > 0 {
+	//
+	// The schedule compared is the effective one, so clearing an expiry or a
+	// reset day — which falls back to the creation-date schedule — counts too.
+	pd, ph, pm := prev.ResetSchedule()
+	nd, nh, nm := u.ResetSchedule()
+	if (pd != nd || ph != nh || pm != nm) && nd > 0 {
 		if err := s.st.TouchUserReset(u.ID); err != nil {
 			return err
 		}

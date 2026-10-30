@@ -113,10 +113,11 @@ func NextScheduledResetAt(day, hour, minute int, now time.Time) time.Time {
 // upgrade. RunDueResets gives it a start point instead, and the first real reset
 // happens on the next scheduled day.
 func resetDue(u *store.User, now time.Time) bool {
-	if ClampResetDay(u.ResetDay) == 0 || u.LastResetAt == nil {
+	day, hour, minute := u.ResetSchedule()
+	if day == 0 || u.LastResetAt == nil {
 		return false
 	}
-	return u.LastResetAt.Before(LastScheduledResetAt(u.ResetDay, u.ResetHour, u.ResetMinute, now))
+	return u.LastResetAt.Before(LastScheduledResetAt(day, hour, minute, now))
 }
 
 // hasUsage reports whether there is anything on the quota counter to clear.
@@ -149,7 +150,7 @@ func (s *Service) RunDueResets() (int, error) {
 		// A schedule with no start point gets one, without losing anything.
 		// This is the state every row is in immediately after the column was
 		// added, so getting it wrong would wipe the whole panel once.
-		if ClampResetDay(u.ResetDay) > 0 && u.LastResetAt == nil {
+		if day, _, _ := u.ResetSchedule(); day > 0 && u.LastResetAt == nil {
 			if err := s.st.TouchUserReset(u.ID); err != nil {
 				return n, err
 			}
