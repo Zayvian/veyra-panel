@@ -134,9 +134,12 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 			address, port = relayTarget(in.Address, in.Port)
 		}
 
+		// Billing follows the inbound's own node, relay or not, so that is the
+		// rate the user is told.
+		name := withRate(in.Tag, node.RateMilli)
 		e := Entry{
-			Name:        in.Tag,
-			Label:       in.Tag,
+			Name:        name,
+			Label:       name,
 			Protocol:    in.Protocol,
 			Address:     address,
 			Port:        port,
@@ -171,6 +174,18 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 		out = append(out, e)
 	}
 	return out, nil
+}
+
+// withRate appends the node's traffic rate to a client-facing name, so a user
+// picking a server can see what it costs them: "日本 Oracle 01 [0.5×]". A name
+// the operator already wrote the suffix into is left alone rather than
+// doubled.
+func withRate(name string, rateMilli int64) string {
+	suffix := " [" + strconv.FormatFloat(float64(rateMilli)/1000, 'f', -1, 64) + "×]"
+	if strings.HasSuffix(name, suffix) {
+		return name
+	}
+	return name + suffix
 }
 
 // relayTarget splits an inbound's relay address into what a client dials.

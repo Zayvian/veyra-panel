@@ -41,7 +41,7 @@ func TestSubscriptionSortAcrossFormats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"HK-Z", "HK-A", "JP-Z", "JP-A", "US-Z", "US-A"}
+	want := []string{"HK-Z [0×]", "HK-A [0×]", "JP-Z [0×]", "JP-A [0×]", "US-Z [0×]", "US-A [0×]"}
 	var names []string
 	for _, e := range entries {
 		names = append(names, e.Name)
@@ -96,7 +96,7 @@ func TestSubscriptionSortAcrossFormats(t *testing.T) {
 	}
 	allowed := map[int64]bool{ins[0].ID: true, ins[3].ID: true}
 	filtered, err := Build(u, nodes, ins, allowed)
-	if err != nil || len(filtered) != 2 || filtered[0].Name != "JP-Z" || filtered[1].Name != "US-A" {
+	if err != nil || len(filtered) != 2 || filtered[0].Name != "JP-Z [0×]" || filtered[1].Name != "US-A [0×]" {
 		t.Fatal("sort bypassed access filtering")
 	}
 	for _, n := range nodes {
@@ -109,7 +109,7 @@ func TestSubscriptionSortAcrossFormats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entries[0].Name != "US-A" || entries[2].Name != "JP-A" || entries[4].Name != "HK-A" {
+	if entries[0].Name != "US-A [0×]" || entries[2].Name != "JP-A [0×]" || entries[4].Name != "HK-A [0×]" {
 		t.Fatal("default order changed")
 	}
 }

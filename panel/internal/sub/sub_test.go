@@ -22,7 +22,7 @@ func fixture(t *testing.T) (*store.User, []*store.Node, []*store.Inbound) {
 	t.Helper()
 
 	node := &store.Node{ID: 1, Name: "tokyo", Address: "jp.example.com",
-		Country: "JP", Enabled: true}
+		Country: "JP", Enabled: true, RateMilli: 1000}
 
 	specs := []service.InboundSpec{
 		{Protocol: store.ProtoVLESS, Tag: "vless-tokyo", Port: 443,
@@ -307,7 +307,7 @@ func TestSingBoxConfigIsUsable(t *testing.T) {
 		m := o.(map[string]any)
 		types[m["tag"].(string)] = m
 	}
-	for _, tag := range []string{"vless-tokyo", "anytls-tokyo", "ss-tokyo",
+	for _, tag := range []string{"vless-tokyo [1×]", "anytls-tokyo [1×]", "ss-tokyo [1×]",
 		tagProxy, groupAI, groupFinal, tagDirect} {
 		if _, ok := types[tag]; !ok {
 			t.Errorf("outbound %q missing", tag)
@@ -316,7 +316,7 @@ func TestSingBoxConfigIsUsable(t *testing.T) {
 
 	// Reality is a hidden handshake; without uTLS the client's own TLS
 	// fingerprint gives it away, which defeats the protocol.
-	tls := types["vless-tokyo"]["tls"].(map[string]any)
+	tls := types["vless-tokyo [1×]"]["tls"].(map[string]any)
 	utls, ok := tls["utls"].(map[string]any)
 	if !ok || utls["enabled"] != true {
 		t.Error("vless outbound does not enable utls")
@@ -588,14 +588,14 @@ func TestRelayAddressOverridesTheNode(t *testing.T) {
 	for _, e := range entries {
 		seen[e.Name] = e.Address
 	}
-	if got := seen[relayed.Tag]; got != "relay.example.net" {
+	if got := seen[relayed.Tag+" [1×]"]; got != "relay.example.net" {
 		t.Errorf("relayed inbound advertises %q, want the relay", got)
 	}
 	for _, in := range inbounds {
 		if in.ID == relayed.ID {
 			continue
 		}
-		if got := seen[in.Tag]; got != nodes[0].Address {
+		if got := seen[in.Tag+" [1×]"]; got != nodes[0].Address {
 			t.Errorf("%s advertises %q, want the node's own address %q",
 				in.Tag, got, nodes[0].Address)
 		}
@@ -603,7 +603,7 @@ func TestRelayAddressOverridesTheNode(t *testing.T) {
 
 	// No port given means the relay listens on the node's port.
 	for _, e := range entries {
-		if e.Name == relayed.Tag && e.Port != relayed.Port {
+		if e.Name == relayed.Tag+" [1×]" && e.Port != relayed.Port {
 			t.Errorf("relayed port is %d, want the node's %d", e.Port, relayed.Port)
 		}
 	}
@@ -640,7 +640,7 @@ func TestRelayAddressCanCarryAPort(t *testing.T) {
 		}
 		var got *Entry
 		for i := range entries {
-			if entries[i].Name == relayed.Tag {
+			if entries[i].Name == relayed.Tag+" [1×]" {
 				got = &entries[i]
 			}
 		}
@@ -677,7 +677,7 @@ func TestInPanelRelayAdvertisesTheRelayNode(t *testing.T) {
 	}
 	for _, e := range entries {
 		switch e.Name {
-		case relayed.Tag:
+		case relayed.Tag + " [1×]":
 			if e.Address != "hk.example.com" || e.Port != 443 {
 				t.Errorf("relayed entry points at %s:%d, want hk.example.com:443",
 					e.Address, e.Port)
