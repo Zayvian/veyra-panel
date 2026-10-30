@@ -302,3 +302,57 @@ func TestAScheduleWithNoStartPointIsStampedNotReset(t *testing.T) {
 		t.Error("the schedule does not fire once it has a start point")
 	}
 }
+
+// A plan that has run out is over, so its usage goes too — whether or not the
+// account has a monthly schedule. Otherwise a renewal months later opens with
+// the old plan's usage still on the counter.
+func TestAnExpiredAccountIsZeroedOnce(t *testing.T) {
+	svc := resetFixture(t)
+	for _, day := range []int{0, 1} {
+		past := time.Now().Add(-time.Hour)
+		u, err := svc.CreateUser(NewUser{Name: "alice" + string(rune('a'+day)), ExpiresAt: &past, ResetDay: day})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.Store().DB().Exec(
+			`UPDATE users SET traffic_used = 555, traffic_up = 200, traffic_down = 355 WHERE id = ?`,
+			u.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if n, err := svc.RunDueResets(); err != nil || n != 2 {
+		t.Fatalf("expired accounts reset = %d (err %v), want 2", n, err)
+	}
+	users, _ := svc.Users()
+	for _, u := range users {
+		if u.TrafficUsed != 0 || u.TrafficUp != 0 || u.TrafficDown != 0 {
+			t.Errorf("%s: usage left at %d (%d/%d) after expiry", u.Name, u.TrafficUsed, u.TrafficUp, u.TrafficDown)
+		}
+		if u.Active(time.Now()) {
+			t.Errorf("%s: clearing the counter brought an expired account back", u.Name)
+		}
+	}
+	if n, _ := svc.RunDueResets(); n != 0 {
+		t.Errorf("a second sweep reset %d expired accounts again", n)
+	}
+}
+
+// An account that has not expired yet keeps its usage when it has no schedule.
+func TestALiveAccountWithoutAScheduleKeepsItsUsage(t *testing.T) {
+	svc := resetFixture(t)
+	future := time.Now().Add(time.Hour)
+	u, err := svc.CreateUser(NewUser{Name: "alice", ExpiresAt: &future})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Store().DB().Exec(`UPDATE users SET traffic_used = 777 WHERE id = ?`, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := svc.RunDueResets(); n != 0 {
+		t.Fatalf("reset %d live accounts", n)
+	}
+	if got, _ := svc.User(u.ID); got.TrafficUsed != 777 {
+		t.Errorf("usage cleared before expiry: %d", got.TrafficUsed)
+	}
+}
