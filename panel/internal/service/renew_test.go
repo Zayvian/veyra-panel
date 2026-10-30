@@ -143,3 +143,48 @@ func TestRenewUserRejectsBadInput(t *testing.T) {
 		t.Fatalf("unknown user: %v, want ErrNotFound", err)
 	}
 }
+
+// A lapsed account renewed later starts a fresh month on the renewal day; an
+// early renewal keeps the day its expiry still lines up with.
+func TestRenewingALapsedAccountMovesTheResetDay(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		offset time.Duration
+		moves  bool
+	}{
+		{"lapsed", -2 * 24 * time.Hour, true},
+		{"early", 10 * 24 * time.Hour, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := newTestService(t)
+			exp := time.Now().Add(tc.offset)
+			oldDay := time.Now().AddDate(0, 0, 3).Day()
+			u, err := svc.CreateUser(NewUser{Name: "alice", ExpiresAt: &exp, ResetDay: oldDay, ResetHour: 4, ResetMinute: 5})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := svc.Store().DB().Exec(`UPDATE users SET traffic_used = 123 WHERE id = ?`, u.ID); err != nil {
+				t.Fatal(err)
+			}
+			got, err := svc.RenewUser(u.ID, 30, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			now := time.Now()
+			if tc.moves {
+				if got.ResetDay != now.Day() || got.ResetHour != now.Hour() {
+					t.Errorf("reset schedule = day %d %02d:%02d, want the renewal moment", got.ResetDay, got.ResetHour, got.ResetMinute)
+				}
+			} else if got.ResetDay != oldDay || got.ResetHour != 4 || got.ResetMinute != 5 {
+				t.Errorf("an early renewal moved the reset schedule to day %d %02d:%02d", got.ResetDay, got.ResetHour, got.ResetMinute)
+			}
+			// Moving the day must not read as an overdue reset.
+			if n, _ := svc.RunDueResets(); n != 0 {
+				t.Errorf("the sweep reset %d accounts right after renewal", n)
+			}
+			if after, _ := svc.User(u.ID); after.TrafficUsed != 123 {
+				t.Errorf("usage changed to %d without asking for a reset", after.TrafficUsed)
+			}
+		})
+	}
+}

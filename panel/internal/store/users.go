@@ -183,6 +183,11 @@ func (s *Store) ReissueUser(c UserCredentials, subToken string) error {
 // the days it spent expired. An account with no expiry keeps none — a renewal
 // is not the place to start limiting it. With resetTraffic the counter is
 // zeroed and the reset schedule stamped, exactly as ResetUserTraffic does.
+//
+// Renewing a lapsed account also moves its monthly reset day to the renewal
+// moment, because that is where the new period starts: the new expiry counts
+// from now, and keeping the old day would make the first month short. An early
+// renewal keeps the old day, since its expiry still lines up with it.
 func (s *Store) RenewUser(id int64, days int, resetTraffic bool, now time.Time) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -191,17 +196,20 @@ func (s *Store) RenewUser(id int64, days int, resetTraffic bool, now time.Time) 
 	defer tx.Rollback()
 
 	var expires sql.NullInt64
-	if err := tx.QueryRow(`SELECT expires_at FROM users WHERE id = ?`, id).Scan(&expires); err != nil {
+	var resetDay int
+	if err := tx.QueryRow(`SELECT expires_at, reset_day FROM users WHERE id = ?`, id).Scan(&expires, &resetDay); err != nil {
 		if err == sql.ErrNoRows {
 			return ErrNotFound
 		}
 		return err
 	}
 	var next any
+	lapsed := false
 	if expires.Valid {
 		from := time.Unix(expires.Int64, 0)
 		if from.Before(now) {
 			from = now
+			lapsed = true
 		}
 		// AddDate in local time, so a day is a calendar day and the
 		// time of day the account expires at stays where it was.
@@ -209,6 +217,17 @@ func (s *Store) RenewUser(id int64, days int, resetTraffic bool, now time.Time) 
 	}
 	if _, err := tx.Exec(`UPDATE users SET expires_at = ?, enabled = 1 WHERE id = ?`, next, id); err != nil {
 		return fmt.Errorf("renew user %d: %w", id, err)
+	}
+	if lapsed && resetDay > 0 {
+		// Stamping last_reset_at starts the cycle now without zeroing anything,
+		// as switching any schedule does; otherwise the new day, being today,
+		// would read as already overdue.
+		local := now.In(time.Local)
+		if _, err := tx.Exec(`UPDATE users SET reset_day = ?, reset_hour = ?, reset_minute = ?,
+			last_reset_at = ? WHERE id = ?`,
+			local.Day(), local.Hour(), local.Minute(), now.Unix(), id); err != nil {
+			return fmt.Errorf("renew user %d: %w", id, err)
+		}
 	}
 	if resetTraffic {
 		if _, err := tx.Exec(`UPDATE users SET traffic_used = 0, traffic_up = 0, traffic_down = 0,
