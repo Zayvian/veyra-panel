@@ -46,6 +46,14 @@ func (s *Server) renderSettingsWith(w http.ResponseWriter, r *http.Request, save
 	data["Announcement"] = strings.Join(lines, "\n")
 	data["AnnouncementLines"] = service.MaxAnnouncementLines
 	data["AnnouncementRunes"] = service.MaxAnnouncementRunes
+	tmpl, err := s.shareTemplate()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	data["ShareTemplate"] = tmpl
+	data["ShareVars"] = shareVars
+	data["ShareTemplateRunes"] = MaxShareTemplateRunes
 	tz, err := s.svc.Store().Setting(settingTimezone)
 	if err != nil {
 		s.fail(w, r, err)
@@ -107,6 +115,14 @@ func (s *Server) postAnnouncement(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderSettings(w, r, "订阅公告已保存，客户更新订阅后就能看到")
+}
+
+func (s *Server) postShareTemplate(w http.ResponseWriter, r *http.Request) {
+	if err := s.setShareTemplate(r.FormValue("share_template")); err != nil {
+		s.errorBanner(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.renderSettings(w, r, "话术模板已保存，之后打开的每个用户都会用新话术")
 }
 
 func (s *Server) postForceSubscriptionRefresh(w http.ResponseWriter, r *http.Request) {

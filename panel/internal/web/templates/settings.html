@@ -83,6 +83,19 @@
         style="width:100%;background:#0c0e12;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.5rem;font:inherit;resize:vertical">{{.Announcement}}</textarea>
       <button style="margin-top:.6rem">保存公告</button>
     </form>
+    <form class="card" id="share-template" hx-post="{{panelPath "/settings/share-template"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML">
+      <h2 style="margin-top:0">发给用户的话术</h2>
+      <p class="dim" style="margin:.2rem 0 .8rem;font-size:.85rem">
+        用户列表里点「发给用户」时生成的文字，<strong>所有用户共用这一份</strong>。可用的变量：
+        {{range $i, $v := .ShareVars}}{{if $i}}、{{end}}<code class="mono">{{$v}}</code>{{end}}。<br>
+        <code class="mono">{重置}</code> 自带开头的逗号，例如「，每月 25 号 00:00 自动重置（下次 11-25）」，不自动重置时为空；
+        <code class="mono">{IP数}</code> 在不限 IP 时为空。一行里的变量<strong>全都为空</strong>时，这一行会整行省略。
+        最多 {{.ShareTemplateRunes}} 个字，<strong>留空保存就恢复默认</strong>。
+      </p>
+      <textarea name="share_template" rows="10"
+        style="width:100%;background:#0c0e12;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.5rem;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical">{{.ShareTemplate}}</textarea>
+      <button style="margin-top:.6rem">保存话术</button>
+    </form>
     {{template "totp-card" .}}
     <form class="card" hx-post="{{panelPath "/settings/force-subscription-refresh"}}" hx-target="#settings" hx-swap="innerHTML" hx-confirm="这会立即让所有用户的旧节点配置失效，并断开现有连接。用户须更新原订阅后才能恢复。确定继续吗？">
       <h2 style="margin-top:0">强制全员更新订阅</h2>
