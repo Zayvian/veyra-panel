@@ -284,6 +284,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/force-subscription-refresh", s.auth(s.requireCSRF(http.HandlerFunc(s.postForceSubscriptionRefresh))))
 	mux.Handle("POST /settings/domain", s.auth(s.requireCSRF(http.HandlerFunc(s.postDomain))))
 	mux.Handle("POST /settings/domain/retire", s.auth(s.requireCSRF(http.HandlerFunc(s.postRetireOldDomains))))
+	mux.Handle("POST /settings/timezone", s.auth(s.requireCSRF(http.HandlerFunc(s.postTimezone))))
 	mux.Handle("POST /settings/announcement", s.auth(s.requireCSRF(http.HandlerFunc(s.postAnnouncement))))
 	mux.Handle("POST /settings/2fa/begin", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPBegin))))
 	mux.Handle("POST /settings/2fa/enable", s.auth(s.requireCSRF(http.HandlerFunc(s.postTOTPEnable))))

@@ -15,7 +15,7 @@
       {{end}}
       <label>有效天数<input name="days" type="number" step="1" min="0" max="3650"
              placeholder="或填下面的到期" style="min-width:7rem"></label>
-      <label>到期（服务器时间）<input name="expires_at" type="datetime-local"></label>
+      <label>到期（面板时区）<input name="expires_at" type="datetime-local"></label>
       <label>流量上限 GiB<input name="traffic_limit_gb" type="number" step="1" min="0"
              placeholder="留空 = 不限"></label>
       <label>同时在线 IP<input name="ip_limit" type="number" step="1" min="0"
@@ -35,7 +35,7 @@
     <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
       <strong>流量重置</strong>是月付套餐用的：在选定日期和时间已用流量归零，不用每个月手动清。
       选「每月最后一天」或 29–31 号时，短月会自动落到该月最后一天，二月不会被跳过。
-      到期和重置落在同一时刻时，到期优先，用户不会因重置恢复可用。所有日期时间按服务器本地时区解释。<br>
+      到期和重置落在同一时刻时，到期优先，用户不会因重置恢复可用。所有日期时间按面板时区（设置页可改）解释。<br>
       <strong>有效天数</strong>从创建这一刻算起；填了「到期」就以「到期」为准。选套餐会自动填好天数、流量、IP 和重置日，填好后仍然可以改。
     </p>
   </div>
@@ -87,7 +87,7 @@ function applyPlan(sel) {
     <form class="row" hx-post="{{panelPath "/users/"}}{{.User.ID}}"
           hx-target="#users" hx-swap="outerHTML" style="align-items:flex-end">
       <label>名称<input name="name" required value="{{.User.Name}}" maxlength="32"></label>
-      <label>到期（服务器时间）<input name="expires_at" type="datetime-local"
+      <label>到期（面板时区）<input name="expires_at" type="datetime-local"
              value="{{datetimeval .User.ExpiresAt}}"></label>
       <label>流量上限 GiB<input name="traffic_limit_gb" type="number" step="0.01" min="0"
              placeholder="留空 = 不限" value="{{gibval .User.TrafficLimit}}"></label>
