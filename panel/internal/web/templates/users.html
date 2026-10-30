@@ -260,8 +260,8 @@ function applyPlan(sel) {
                limit rather than in a column of its own: "3.4 / 50 GiB" means
                something quite different depending on whether it resets on
                Tuesday. */}}
-          {{if gt .ResetDay 0}}
-            <div class="dim" style="font-size:.7rem">{{nextreset .ResetDay .ResetHour .ResetMinute}} 重置</div>
+          {{with nextreset .}}
+            <div class="dim" style="font-size:.7rem">{{.}} 重置</div>
           {{end}}
         </td>
         <td class="mobile-actions" style="text-align:right;white-space:nowrap">

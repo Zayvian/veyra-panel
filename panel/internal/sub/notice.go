@@ -75,8 +75,8 @@ func noticeText(u *store.User, now time.Time) string {
 	case u.TrafficLimit > 0 && u.TrafficUsed >= u.TrafficLimit:
 		// A monthly allowance comes back by itself; saying when saves a message
 		// asking whether it will.
-		if service.ClampResetDay(u.ResetDay) > 0 {
-			next := service.NextScheduledResetAt(u.ResetDay, u.ResetHour, u.ResetMinute, now)
+		if day, hour, minute := u.ResetSchedule(); day > 0 {
+			next := service.NextScheduledResetAt(day, hour, minute, now)
 			return "本期流量已用完，" + next.Format("01-02 15:04") + " 自动恢复"
 		}
 		return "流量已用完，请联系续费"

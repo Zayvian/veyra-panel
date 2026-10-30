@@ -113,10 +113,18 @@ func NextScheduledResetAt(day, hour, minute int, now time.Time) time.Time {
 // upgrade. RunDueResets gives it a start point instead, and the first real reset
 // happens on the next scheduled day.
 func resetDue(u *store.User, now time.Time) bool {
-	if ClampResetDay(u.ResetDay) == 0 || u.LastResetAt == nil {
+	day, hour, minute := u.ResetSchedule()
+	if day == 0 || u.LastResetAt == nil {
 		return false
 	}
-	return u.LastResetAt.Before(LastScheduledResetAt(u.ResetDay, u.ResetHour, u.ResetMinute, now))
+	return u.LastResetAt.Before(LastScheduledResetAt(day, hour, minute, now))
+}
+
+// hasUsage reports whether there is anything on the quota counter to clear.
+// Checking it keeps the expiry sweep idempotent: an expired account is zeroed
+// once, not stamped again every minute until it is renewed.
+func hasUsage(u *store.User) bool {
+	return u.TrafficUsed > 0 || u.TrafficUp > 0 || u.TrafficDown > 0
 }
 
 // RunDueResets zeroes the counter for every user whose reset day has passed
@@ -126,9 +134,9 @@ func resetDue(u *store.User, now time.Time) bool {
 // what makes a missed month impossible: a panel switched off across someone's
 // reset day performs it on the next start.
 //
-// An account already expired at the scheduled minute is left untouched: expiry
-// has priority over a reset that shares its timestamp. The daily traffic table
-// still keeps the immutable history used by the dashboard and node ledger.
+// An account that has expired is zeroed as well, once its expiry passes, so a
+// lapsed plan does not carry its old usage into the next one. The daily traffic
+// table still keeps the immutable history used by the dashboard and node ledger.
 func (s *Service) RunDueResets() (int, error) {
 	users, err := s.st.Users()
 	if err != nil {
@@ -142,16 +150,24 @@ func (s *Service) RunDueResets() (int, error) {
 		// A schedule with no start point gets one, without losing anything.
 		// This is the state every row is in immediately after the column was
 		// added, so getting it wrong would wipe the whole panel once.
-		if ClampResetDay(u.ResetDay) > 0 && u.LastResetAt == nil {
+		if day, _, _ := u.ResetSchedule(); day > 0 && u.LastResetAt == nil {
 			if err := s.st.TouchUserReset(u.ID); err != nil {
 				return n, err
 			}
 			continue
 		}
-		// An expiry wins over a reset at the same moment. This avoids clearing a
-		// dead account just because a calendar boundary happened to coincide;
-		// renewing it later starts from the ordinary schedule instead.
+		// An expired account's period is over, so its usage is cleared too —
+		// with or without a monthly schedule. Expiry still wins over a reset at
+		// the same moment: zeroing the counter does not bring the account back,
+		// only a renewal does, and the renewal then starts from zero.
 		if u.ExpiresAt != nil && !now.Before(*u.ExpiresAt) {
+			if !hasUsage(u) {
+				continue
+			}
+			if err := s.st.ResetUserTraffic(u.ID); err != nil {
+				return n, err
+			}
+			n++
 			continue
 		}
 		if !resetDue(u, now) {

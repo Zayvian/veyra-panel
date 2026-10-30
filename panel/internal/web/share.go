@@ -68,10 +68,10 @@ func shareMessage(u *store.User, link string, now time.Time) string {
 	}
 	if u.TrafficLimit > 0 {
 		fmt.Fprintf(&b, "流量：%s", humanBytes(u.TrafficLimit))
-		if day := service.ClampResetDay(u.ResetDay); day > 0 {
-			next := service.NextScheduledResetAt(u.ResetDay, u.ResetHour, u.ResetMinute, now)
+		if day, hour, minute := u.ResetSchedule(); day > 0 {
+			next := service.NextScheduledResetAt(day, hour, minute, now)
 			fmt.Fprintf(&b, "，%s %02d:%02d 自动重置（下次 %s）",
-				planResetLabel(day), u.ResetHour, u.ResetMinute, next.Format("01-02"))
+				planResetLabel(day), hour, minute, next.Format("01-02"))
 		}
 		b.WriteString("\n")
 	} else {

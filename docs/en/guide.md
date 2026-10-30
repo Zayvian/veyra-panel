@@ -49,6 +49,8 @@ Every feature, page by page, in the order of the panel's top navigation. Not ins
 
 Days 29–31 fall back to the last day of shorter months, so February is never skipped. When an expiry and a reset land on the same moment, the expiry wins: a reset never revives an expired account.
 
+Once an account expires its used traffic is cleared automatically as well, with or without a reset day, so a renewal starts from zero; the traffic history is kept. An account with neither an expiry nor a reset day is cleared monthly on the anniversary of its creation (created 14 March 09:30 means the 14th of every month at 09:30).
+
 ### The user list
 
 Each row shows:

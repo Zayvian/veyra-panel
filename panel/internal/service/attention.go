@@ -72,8 +72,8 @@ func attention(u *store.User, now time.Time) (Attention, bool) {
 		}
 		// A monthly allowance comes back by itself; say when, so it is not
 		// mistaken for one that needs selling.
-		if ClampResetDay(u.ResetDay) > 0 {
-			a.Reason += "，" + NextScheduledResetAt(u.ResetDay, u.ResetHour, u.ResetMinute, now).Format("01-02") + " 重置"
+		if day, hour, minute := u.ResetSchedule(); day > 0 {
+			a.Reason += "，" + NextScheduledResetAt(day, hour, minute, now).Format("01-02") + " 重置"
 		}
 		return a, true
 	}

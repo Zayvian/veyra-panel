@@ -182,11 +182,12 @@ func TestAMissedResetIsCaughtUpOnTheNextRun(t *testing.T) {
 	}
 }
 
-// Zero means never, which is what every account has until someone asks for a
-// schedule. Turning this on must not touch anyone who did not opt in.
+// An account with an expiry and no reset day has no monthly schedule: its
+// counter only goes back to zero when the plan expires.
 func TestUsersWithoutAScheduleAreLeftAlone(t *testing.T) {
 	svc := resetFixture(t)
-	u, err := svc.CreateUser(NewUser{Name: "alice"})
+	future := time.Now().AddDate(0, 3, 0)
+	u, err := svc.CreateUser(NewUser{Name: "alice", ExpiresAt: &future})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,5 +301,113 @@ func TestAScheduleWithNoStartPointIsStampedNotReset(t *testing.T) {
 	}
 	if n, _ := svc.RunDueResets(); n != 1 {
 		t.Error("the schedule does not fire once it has a start point")
+	}
+}
+
+// A plan that has run out is over, so its usage goes too — whether or not the
+// account has a monthly schedule. Otherwise a renewal months later opens with
+// the old plan's usage still on the counter.
+func TestAnExpiredAccountIsZeroedOnce(t *testing.T) {
+	svc := resetFixture(t)
+	for _, day := range []int{0, 1} {
+		past := time.Now().Add(-time.Hour)
+		u, err := svc.CreateUser(NewUser{Name: "alice" + string(rune('a'+day)), ExpiresAt: &past, ResetDay: day})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := svc.Store().DB().Exec(
+			`UPDATE users SET traffic_used = 555, traffic_up = 200, traffic_down = 355 WHERE id = ?`,
+			u.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if n, err := svc.RunDueResets(); err != nil || n != 2 {
+		t.Fatalf("expired accounts reset = %d (err %v), want 2", n, err)
+	}
+	users, _ := svc.Users()
+	for _, u := range users {
+		if u.TrafficUsed != 0 || u.TrafficUp != 0 || u.TrafficDown != 0 {
+			t.Errorf("%s: usage left at %d (%d/%d) after expiry", u.Name, u.TrafficUsed, u.TrafficUp, u.TrafficDown)
+		}
+		if u.Active(time.Now()) {
+			t.Errorf("%s: clearing the counter brought an expired account back", u.Name)
+		}
+	}
+	if n, _ := svc.RunDueResets(); n != 0 {
+		t.Errorf("a second sweep reset %d expired accounts again", n)
+	}
+}
+
+// An account that has not expired yet keeps its usage when it has no schedule.
+func TestALiveAccountWithoutAScheduleKeepsItsUsage(t *testing.T) {
+	svc := resetFixture(t)
+	future := time.Now().Add(time.Hour)
+	u, err := svc.CreateUser(NewUser{Name: "alice", ExpiresAt: &future})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Store().DB().Exec(`UPDATE users SET traffic_used = 777 WHERE id = ?`, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := svc.RunDueResets(); n != 0 {
+		t.Fatalf("reset %d live accounts", n)
+	}
+	if got, _ := svc.User(u.ID); got.TrafficUsed != 777 {
+		t.Errorf("usage cleared before expiry: %d", got.TrafficUsed)
+	}
+}
+
+// An account with neither an expiry nor a reset day resets monthly on the
+// anniversary of its creation, so its usage does not grow forever.
+func TestAnOpenEndedAccountResetsOnItsCreationDay(t *testing.T) {
+	svc := resetFixture(t)
+	u, err := svc.CreateUser(NewUser{Name: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := time.Date(2026, time.March, 14, 9, 30, 0, 0, time.Local)
+	if _, err := svc.Store().DB().Exec(
+		`UPDATE users SET traffic_used = 999, created_at = ?, last_reset_at = ? WHERE id = ?`,
+		created.Unix(), created.Unix(), u.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := svc.User(u.ID)
+	if day, hour, minute := got.ResetSchedule(); day != 14 || hour != 9 || minute != 30 {
+		t.Fatalf("schedule = %d %02d:%02d, want the creation day and time", day, hour, minute)
+	}
+	if n, _ := svc.RunDueResets(); n != 1 {
+		t.Fatalf("an overdue creation-day reset did not fire: %d", n)
+	}
+	if after, _ := svc.User(u.ID); after.TrafficUsed != 0 {
+		t.Errorf("traffic_used = %d", after.TrafficUsed)
+	}
+}
+
+// Removing an expiry switches the account onto the creation-day schedule. That
+// has to start the cycle now, not measure it from a creation date months ago.
+func TestClearingAnExpiryDoesNotWipeUsage(t *testing.T) {
+	svc := resetFixture(t)
+	future := time.Now().AddDate(0, 3, 0)
+	u, err := svc.CreateUser(NewUser{Name: "alice", ExpiresAt: &future})
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().AddDate(0, -4, 0)
+	if _, err := svc.Store().DB().Exec(
+		`UPDATE users SET traffic_used = 4242, created_at = ?, last_reset_at = ? WHERE id = ?`,
+		old.Unix(), old.Unix(), u.ID); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := svc.User(u.ID)
+	got.ExpiresAt = nil
+	if err := svc.UpdateUser(got); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := svc.RunDueResets(); n != 0 {
+		t.Fatalf("clearing the expiry reset %d accounts", n)
+	}
+	if after, _ := svc.User(u.ID); after.TrafficUsed != 4242 {
+		t.Errorf("usage was wiped: %d", after.TrafficUsed)
 	}
 }
