@@ -75,6 +75,14 @@ func main() {
 	defer st.Close()
 	log.Info("database ready", "path", *dbPath)
 
+	// Before anything else runs: it swaps time.Local, which nothing may be
+	// reading at the time.
+	if tz, err := web.ApplyTimezone(st); err != nil {
+		log.Warn("panel time zone; using the server's", "error", err)
+	} else {
+		log.Info("panel time zone", "zone", tz)
+	}
+
 	svc := service.New(st)
 
 	// A domain changed from the settings page outranks the unit's flags until

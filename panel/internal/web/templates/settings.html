@@ -57,6 +57,20 @@
     </form>
     {{end}}
     {{end}}
+    <form class="card" hx-post="{{panelPath "/settings/timezone"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML">
+      <h2 style="margin-top:0">时区</h2>
+      <p class="dim" style="margin:.2rem 0 .8rem;font-size:.85rem">
+        面板上显示和填写的所有时间（到期、重置、活动记录）都按这个时区算，套餐的「天数」和每月重置日也按这个时区的日历算。
+        现在是 <code class="mono">{{.TimezoneNow}}</code>。已经设好的到期时刻不会变，只是换个时区显示。
+        {{if .TimezoneRestart}}保存后面板会自动重启。{{else}}保存后需要重启面板才生效。{{end}}
+      </p>
+      <label>面板时区
+        <select name="timezone">
+          {{range .TimezoneChoices}}<option value="{{.Value}}"{{if eq .Value $.Timezone}} selected{{end}}>{{.Label}}</option>{{end}}
+        </select>
+      </label>
+      <button style="margin-top:.6rem">保存时区</button>
+    </form>
     <form class="card" hx-post="{{panelPath "/settings/announcement"}}" hx-target="#settings" hx-select="#settings" hx-swap="outerHTML">
       <h2 style="margin-top:0">订阅公告</h2>
       <p class="dim" style="margin:.2rem 0 .8rem;font-size:.85rem">

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Zayvian/veyra-panel/internal/service"
 )
@@ -45,6 +46,18 @@ func (s *Server) renderSettingsWith(w http.ResponseWriter, r *http.Request, save
 	data["Announcement"] = strings.Join(lines, "\n")
 	data["AnnouncementLines"] = service.MaxAnnouncementLines
 	data["AnnouncementRunes"] = service.MaxAnnouncementRunes
+	tz, err := s.svc.Store().Setting(settingTimezone)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if tz == "" {
+		tz = DefaultTimezone
+	}
+	data["Timezone"] = tz
+	data["TimezoneChoices"] = timezoneChoices
+	data["TimezoneNow"] = time.Now().Format("2006-01-02 15:04")
+	data["TimezoneRestart"] = s.restart != nil
 	for k, v := range s.domainSettings() {
 		data[k] = v
 	}
@@ -112,4 +125,28 @@ func (s *Server) postForceSubscriptionRefresh(w http.ResponseWriter, r *http.Req
 		return
 	}
 	s.renderSettings(w, r, fmt.Sprintf("已轮换 %d 个用户的连接凭据，并通知 %d 个节点重建连接。用户更新原订阅后即可恢复。", result.UserCount, result.NodeCount))
+}
+
+// postTimezone saves the panel's time zone. It takes effect on the next start
+// (see ApplyTimezone), so when the panel runs under systemd it restarts itself.
+func (s *Server) postTimezone(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.FormValue("timezone"))
+	if _, err := loadTimezone(name); err != nil {
+		s.errorBanner(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.svc.Store().SetSetting(settingTimezone, name); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if s.restart == nil {
+		s.renderSettings(w, r, "时区已保存，重启面板后生效")
+		return
+	}
+	s.log.Info("panel time zone changed; restarting", "zone", name)
+	s.renderSettings(w, r, "时区已保存，面板正在重启，几秒后刷新页面即可")
+	go func() {
+		time.Sleep(2 * time.Second)
+		s.restart()
+	}()
 }
