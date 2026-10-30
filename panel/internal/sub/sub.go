@@ -179,8 +179,11 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 // withRate appends the node's traffic rate to a client-facing name, so a user
 // picking a server can see what it costs them: "日本 Oracle 01 [0.5×]". A name
 // the operator already wrote the suffix into is left alone rather than
-// doubled.
+// doubled. 1× is the norm and goes unmarked, so only the exceptions stand out.
 func withRate(name string, rateMilli int64) string {
+	if rateMilli == 1000 {
+		return name
+	}
 	suffix := " [" + strconv.FormatFloat(float64(rateMilli)/1000, 'f', -1, 64) + "×]"
 	if strings.HasSuffix(name, suffix) {
 		return name

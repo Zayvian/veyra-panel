@@ -172,7 +172,7 @@ Picking a plan when creating or renewing a user fills the form, which you can st
 
 0 to 100, up to three decimals. Actual traffic is still recorded; a new rate applies from then on, without recalculating history or restarting the node.
 
-The names customers see carry the rate automatically: a node named "日本 Oracle 01" at 0.5 shows up in subscriptions as "日本 Oracle 01 [0.5×]" (1× shows [1×], a free node [0×]). A name that already ends in the same suffix is not given it twice. Since the name changes with the rate, after a rate change and a subscription refresh a customer may have to pick their node again in the client.
+The names customers see carry the rate automatically: a node named "日本 Oracle 01" at 0.5 shows up in subscriptions as "日本 Oracle 01 [0.5×]" (1× gets no suffix, a free node shows [0×]). A name that already ends in the same suffix is not given it twice. Since the name changes with the rate, after a rate change and a subscription refresh a customer may have to pick their node again in the client.
 
 Also in the list:
 

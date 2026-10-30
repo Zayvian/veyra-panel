@@ -15,7 +15,7 @@ func TestNodeNameCarriesRate(t *testing.T) {
 		want string
 	}{
 		{500, "日本 Oracle 01 [0.5×]"},
-		{1000, "日本 Oracle 01 [1×]"},
+		{1000, "日本 Oracle 01"},
 		{2000, "日本 Oracle 01 [2×]"},
 		{1250, "日本 Oracle 01 [1.25×]"},
 		{0, "日本 Oracle 01 [0×]"},
