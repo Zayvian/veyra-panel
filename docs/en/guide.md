@@ -92,6 +92,7 @@ Users you disabled yourself are not listed.
 Click 「续费」, enter a number of days (or pick a plan), choose whether to reset used traffic, and confirm:
 
 - New expiry = **the later of the current expiry and now** + the days. Renewing early keeps the remaining days; renewing after expiry starts from now, without giving back the lapsed days.
+- Renewing after expiry also moves the reset day (if one is set) to the renewal moment, so the new month starts at the renewal; an early renewal keeps the reset day.
 - Renewing also **enables** the account.
 - An account with no expiry gets none; only the traffic reset applies.
 - The subscription link does not change; the customer does nothing.
