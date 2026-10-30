@@ -166,7 +166,7 @@ function applyPlan(sel) {
         <div class="dim" style="font-size:.75rem;margin-top:.3rem">客户端扫码导入</div>
       </div>
       <div style="flex:1;min-width:16rem">
-        <label>发给用户的话术（可以先改再复制）
+        <label>发给用户的话术（可以先改再复制；要所有用户一起改，去 <a href="{{panelPath "/settings"}}#share-template">设置 → 发给用户的话术</a>）
           <textarea id="share-{{.User.ID}}" rows="10"
             style="width:100%;background:#0c0e12;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:.5rem;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical">{{.Message}}</textarea></label>
         <div style="display:flex;gap:.5rem;margin-top:.5rem;flex-wrap:wrap">
