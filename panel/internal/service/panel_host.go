@@ -17,7 +17,7 @@ type HostMove struct {
 // MovePanelHost rewrites what pointed at the panel's own domain after the
 // administrator changed it: a node whose address is that domain (the node
 // installed on the panel's own server), a relay address naming it, and the
-// server name of AnyTLS, Hysteria2 and TUIC inbounds that present it.
+// server name of AnyTLS, Hysteria2, TUIC and CDN VLESS inbounds that present it.
 //
 // Reality inbounds are left alone: their server name is the borrowed site's,
 // never ours. Anything that names some other host is not the panel's to move.
@@ -81,7 +81,7 @@ func moveInboundHost(in *store.Inbound, from, to string) (bool, error) {
 		}
 	}
 	switch in.Protocol {
-	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC:
+	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC, store.ProtoVLESSWS:
 	default:
 		return changed, nil
 	}
@@ -99,6 +99,9 @@ func moveInboundHost(in *store.Inbound, from, to string) (bool, error) {
 	sb.TLS.ServerName = to
 	if strings.EqualFold(client.SNI, from) {
 		client.SNI = to
+	}
+	if strings.EqualFold(client.Host, from) {
+		client.Host = to
 	}
 	cfg, err := json.Marshal(sb)
 	if err != nil {

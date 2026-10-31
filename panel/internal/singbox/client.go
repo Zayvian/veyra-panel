@@ -51,6 +51,8 @@ type ClientOutbound struct {
 
 	TLS *ClientTLS `json:"tls,omitempty"`
 
+	Transport *ClientTransport `json:"transport,omitempty"` // VLESS over a CDN
+
 	// selector / urltest
 	Outbounds []string `json:"outbounds,omitempty"`
 	Default   string   `json:"default,omitempty"`
@@ -64,6 +66,18 @@ type ClientTLS struct {
 	ServerName string         `json:"server_name,omitempty"`
 	UTLS       *UTLS          `json:"utls,omitempty"`
 	Reality    *ClientReality `json:"reality,omitempty"`
+}
+
+// ClientTransport is the client half of a WebSocket transport. Host is the
+// HTTP Host header: with a CDN in front, the address dialled is often one of
+// the CDN's own IPs, and Host is then the only thing that says which site the
+// request is for.
+type ClientTransport struct {
+	Type                string            `json:"type"`
+	Path                string            `json:"path,omitempty"`
+	Headers             map[string]string `json:"headers,omitempty"`
+	MaxEarlyData        int               `json:"max_early_data,omitempty"`
+	EarlyDataHeaderName string            `json:"early_data_header_name,omitempty"`
 }
 
 // UTLS makes the client's TLS handshake look like a browser's. Reality needs it

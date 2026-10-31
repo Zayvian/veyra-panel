@@ -113,7 +113,7 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		sb.TLS.Reality.Handshake.ServerPort = port
 		client.SNI = host
 
-	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC:
+	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC, store.ProtoVLESSWS:
 		if e.ServerName == "" {
 			return nil, invalid("%s needs a server name", in.Protocol)
 		}
@@ -127,6 +127,10 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		sb.TLS.CertificatePath = e.CertPath
 		sb.TLS.KeyPath = e.KeyPath
 		client.SNI = e.ServerName
+		if in.Protocol == store.ProtoVLESSWS {
+			// The path is kept: it is the shared secret clients already hold.
+			client.Host = e.ServerName
+		}
 		if in.Protocol == store.ProtoHysteria2 {
 			if err := applyHysteria2(&sb, &client, e.Obfs, e.Masquerade); err != nil {
 				return nil, err
@@ -227,7 +231,7 @@ func InboundEditFields(protocol string) (handshake, tls bool) {
 	switch strings.TrimSpace(protocol) {
 	case store.ProtoVLESS:
 		return true, false
-	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC:
+	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC, store.ProtoVLESSWS:
 		return false, true
 	default:
 		return false, false

@@ -193,6 +193,7 @@
 | --- | --- | --- | --- | --- |
 | VLESS Reality | 443 | TCP | Reality 握手站点 | **主力**，最稳，不需要证书 |
 | Hysteria2 | 8443 | UDP | 证书、SNI；可选混淆、伪装网站、跳端口 | 速度快；网络干扰 QUIC 时开混淆 |
+| VLESS WS（CDN） | 2053 | TCP | CDN 域名；可选证书 | 节点 IP 被封时的**保底**，走 Cloudflare 等 CDN |
 | AnyTLS | 8443 | TCP | 证书、SNI | 备用 |
 | Shadowsocks 2022 | 8388 | TCP 和 UDP | 无（密钥自动生成） | 备用，兼容性最好 |
 | TUIC v5 | 9443 | UDP | 证书、SNI | 一般不需要：功能是 Hysteria2 的子集（没有混淆、伪装、跳端口） |
@@ -214,6 +215,19 @@
 Reality 会借用一个真实网站的 TLS 握手来伪装。可以从输入框旁的「常用站点…」下拉菜单里选，也可以自己填 `域名:端口`。
 
 点「**检测**」会从面板确认这个网站支持 TLS 1.3 和 HTTP/2、证书正常。检测通过只代表从面板能连上，不代表每个地区都好用；检测不通过的网站肯定不能用。
+
+### VLESS WS（CDN）
+
+客户端连的是 CDN，CDN 再从海外连到节点。所以节点 IP 被墙（哪怕所有 TCP 端口都不通）时，这个入站照样能用；代价是速度和延迟取决于 CDN 到国内的线路。
+
+以 Cloudflare 为例：
+
+1. 域名托管在 Cloudflare，给节点加一条 A 记录（比如 `cdn.example.com` → 节点 IP），**打开代理**（橙色云朵）。
+2. 「SSL/TLS」模式选 **Full (strict)**。节点上的证书要对这个域名有效：安装脚本申请的证书（节点域名就是 CDN 域名时）或 Cloudflare 签发的 Origin 证书都可以，后者把路径填进「证书路径」「私钥路径」。
+3. 新建入站选 `vless-ws`，端口用 Cloudflare 支持的 HTTPS 端口：443、2053、2083、2087、2096、8443。「CDN 域名」留空就是节点地址。
+4. 想让客户端连优选过的 Cloudflare IP，把 IP 填进「外部中转地址」；TLS 和 Host 仍然用 CDN 域名。
+
+WebSocket 路径自动生成，编辑入站时保持不变，相当于一个共享密钥：猜不到路径的人只会看到 404。订阅里三种格式（Clash / mihomo、sing-box、分享链接）都带上了路径、Host 和 early data。
 
 ### Hysteria2：混淆和伪装网站
 
