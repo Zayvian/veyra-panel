@@ -211,7 +211,7 @@
 | 协议 | 示例端口 | 防火墙要放行 | 要填的 | 适合 |
 | --- | --- | --- | --- | --- |
 | VLESS Reality | 443 | TCP | Reality 握手站点 | **主力**，最稳，不需要证书 |
-| Hysteria2 | 8443 | UDP | 证书、SNI；可选混淆、伪装网站、跳端口 | 速度快；网络干扰 QUIC 时开混淆 |
+| Hysteria2 | 10000–60000 随机 | UDP | 证书、SNI；可选混淆、伪装网站、跳端口 | 速度快；网络干扰 QUIC 时开混淆 |
 | VLESS WS（CDN） | 2053 | TCP | CDN 域名；可选证书 | 节点 IP 被封时的**保底**，走 Cloudflare 等 CDN |
 | AnyTLS | 8443 | TCP | 证书、SNI | 备用 |
 | Shadowsocks 2022 | 8388 | TCP 和 UDP | 无（密钥自动生成） | 备用，兼容性最好 |

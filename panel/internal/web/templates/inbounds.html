@@ -117,7 +117,10 @@ function onProto(v) {
   document.querySelector('input[name=hop_ports]').disabled = v !== 'hysteria2';
   document.querySelector('input[name=hop_interval]').disabled = v !== 'hysteria2';
   var port = document.querySelector('input[name=port]');
-  port.value = ({vless:443,'vless-ws':2053,anytls:8443,shadowsocks:8388,hysteria2:8443,tuic:9443})[v];
+  // Hysteria2 gets a random high port: a fixed default is the first port a
+  // blocklist tries, and UDP has no CDN that pins it to a short list.
+  port.value = v === 'hysteria2' ? 10000 + Math.floor(Math.random() * 50001)
+    : ({vless:443,'vless-ws':2053,anytls:8443,shadowsocks:8388,tuic:9443})[v];
 }
 // The two relay fields are alternatives, so picking one takes the other away
 // rather than leaving a form that can be filled in contradictorily and only
