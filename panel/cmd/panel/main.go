@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Zayvian/veyra-panel/internal/hub"
+	"github.com/Zayvian/veyra-panel/internal/probe"
 	"github.com/Zayvian/veyra-panel/internal/service"
 	"github.com/Zayvian/veyra-panel/internal/store"
 	"github.com/Zayvian/veyra-panel/internal/web"
@@ -155,6 +156,12 @@ func main() {
 	// Restarting after a domain change is a clean exit: the unit's
 	// Restart=always starts the panel again, and it comes up on the new names.
 	srv.SetPanelDomains(domains, filepath.Dir(*dbPath), stop)
+
+	// Reachability from China, judged by the nodes marked as probes. With
+	// none marked a round does nothing.
+	probes := probe.New(svc.Store(), nodeHub, log)
+	srv.SetProbes(probes)
+	go probes.Run(ctx)
 	listenAddr := *addr
 	if *domain != "" {
 		listenAddr = ":443"

@@ -24,12 +24,15 @@ const (
 	TypeState  = "state"
 	TypePong   = "pong"
 
+	TypeProbeResult = "probe_result"
+
 	// panel -> node
 	TypeWelcome  = "welcome"
 	TypeConfig   = "config"
 	TypeUsers    = "users"
 	TypePing     = "ping"
 	TypePanelURL = "panel_url"
+	TypeProbe    = "probe"
 )
 
 // Protocol 2 adds capability negotiation. A node that says proto >= 2 in its
@@ -50,10 +53,13 @@ const (
 	// CapPanelURL: the panel may tell a node that dialled an old domain where
 	// to find it now, and the node switches over and remembers it.
 	CapPanelURL = "panel_url"
+	// CapProbe: the panel may ask the node to test TCP reachability of other
+	// hosts, answered with probe_result. See protocol/PROTOCOL.md.
+	CapProbe = "probe"
 )
 
 // PanelCaps is what this panel offers in its welcome.
-var PanelCaps = []string{CapStatsAck, CapConfigRev, CapPanelURL}
+var PanelCaps = []string{CapStatsAck, CapConfigRev, CapPanelURL, CapProbe}
 
 // PanelURLData is the panel's current base URL, sent to a node that reached it
 // through an old domain after the administrator changed it.
@@ -183,6 +189,37 @@ type StateData struct {
 	// AppliedRev is the rev of the configuration the node is running, under
 	// config_rev. Empty before the first configuration has been applied.
 	AppliedRev string `json:"applied_rev,omitempty"`
+}
+
+// ProbeData asks a node to try a TCP connection to each target and say which
+// ones it reached. Only sent under the probe capability, and in practice only
+// to a node the operator marked as a probe: one in China, looking at the other
+// nodes the way their users do.
+type ProbeData struct {
+	Targets   []ProbeTarget `json:"targets"`
+	TimeoutMS int           `json:"timeout_ms,omitempty"`
+}
+
+// ProbeTarget is one host and port. Key is the panel's own name for it and
+// comes back unchanged in the result.
+type ProbeTarget struct {
+	Key  string `json:"key"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+// ProbeResultData answers a probe, under the probe's own id.
+type ProbeResultData struct {
+	Results []ProbeResult `json:"results"`
+}
+
+// ProbeResult is whether a TCP handshake to one target completed, and how
+// long it took. Err is the dial error when it did not.
+type ProbeResult struct {
+	Key string `json:"key"`
+	OK  bool   `json:"ok"`
+	MS  int    `json:"ms,omitempty"`
+	Err string `json:"err,omitempty"`
 }
 
 func encode(t string, id uint64, data any) ([]byte, error) {
