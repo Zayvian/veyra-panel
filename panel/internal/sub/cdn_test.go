@@ -7,6 +7,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/Zayvian/veyra-panel/internal/service"
 	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
@@ -94,4 +95,35 @@ func TestCDNVLESSInEveryFormat(t *testing.T) {
 		return
 	}
 	t.Fatalf("no cdn outbound: %s", raw)
+}
+
+// The node's own address is often the very IP the firewall blocked, which is
+// why the CDN inbound exists; handing it to clients would make the CDN inbound
+// time out exactly like the inbounds it was meant to replace.
+func TestCDNVLESSDialsTheCDNDomain(t *testing.T) {
+	user, nodes, _ := fixture(t)
+	nodes[0].Address = "38.64.60.249"
+	in, err := service.BuildInbound(service.InboundSpec{Tag: "cdn", Protocol: store.ProtoVLESSWS,
+		Port: 2053, ServerName: "cdn.example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.NodeID = nodes[0].ID
+	entries, err := Build(user, nodes, []*store.Inbound{in}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Address != "cdn.example.com" || entries[0].Port != 2053 {
+		t.Fatalf("entries: %+v", entries)
+	}
+
+	// An explicit address, such as a preferred CDN IP, still wins.
+	in.Address = "104.16.1.1"
+	entries, err = Build(user, nodes, []*store.Inbound{in}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entries[0].Address != "104.16.1.1" || entries[0].Host != "cdn.example.com" {
+		t.Fatalf("entries: %+v", entries)
+	}
 }

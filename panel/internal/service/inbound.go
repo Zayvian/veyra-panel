@@ -170,6 +170,11 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 		if spec.ServerName == "" {
 			return nil, invalid("%s needs the domain the CDN serves", spec.Protocol)
 		}
+		// A CDN routes by name. An IP here means clients would dial the node
+		// directly, which is usually the address that was blocked.
+		if net.ParseIP(spec.ServerName) != nil {
+			return nil, invalid("%s needs a domain on the CDN, not the IP %s", spec.Protocol, spec.ServerName)
+		}
 		in.Type = "vless"
 		in.TLS = &singbox.TLS{
 			Enabled:         true,
