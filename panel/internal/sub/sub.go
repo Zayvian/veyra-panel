@@ -45,6 +45,10 @@ type Entry struct {
 	// Obfs is the Hysteria2 salamander password; empty when obfs is off.
 	Obfs string
 
+	// VLESS over a CDN: the WebSocket path and the Host header.
+	Path string
+	Host string
+
 	// Info marks an entry that is a message, not a node — an announcement or
 	// an account notice. It is listed like any other so the user reads it,
 	// but kept out of automatic selection, which would only measure it as
@@ -150,12 +154,16 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 			PBK:         client.PBK,
 			SID:         client.SID,
 			Obfs:        client.Obfs,
+			Path:        client.Path,
+			Host:        client.Host,
 		}
 
 		switch in.Protocol {
 		case store.ProtoVLESS:
 			e.UUID = u.VlessUUID
 			e.Flow = client.Flow
+		case store.ProtoVLESSWS:
+			e.UUID = u.VlessUUID
 		case store.ProtoTUIC:
 			e.UUID = u.VlessUUID
 			e.Password = u.Password

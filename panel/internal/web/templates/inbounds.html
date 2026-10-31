@@ -8,7 +8,7 @@
           hx-target="#inbounds" hx-swap="outerHTML">
       <label>协议
         <select name="protocol" onchange="onProto(this.value)">
-          {{range .Protocols}}<option value="{{.}}">{{.}}</option>{{end}}
+          {{range .Protocols}}<option value="{{.}}">{{.}}{{if eq . "vless-ws"}}（CDN）{{end}}</option>{{end}}
         </select>
       </label>
       <label>tag<input name="tag" required placeholder="vless-{{.Node.Name}}"
@@ -64,7 +64,7 @@
         <input name="cert_path" placeholder="{{.DefaultCertPath}}"></label>
       <label id="f-key" hidden>私钥路径（节点上，留空即默认）
         <input name="key_path" placeholder="{{.DefaultKeyPath}}"></label>
-      <label id="f-sni" hidden>SNI
+      <label id="f-sni" hidden><span id="f-sni-label">SNI</span>
         <input name="server_name" placeholder="{{.Node.Address}}"></label>
 
       <label id="f-hop" hidden>跳跃端口范围（可选）
@@ -84,6 +84,10 @@
       <strong>Reality 握手站点</strong>可以点「检测」，从面板确认它支持 TLS 1.3 和 HTTP/2；面板能通不代表每个地区都好用。<br>
       Hysteria2 跳端口仅支持直连 Linux 节点，需要放行对应 UDP 端口范围。
       TUIC 当前使用固定端口。跳跃间隔仅在 sing-box / Mihomo 配置中下发，分享链接导入使用客户端自身间隔。<br>
+      <strong>vless-ws（CDN）</strong>让客户端经 Cloudflare 这类 CDN 连到节点，节点 IP 被封了也能用：
+      域名在 CDN 开启代理（Cloudflare 的橙色云朵），SSL 模式选 Full (strict)，
+      端口用 CDN 支持的 443、2053、2083、2087、2096、8443 之一。「CDN 域名」留空就用节点地址；
+      想让客户端连优选 IP，把它填进「外部中转地址」。WebSocket 路径自动生成，修改入站时保持不变。<br>
       密钥、short id、Shadowsocks 的服务端 PSK 都是自动生成的。
       <strong>AnyTLS、Hysteria2、TUIC 需要证书</strong> ——
       Reality 用自己的密钥对认证，Shadowsocks 没有 TLS 层。
@@ -105,14 +109,15 @@
 function onProto(v) {
   var show = function (id, on) { document.getElementById(id).hidden = !on; };
   show('f-handshake', v === 'vless');
-  var tls = ['anytls', 'hysteria2', 'tuic'].includes(v);
+  var tls = ['anytls', 'hysteria2', 'tuic', 'vless-ws'].includes(v);
   show('f-cert', tls); show('f-key', tls); show('f-sni', tls);
+  document.getElementById('f-sni-label').textContent = v === 'vless-ws' ? 'CDN 域名' : 'SNI';
   show('f-hop', v === 'hysteria2'); show('f-hop-interval', v === 'hysteria2');
   show('f-obfs', v === 'hysteria2'); show('f-masq', v === 'hysteria2');
   document.querySelector('input[name=hop_ports]').disabled = v !== 'hysteria2';
   document.querySelector('input[name=hop_interval]').disabled = v !== 'hysteria2';
   var port = document.querySelector('input[name=port]');
-  port.value = ({vless:443,anytls:8443,shadowsocks:8388,hysteria2:8443,tuic:9443})[v];
+  port.value = ({vless:443,'vless-ws':2053,anytls:8443,shadowsocks:8388,hysteria2:8443,tuic:9443})[v];
 }
 // The two relay fields are alternatives, so picking one takes the other away
 // rather than leaving a form that can be filled in contradictorily and only
@@ -242,7 +247,8 @@ function randomMasq(btn) {
                 </span></label>
             {{end}}
             {{if $.EditTLS}}
-              <label>SNI<input name="server_name" required value="{{$.SNI}}"></label>
+              <label>{{if $.WSPath}}CDN 域名{{else}}SNI{{end}}<input name="server_name" required value="{{$.SNI}}"></label>
+              {{if $.WSPath}}<label>WebSocket 路径<input value="{{$.WSPath}}" readonly></label>{{end}}
               <label>证书路径（节点上）<input name="cert_path" value="{{$.CertPath}}"></label>
               <label>私钥路径（节点上）<input name="key_path" value="{{$.KeyPath}}"></label>
             {{end}}

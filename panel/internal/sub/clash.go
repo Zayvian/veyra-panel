@@ -4,6 +4,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"time"
 
+	"github.com/Zayvian/veyra-panel/internal/service"
 	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
@@ -39,6 +40,14 @@ type clashProxy struct {
 	AnyTLSSNI         string            `yaml:"sni,omitempty"`
 	ClientFingerprint string            `yaml:"client-fingerprint,omitempty"`
 	RealityOpts       *clashRealityOpts `yaml:"reality-opts,omitempty"`
+	WSOpts            *clashWSOpts      `yaml:"ws-opts,omitempty"`
+}
+
+type clashWSOpts struct {
+	Path                string            `yaml:"path"`
+	Headers             map[string]string `yaml:"headers,omitempty"`
+	MaxEarlyData        int               `yaml:"max-early-data,omitempty"`
+	EarlyDataHeaderName string            `yaml:"early-data-header-name,omitempty"`
 }
 
 type clashRealityOpts struct {
@@ -98,6 +107,16 @@ func Clash(entries []Entry, rulesBase string) ([]byte, error) {
 			p.TLS = true
 			p.SNI = e.SNI
 			p.RealityOpts = &clashRealityOpts{PublicKey: e.PBK, ShortID: e.SID}
+		case store.ProtoVLESSWS:
+			p.Type = "vless"
+			p.UUID = e.UUID
+			p.Network = "ws"
+			p.TLS = true
+			p.SNI = e.SNI
+			p.WSOpts = &clashWSOpts{
+				Path: e.Path, Headers: map[string]string{"Host": e.Host},
+				MaxEarlyData: service.WSEarlyData, EarlyDataHeaderName: service.WSEarlyDataHeader,
+			}
 		case store.ProtoAnyTLS:
 			p.Type = "anytls"
 			p.Password = e.Password

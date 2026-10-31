@@ -153,6 +153,8 @@ func singboxUser(u *store.User, protocol string) (singbox.User, bool) {
 	switch protocol {
 	case store.ProtoVLESS:
 		return singbox.User{Name: u.Name, UUID: u.VlessUUID, Flow: FlowVision}, true
+	case store.ProtoVLESSWS:
+		return singbox.User{Name: u.Name, UUID: u.VlessUUID}, true
 	case store.ProtoTUIC:
 		return singbox.User{Name: u.Name, UUID: u.VlessUUID, Password: u.Password}, true
 	case store.ProtoAnyTLS, store.ProtoHysteria2:

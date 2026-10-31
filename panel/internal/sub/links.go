@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Zayvian/veyra-panel/internal/service"
 	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
@@ -60,6 +61,21 @@ func shareLink(e Entry) string {
 		if e.Flow != "" {
 			q.Set("flow", e.Flow)
 		}
+		return "vless://" + e.UUID + "@" + host + "?" + q.Encode() + "#" + frag(e.display())
+
+	case store.ProtoVLESSWS:
+		q := url.Values{}
+		q.Set("encryption", "none")
+		q.Set("type", "ws")
+		q.Set("security", "tls")
+		q.Set("sni", e.SNI)
+		q.Set("host", e.Host)
+		if e.FP != "" {
+			q.Set("fp", e.FP)
+		}
+		// "?ed=" in the path is how Xray-family clients learn about early
+		// data; sing-box and mihomo take it from their own fields instead.
+		q.Set("path", e.Path+"?ed="+strconv.Itoa(service.WSEarlyData))
 		return "vless://" + e.UUID + "@" + host + "?" + q.Encode() + "#" + frag(e.display())
 
 	case store.ProtoAnyTLS:

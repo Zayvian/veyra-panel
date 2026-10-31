@@ -309,7 +309,7 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		"NodeNames":        nodeNames,
 		"RelayPrefix":      service.RelayTagPrefix,
 		"EditRelayNodeID":  int64(0),
-		"Protocols":        []string{store.ProtoVLESS, store.ProtoAnyTLS, store.ProtoShadowsocks, store.ProtoHysteria2, store.ProtoTUIC},
+		"Protocols":        []string{store.ProtoVLESS, store.ProtoVLESSWS, store.ProtoAnyTLS, store.ProtoShadowsocks, store.ProtoHysteria2, store.ProtoTUIC},
 		"DefaultHandshake": service.DefaultHandshake,
 		"Handshakes":       service.HandshakeCandidates,
 		"DefaultMasq":      service.DefaultMasquerade,
@@ -392,7 +392,7 @@ func (s *Server) createInbound(w http.ResponseWriter, r *http.Request) {
 		Obfs:        r.FormValue("obfs") != "",
 		Masquerade:  r.FormValue("masquerade"),
 	}
-	if (spec.Protocol == store.ProtoAnyTLS || spec.Protocol == store.ProtoHysteria2 || spec.Protocol == store.ProtoTUIC) && spec.ServerName == "" {
+	if (spec.Protocol == store.ProtoAnyTLS || spec.Protocol == store.ProtoHysteria2 || spec.Protocol == store.ProtoTUIC || spec.Protocol == store.ProtoVLESSWS) && spec.ServerName == "" {
 		if n, err := s.svc.Node(nodeID); err == nil {
 			spec.ServerName = n.Address
 		}
@@ -436,6 +436,7 @@ func (s *Server) inboundEditFields(data map[string]any, inbounds []*store.Inboun
 	data["HopPorts"] = client.HopPorts
 	data["HopInterval"] = client.HopInterval
 	data["SNI"] = client.SNI
+	data["WSPath"] = client.Path
 	data["EditRelayNodeID"] = in.RelayNodeID
 	if sb.TLS != nil {
 		data["CertPath"] = sb.TLS.CertificatePath

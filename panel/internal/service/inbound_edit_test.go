@@ -63,6 +63,20 @@ func TestEditingAnInboundKeepsItsKeys(t *testing.T) {
 				t.Errorf("SNI is %q, want the new server name", after.SNI)
 			}
 		},
+	}, {
+		// The path is a secret every client already holds; the domain is not.
+		name: "cdn vless keeps its path and moves its host",
+		spec: InboundSpec{Protocol: store.ProtoVLESSWS, Port: 2053,
+			ServerName: "a.example.com"},
+		edit: func(e *InboundEdit) { e.ServerName = "b.example.com" },
+		check: func(t *testing.T, before, after ClientParams) {
+			if after.Path == "" || after.Path != before.Path {
+				t.Errorf("path went from %q to %q", before.Path, after.Path)
+			}
+			if after.SNI != "b.example.com" || after.Host != "b.example.com" {
+				t.Errorf("SNI %q, Host %q; want both on the new domain", after.SNI, after.Host)
+			}
+		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			in, err := svc.CreateInbound(nodeID, tc.spec)

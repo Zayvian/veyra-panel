@@ -73,6 +73,12 @@ type ClientParams struct {
 	ServerPSK string `json:"server_psk,omitempty"` // Shadowsocks, server half of the key pair
 
 	Obfs string `json:"obfs,omitempty"` // Hysteria2 salamander password
+
+	// VLESS over a CDN. Network is "ws"; Host is the Host header, which is
+	// the CDN site and so normally the same as the SNI.
+	Network string `json:"network,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Host    string `json:"host,omitempty"`
 }
 
 // SSMethod is the only Shadowsocks method this panel emits. The user PSK it
@@ -90,6 +96,14 @@ const DefaultHandshake = "www.microsoft.com:443"
 const (
 	DefaultCertPath = "/opt/skysbx/cert.pem"
 	DefaultKeyPath  = "/opt/skysbx/key.pem"
+)
+
+// WSEarlyData is how many bytes of the proxied stream a client may send in the
+// WebSocket upgrade request, and WSEarlyDataHeader the header they go in. Both
+// ends have to agree, so they are fixed rather than configurable.
+const (
+	WSEarlyData       = 2048
+	WSEarlyDataHeader = "Sec-WebSocket-Protocol"
 )
 
 // FlowVision is the only VLESS flow this panel emits. It has to be identical in
@@ -141,6 +155,34 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 		}
 		client = ClientParams{SNI: host, PBK: pub, SID: shortID, FP: "chrome",
 			Flow: FlowVision}
+
+	case store.ProtoVLESSWS:
+		// The certificate is the one the CDN checks when it connects to the
+		// node, not one any client sees. The installer's certificate for the
+		// node's domain passes Cloudflare's strict mode; so does an origin
+		// certificate issued by Cloudflare itself.
+		if spec.CertPath == "" {
+			spec.CertPath = DefaultCertPath
+		}
+		if spec.KeyPath == "" {
+			spec.KeyPath = DefaultKeyPath
+		}
+		if spec.ServerName == "" {
+			return nil, invalid("%s needs the domain the CDN serves", spec.Protocol)
+		}
+		in.Type = "vless"
+		in.TLS = &singbox.TLS{
+			Enabled:         true,
+			ServerName:      spec.ServerName,
+			CertificatePath: spec.CertPath,
+			KeyPath:         spec.KeyPath,
+		}
+		path := NewWSPath()
+		in.Transport = &singbox.Transport{Type: "ws", Path: path,
+			MaxEarlyData: WSEarlyData, EarlyDataHeaderName: WSEarlyDataHeader}
+		// No flow: Vision needs the raw TLS stream, which a WebSocket hides.
+		client = ClientParams{SNI: spec.ServerName, FP: "chrome",
+			Network: "ws", Path: path, Host: spec.ServerName}
 
 	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC:
 		// Blank means "wherever the installer put it". Refusing instead would
@@ -223,6 +265,17 @@ func newRealityKeypair() (priv, pub string, err error) {
 	}
 	enc := base64.RawURLEncoding
 	return enc.EncodeToString(key.Bytes()), enc.EncodeToString(key.PublicKey().Bytes()), nil
+}
+
+// NewWSPath returns a random WebSocket path. Anyone can reach a CDN-fronted
+// site, so the path is what keeps a stranger who guesses the domain from even
+// learning that a proxy is behind it: every other path is a plain 404.
+func NewWSPath() string {
+	b := make([]byte, 9)
+	if _, err := rand.Read(b); err != nil {
+		panic(err) // crypto/rand does not fail on any supported platform
+	}
+	return "/" + base64.RawURLEncoding.EncodeToString(b)
 }
 
 // splitHandshake accepts "host" or "host:port", defaulting to 443.

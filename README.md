@@ -8,7 +8,7 @@
 
 ## 功能
 
-- **协议**：VLESS Reality、Hysteria2（混淆、伪装网站、跳端口）、AnyTLS、Shadowsocks 2022、TUIC v5
+- **协议**：VLESS Reality、VLESS WS（套 CDN）、Hysteria2（混淆、伪装网站、跳端口）、AnyTLS、Shadowsocks 2022、TUIC v5
 - **用户**：到期时间、流量上限、每月自动重置、同时在线 IP 限制、按入站分配权限、一键续费、套餐模板
 - **订阅**：Clash / mihomo、sing-box、Shadowrocket、通用分享链接，自动识别客户端；Clash 和 sing-box 自带分组（AI、YouTube、Netflix 等）和国内直连规则；二维码和可直接发给客户的话术；订阅公告；账号失效时显示原因
 - **节点**：流量倍率（如 0.5 倍、不扣流量）、站内中转、每台节点的流量统计

@@ -81,6 +81,11 @@ type Inbound struct {
 
 	TLS *TLS `json:"tls,omitempty"`
 
+	// Transport carries VLESS over something other than raw TCP. Only the
+	// CDN variant uses it: a CDN forwards HTTP, so the stream has to be a
+	// WebSocket for it to pass through at all.
+	Transport *Transport `json:"transport,omitempty"`
+
 	// Shadowsocks only. Password here is the *server* half of the SS2022 key
 	// pair; each user carries their own half.
 	Method   string   `json:"method,omitempty"`
@@ -103,6 +108,19 @@ type Inbound struct {
 	// browser, or someone probing — instead of an error that names a proxy.
 	// Server-side only: clients never see it.
 	Masquerade *Masquerade `json:"masquerade,omitempty"`
+}
+
+// Transport is sing-box's V2Ray transport block, WebSocket only.
+//
+// The early-data pair lets a client put the first bytes of the proxied stream
+// into the WebSocket upgrade itself, in the header named here, which saves a
+// round trip on every connection. Sec-WebSocket-Protocol is the header that
+// Cloudflare passes through untouched.
+type Transport struct {
+	Type                string `json:"type"` // always "ws"
+	Path                string `json:"path,omitempty"`
+	MaxEarlyData        int    `json:"max_early_data,omitempty"`
+	EarlyDataHeaderName string `json:"early_data_header_name,omitempty"`
 }
 
 // Obfs is Hysteria2's salamander obfuscation.

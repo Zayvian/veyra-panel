@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/Zayvian/veyra-panel/internal/service"
 	"github.com/Zayvian/veyra-panel/internal/singbox"
 	"github.com/Zayvian/veyra-panel/internal/store"
 )
@@ -43,6 +44,18 @@ func SingBox(entries []Entry, rulesBase string) ([]byte, error) {
 				// not optional here.
 				UTLS:    &singbox.UTLS{Enabled: true, Fingerprint: fpOr(e.FP)},
 				Reality: &singbox.ClientReality{Enabled: true, PublicKey: e.PBK, ShortID: e.SID},
+			}
+		case store.ProtoVLESSWS:
+			ob.Type = "vless"
+			ob.UUID = e.UUID
+			ob.TLS = &singbox.ClientTLS{
+				Enabled:    true,
+				ServerName: e.SNI,
+				UTLS:       &singbox.UTLS{Enabled: true, Fingerprint: fpOr(e.FP)},
+			}
+			ob.Transport = &singbox.ClientTransport{
+				Type: "ws", Path: e.Path, Headers: map[string]string{"Host": e.Host},
+				MaxEarlyData: service.WSEarlyData, EarlyDataHeaderName: service.WSEarlyDataHeader,
 			}
 		case store.ProtoAnyTLS:
 			ob.Type = "anytls"
