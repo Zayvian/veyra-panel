@@ -318,6 +318,11 @@ function randomMasq(btn) {
               {{else if $.Settle}}<span class="pill off">确认中…</span>
               {{else if $.StateKnown}}<span class="pill bad">未生效</span>
               {{else}}<span class="pill off">节点离线</span>{{end}}
+              {{/* From the domestic probes, see internal/probe. */}}
+              {{with index $.Probe .ID}}
+                <div style="margin-top:.25rem"><span class="pill {{.Class}}">{{.Label}}</span>
+                  {{if .Advice}}<div class="dim" style="font-size:.75rem">{{.Advice}}</div>{{end}}</div>
+              {{end}}
             {{end}}
         </td>
         <td class="mobile-actions" style="text-align:right;white-space:nowrap">

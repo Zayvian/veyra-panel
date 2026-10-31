@@ -465,6 +465,21 @@ func (c *Client) handle(ctx context.Context, data []byte) {
 			}
 		}
 
+	case proto.TypeProbe:
+		var pd proto.ProbeData
+		if err := json.Unmarshal(env.Data, &pd); err != nil {
+			c.reply(ctx, env.ID, fmt.Errorf("probe payload: %w", err))
+			return
+		}
+		// Dialling takes seconds; the read loop must not wait for it, or pings
+		// go unanswered and the panel drops the connection.
+		go func(id uint64) {
+			res := runProbe(ctx, pd)
+			if err := c.send(ctx, proto.TypeProbeResult, id, res); err != nil {
+				c.log.Debug("probe result", "error", err)
+			}
+		}(env.ID)
+
 	case proto.TypePing:
 		if err := c.send(ctx, proto.TypePong, env.ID, nil); err != nil {
 			c.log.Debug("pong", "error", err)

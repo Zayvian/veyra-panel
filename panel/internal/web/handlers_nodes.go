@@ -58,8 +58,15 @@ func (s *Server) renderNodesFull(w http.ResponseWriter, r *http.Request, code in
 		connected[n.ID] = s.nodes.Connected(n.ID)
 		bareIP[n.ID] = net.ParseIP(strings.TrimSpace(n.Address)) != nil
 	}
+	probeNodes, err := s.svc.Store().ProbeNodes()
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	data := map[string]any{
 		"Nodes":         nodes,
+		"ProbeNodes":    probeNodes,
+		"Probe":         s.nodeProbes(nodes, inbounds),
 		"InboundCounts": counts,
 		"Connected":     connected,
 		"Rejected":      rejected,
@@ -185,6 +192,14 @@ func (s *Server) updateNode(w http.ResponseWriter, r *http.Request) {
 	if err := s.svc.UpdateNode(n); err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	// An unticked checkbox sends nothing, so the form says it carries one;
+	// a request without the marker leaves the role as it was.
+	if r.Form.Has("probe_field") {
+		if err := s.svc.Store().SetProbeNode(n.ID, r.FormValue("probe") != ""); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 	}
 	s.renderNodes(w, r, http.StatusOK, "")
 }
@@ -323,6 +338,7 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		"Stale":            stale,
 		"Settle":           settle,
 		"EditID":           editID,
+		"Probe":            s.inboundProbes(inbounds),
 		"CSRFToken":        s.csrf.csrfValue(r),
 	}
 	if editID != 0 {

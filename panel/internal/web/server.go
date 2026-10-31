@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Zayvian/veyra-panel/internal/ratelimit"
+	"github.com/Zayvian/veyra-panel/internal/probe"
 	"github.com/Zayvian/veyra-panel/internal/service"
 	"github.com/Zayvian/veyra-panel/internal/store"
 	"github.com/Zayvian/veyra-panel/internal/sub"
@@ -131,6 +132,7 @@ type Server struct {
 	sess               *sessions
 	csrf               *csrfToken
 	nodes              NodeChannel
+	probes             *probe.Monitor // nil until SetProbes; see probeView
 	logins             *ratelimit.Limiter
 	secureCookies      bool
 	access             panelAccess

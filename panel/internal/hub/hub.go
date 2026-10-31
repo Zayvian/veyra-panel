@@ -91,6 +91,11 @@ type conn struct {
 	statsAck  atomic.Bool
 	configRev atomic.Bool
 	panelURL  atomic.Bool
+	probe     atomic.Bool
+
+	// Probes awaiting their probe_result, by envelope id.
+	probeMu      sync.Mutex
+	probeWaiters map[uint64]chan ProbeResultData
 
 	// host is the name the node dialled, from the request's Host. It is how
 	// the panel tells a node still on an old domain from one that has moved.
@@ -178,7 +183,7 @@ func (h *Hub) serve(ctx context.Context, nodeID int64, host string, ws *websocke
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	c := &conn{nodeID: nodeID, ws: ws, host: host}
+	c := &conn{nodeID: nodeID, ws: ws, host: host, probeWaiters: map[uint64]chan ProbeResultData{}}
 	c.lastSeen.Store(time.Now().Unix())
 
 	// One connection per node. A reconnect after a network drop arrives before
@@ -283,6 +288,8 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 					c.configRev.Store(true)
 				case CapPanelURL:
 					c.panelURL.Store(true)
+				case CapProbe:
+					c.probe.Store(true)
 				}
 			}
 			if err := h.send(ctx, c, TypeWelcome, 0,
@@ -299,6 +306,20 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 		return h.redirectIfMoved(ctx, c)
 
 	case TypeOK:
+		return nil
+
+	case TypeProbeResult:
+		var res ProbeResultData
+		if err := json.Unmarshal(env.Data, &res); err != nil {
+			return fmt.Errorf("probe_result: %w", err)
+		}
+		c.probeMu.Lock()
+		ch := c.probeWaiters[env.ID]
+		delete(c.probeWaiters, env.ID)
+		c.probeMu.Unlock()
+		if ch != nil {
+			ch <- res // buffered; see Probe
+		}
 		return nil
 
 	case TypeError:
@@ -571,6 +592,52 @@ func (h *Hub) flush() {
 		}(c)
 	}
 	wg.Wait()
+}
+
+// ── probing ─────────────────────────────────────────────────────────────────
+
+// ErrNoProbe is returned for a node that is not connected or does not support
+// probing.
+var ErrNoProbe = errors.New("node cannot probe")
+
+// CanProbe reports whether a node is connected and agreed to the probe
+// capability.
+func (h *Hub) CanProbe(nodeID int64) bool {
+	h.mu.RLock()
+	c := h.conns[nodeID]
+	h.mu.RUnlock()
+	return c != nil && c.probe.Load()
+}
+
+// Probe asks a node to try a TCP handshake with each target and waits for its
+// answer, or for ctx to end.
+func (h *Hub) Probe(ctx context.Context, nodeID int64, targets []ProbeTarget, timeout time.Duration) ([]ProbeResult, error) {
+	h.mu.RLock()
+	c := h.conns[nodeID]
+	h.mu.RUnlock()
+	if c == nil || !c.probe.Load() {
+		return nil, ErrNoProbe
+	}
+	id := h.nextID.Add(1)
+	ch := make(chan ProbeResultData, 1)
+	c.probeMu.Lock()
+	c.probeWaiters[id] = ch
+	c.probeMu.Unlock()
+	defer func() {
+		c.probeMu.Lock()
+		delete(c.probeWaiters, id)
+		c.probeMu.Unlock()
+	}()
+	if err := h.send(ctx, c, TypeProbe, id, ProbeData{
+		Targets: targets, TimeoutMS: int(timeout / time.Millisecond)}); err != nil {
+		return nil, err
+	}
+	select {
+	case res := <-ch:
+		return res.Results, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 // ── status for the UI ───────────────────────────────────────────────────────

@@ -87,6 +87,10 @@
                 <select name="stats_reset_day" style="min-width:7.5rem">{{template "node-reset-day-options" .StatsResetDay}}</select></label>
               <label>重置时间<input name="stats_reset_time" type="time"
                 value="{{resettime .StatsResetHour .StatsResetMinute}}"></label>
+              <input type="hidden" name="probe_field" value="1">
+              <label style="flex-direction:row;align-items:center;gap:.4rem">
+                <input type="checkbox" name="probe" value="1" {{if index $.ProbeNodes .ID}}checked{{end}}
+                       style="min-width:0">国内探针</label>
               <button>保存</button>
               <button type="button" class="ghost" hx-get="{{panelPath "/nodes"}}"
                       hx-target="#nodes" hx-swap="outerHTML">取消</button>
@@ -98,13 +102,18 @@
               改名会<strong>重新生成该节点所有入站的 tag</strong>（含手工取过名的），
               订阅里显示的名字跟着变，节点会重启一次、连接断一次。
               接入 token 不在这里改 —— 那是「换 token」。
-              节点统计重置只清概览里的本周期上/下行，不清历史账，也不影响用户套餐。
+              节点统计重置只清概览里的本周期上/下行，不清历史账，也不影响用户套餐。<br>
+              <strong>国内探针</strong>：这台机器在国内，用来每 5 分钟从国内测一遍其他节点的 TCP 入站，
+              再和面板从海外测的结果对比，判断是端口被封还是整个 IP 的 TCP 被封。探针节点不需要建入站，
+              节点程序要升级到支持探测的版本。
             </p>
           </td>
         </tr>
         {{else}}
         <tr>
-          <td>{{.Name}} <span class="dim">{{.Country}}</span><div class="dim" style="font-size:.75rem">排序 {{.SortOrder}}</div></td>
+          <td>{{.Name}} <span class="dim">{{.Country}}</span>
+            {{if index $.ProbeNodes .ID}}<span class="pill live" style="margin-left:.35rem">国内探针</span>{{end}}
+            <div class="dim" style="font-size:.75rem">排序 {{.SortOrder}}</div></td>
           <td data-label="倍率">{{.RateText}}×{{if eq .RateMilli 0}} <span class="dim">不扣套餐</span>{{end}}</td>
           <td class="dim" data-label="地址">
             {{.Address}}
@@ -123,6 +132,9 @@
             {{else if .LastSeenAt}}<span class="pill bad">离线</span>
               <div class="dim" style="font-size:.75rem">最后 {{ago .LastSeenAt}}</div>
             {{else}}<span class="pill off">从未接入</span>{{end}}
+            {{with index $.Probe .ID}}
+              <div style="margin-top:.25rem"><span class="pill {{.Class}}" title="{{.Advice}}">{{.Label}}</span></div>
+            {{end}}
           </td>
           <td data-label="入站">
             <a href="{{panelPath "/nodes/"}}{{.ID}}/inbounds">{{index $.InboundCounts .ID}} 个</a>
