@@ -67,3 +67,11 @@ func TestCDNUsersCarryNoFlow(t *testing.T) {
 		t.Fatalf("reality user lost its flow: %+v", su)
 	}
 }
+
+func TestCDNVLESSRefusesAnIP(t *testing.T) {
+	_, err := BuildInbound(InboundSpec{Tag: "cdn", Protocol: store.ProtoVLESSWS, Port: 2053,
+		ServerName: "38.64.60.249"})
+	if err == nil {
+		t.Fatal("an IP was accepted as the CDN domain")
+	}
+}

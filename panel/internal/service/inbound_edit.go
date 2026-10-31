@@ -117,6 +117,9 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		if e.ServerName == "" {
 			return nil, invalid("%s needs a server name", in.Protocol)
 		}
+		if in.Protocol == store.ProtoVLESSWS && net.ParseIP(e.ServerName) != nil {
+			return nil, invalid("%s needs a domain on the CDN, not the IP %s", in.Protocol, e.ServerName)
+		}
 		if e.CertPath == "" {
 			e.CertPath = DefaultCertPath
 		}

@@ -243,7 +243,7 @@ Reality 会借用一个真实网站的 TLS 握手来伪装。可以从输入框�
 
 1. 域名托管在 Cloudflare，给节点加一条 A 记录（比如 `cdn.example.com` → 节点 IP），**打开代理**（橙色云朵）。
 2. 「SSL/TLS」模式选 **Full (strict)**。节点上的证书要对这个域名有效：安装脚本申请的证书（节点域名就是 CDN 域名时）或 Cloudflare 签发的 Origin 证书都可以，后者把路径填进「证书路径」「私钥路径」。
-3. 新建入站选 `vless-ws`，端口用 Cloudflare 支持的 HTTPS 端口：443、2053、2083、2087、2096、8443。「CDN 域名」留空就是节点地址。
+3. 新建入站选 `vless-ws`，端口用 Cloudflare 支持的 HTTPS 端口：443、2053、2083、2087、2096、8443。「CDN 域名」填第 1 步那个开了橙色云朵的域名，留空就用节点地址（节点地址是 IP 时会被拒绝，CDN 只认域名）。订阅里客户端连的就是这个域名，不会连节点 IP。
 4. 想让客户端连优选过的 Cloudflare IP，把 IP 填进「外部中转地址」；TLS 和 Host 仍然用 CDN 域名。
 
 WebSocket 路径自动生成，编辑入站时保持不变，相当于一个共享密钥：猜不到路径的人只会看到 404。订阅里三种格式（Clash / mihomo、sing-box、分享链接）都带上了路径、Host 和 early data。

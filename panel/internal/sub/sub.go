@@ -136,6 +136,11 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 			address, port = relay.Address, in.RelayPort
 		case in.Address != "":
 			address, port = relayTarget(in.Address, in.Port)
+		case in.Protocol == store.ProtoVLESSWS && client.Host != "":
+			// The whole point of a CDN inbound is that clients never dial the
+			// node: its address may be an IP the firewall has blocked. They dial
+			// the CDN domain, which resolves to the CDN's edge.
+			address = client.Host
 		}
 
 		// Billing follows the inbound's own node, relay or not, so that is the
