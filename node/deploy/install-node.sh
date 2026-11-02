@@ -39,11 +39,13 @@ Usage: sudo ./install-node.sh [--panel <url> --token <token>] [options]
 Run it with no install options in a terminal for the guided setup.
 
 Actions (default: install)
-  --version         What is installed, including the sing-box it embeds.
+  --version         What is installed, including the sing-box it embeds and
+                    the Xray beside it.
   --upgrade         Install the current release and restart. Reads the panel
                     URL and token back from ${ROOT}/node.env, so it needs no
                     arguments. This is also how the sing-box core is updated:
-                    the node links it, so a new binary is the upgrade.
+                    the node links it, so a new binary is the upgrade. Xray
+                    is brought to the version in node/xray.lock too.
   --uninstall       Stop and remove the service and the binary. Keeps the
                     certificate and ${ROOT}/node.env, so a reinstall is a
                     no-argument --upgrade away.
@@ -121,7 +123,7 @@ if [ "$ACTION" = uninstall ] || [ "$ACTION" = purge ]; then
     systemctl reset-failed 2>/dev/null || true
     ok "Veyra Node stopped and removed"
 
-    rm -f "$ROOT/skysbx-node"
+    rm -f "$ROOT/skysbx-node" "$ROOT/xray"
     # The build tree is this installer's scratch space, not data: it is a fresh
     # clone on every run.
     rm -rf "$ROOT/build/skysbx-node" "$ROOT/build/skysbx-core" \
@@ -390,6 +392,46 @@ else
     ok "node binary installed (built from source)"
 fi
 
+# ───────────────────────────────── xray ───────────────────────────────────
+
+# Xray serves the inbounds the panel assigns to it, as a separate program the
+# node starts beside itself: it looks for ${ROOT}/xray. Without it the node
+# serves its sing-box inbounds as before and tells the panel it has no Xray,
+# so getting Xray is worth a warning, never a failed install.
+XRAY_LOCK=$BUILD/veyra-node/node/xray.lock
+XRAY_VERSION=$(sed -n 's/^XRAY_VERSION=//p' "$XRAY_LOCK" 2>/dev/null || true)
+xray_is_current() {
+    local v
+    [ -x "$ROOT/xray" ] || return 1
+    # Not piped into head: under pipefail a writer cut off early fails the test.
+    v=$("$ROOT/xray" version 2>/dev/null) || return 1
+    case "$v" in "Xray $XRAY_VERSION "*) return 0 ;; *) return 1 ;; esac
+}
+if [ -z "$XRAY_VERSION" ]; then
+    warn "no node/xray.lock in these sources; skipping Xray"
+elif xray_is_current; then
+    ok "xray $XRAY_VERSION already installed"
+elif [ "$FROM_SOURCE" = 0 ] && [ -n "$RELEASE" ] \
+    && fetch_release_binary veyra-xray "$RELEASE" "$BUILD/xray" \
+    && install -m 0755 "$BUILD/xray" "$ROOT/xray" && xray_is_current; then
+    ok "xray $XRAY_VERSION installed ($RELEASE)"
+elif command -v docker >/dev/null; then
+    # Only when Docker is already here: installing it just for Xray would
+    # turn a missing extra into the slow part of the install.
+    say "building xray $XRAY_VERSION"
+    if docker run --rm -v "$BUILD:/src" -w /src/veyra-node/node \
+        -e GOFLAGS=-buildvcs=false golang:1.26.5 \
+        sh deploy/build-xray.sh /src/xray \
+        && install -m 0755 "$BUILD/xray" "$ROOT/xray" && xray_is_current; then
+        ok "xray $XRAY_VERSION installed (built from source)"
+    else
+        warn "could not build xray; Xray inbounds will not run on this node"
+    fi
+else
+    warn "no xray to download and no Docker to build it; Xray inbounds will not run on this node"
+fi
+rm -f "$BUILD/xray"
+
 # ────────────────────────────── certificate ───────────────────────────────
 
 # AnyTLS, Hysteria2 and TUIC need a certificate. Reality uses its own key pair;
@@ -473,7 +515,7 @@ chmod 600 "$ROOT/node.env"
 
 cat > /etc/systemd/system/skysbx-node.service <<EOF
 [Unit]
-Description=Veyra Node (embedded sing-box data plane)
+Description=Veyra Node (embedded sing-box data plane, Xray beside it)
 After=network-online.target
 Wants=network-online.target
 
