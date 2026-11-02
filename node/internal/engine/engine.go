@@ -65,13 +65,18 @@ type Engine struct {
 	// Per-user cap on distinct source addresses. Its own lock: it is read and
 	// written on a timer that must not wait behind a configuration swap.
 	limits *limiter
+
+	// Xray, for the inbounds the panel assigns to it; see xray.go. Always
+	// present, and idle on a node that has no Xray or serves nothing through
+	// it.
+	x *xrayCore
 }
 
 func New(log *slog.Logger) *Engine {
 	if log == nil {
 		log = slog.Default()
 	}
-	e := &Engine{log: log, counters: newCounters(), limits: newLimiter()}
+	e := &Engine{log: log, counters: newCounters(), limits: newLimiter(), x: newXrayCore(log)}
 	apis, err := newLocalAPIs()
 	if err != nil {
 		// Only reachable if loopback itself is unusable, in which case nothing
@@ -84,12 +89,65 @@ func New(log *slog.Logger) *Engine {
 
 func (e *Engine) SingboxVersion() string { return C.Version }
 
-// ApplyConfig starts sing-box, or replaces a running instance.
+// UseXray finds the Xray binary this node will run Xray inbounds with: path if
+// given, otherwise one beside the node's executable or on PATH. "off" turns
+// Xray off. Finding none is not an error — the node then serves sing-box
+// alone, and tells the panel so by not offering xray. Call before the engine
+// is used.
+func (e *Engine) UseXray(path string) error {
+	bin, err := findXray(path)
+	if err != nil {
+		return err
+	}
+	if bin == "" {
+		return nil
+	}
+	version, err := xrayVersion(bin)
+	if err != nil {
+		return err
+	}
+	e.x.bin, e.x.version = bin, version
+	return nil
+}
+
+// XrayVersion is the version of the Xray this node runs, or empty if it has
+// none.
+func (e *Engine) XrayVersion() string { return e.x.version }
+
+// ApplyConfig serves a configuration: raw for sing-box, xray for the inbounds
+// Xray serves (empty when there are none).
+//
+// The Xray part is checked first, so that one Xray refuses changes nothing at
+// all. Then each core is replaced only if its own part changed: an edit to an
+// Xray inbound does not drop sing-box's connections, and the reverse.
+func (e *Engine) ApplyConfig(ctx context.Context, raw, xray json.RawMessage) error {
+	xray = compactJSON(xray)
+	if err := e.x.check(xray); err != nil {
+		e.setApplyErr(err)
+		return err
+	}
+	if err := e.applySingbox(ctx, raw); err != nil {
+		return err
+	}
+	if err := e.x.apply(xray); err != nil {
+		e.setApplyErr(err)
+		return err
+	}
+	return nil
+}
+
+func (e *Engine) setApplyErr(err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.applyErr = err.Error()
+}
+
+// applySingbox starts sing-box, or replaces a running instance.
 //
 // sing-box has no way to reload in place, so this stops and starts. Live
 // connections on every inbound are dropped, which is precisely why user changes
 // go through UpdateUsers instead of arriving as a new config.
-func (e *Engine) ApplyConfig(ctx context.Context, raw json.RawMessage) error {
+func (e *Engine) applySingbox(ctx context.Context, raw json.RawMessage) error {
 	if len(raw) == 0 {
 		return fmt.Errorf("empty configuration")
 	}
@@ -217,13 +275,16 @@ func (e *Engine) swapLocked(options option.Options, raw json.RawMessage) error {
 // State is what this node is serving right now, and the reason it differs from
 // what the panel last sent, if it does.
 func (e *Engine) State() proto.StateData {
+	xrayTags := e.x.tags()
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	// Copied: activeTags is rewritten in place on the next apply, and the
 	// caller marshals this after the lock is gone.
+	inbounds := append([]string(nil), e.activeTags...)
 	return proto.StateData{
-		Inbounds: append([]string(nil), e.activeTags...),
+		Inbounds: append(inbounds, xrayTags...),
 		Error:    e.applyErr,
 	}
 }
@@ -243,6 +304,7 @@ func parseOptions(ctx context.Context, raw json.RawMessage) (option.Options, err
 }
 
 func (e *Engine) Close() error {
+	e.x.close()
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.stopLocked()
@@ -272,7 +334,7 @@ func (e *Engine) stopLocked() {
 // service counting for the set it was built with, so a newly added user relays
 // traffic that is attributed to nobody — no error, no log line, just a user who
 // never appears to consume anything.
-func (e *Engine) UpdateUsers(_ context.Context, data proto.UsersData) error {
+func (e *Engine) UpdateUsers(ctx context.Context, data proto.UsersData) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -303,6 +365,9 @@ func (e *Engine) UpdateUsers(_ context.Context, data proto.UsersData) error {
 	}
 
 	for tag, users := range data.ByTag {
+		if e.x.owns(tag) {
+			continue
+		}
 		inbound, ok := manager.Get(tag)
 		if !ok {
 			// The panel may know about an inbound this instance does not yet
@@ -328,6 +393,14 @@ func (e *Engine) UpdateUsers(_ context.Context, data proto.UsersData) error {
 		known[name] = true
 	}
 	e.limits.forget(known)
+
+	// Xray is given the whole list: it keeps the users of every tag, so that
+	// an inbound the next configuration moves to Xray starts with its users
+	// rather than empty until the panel next sends them. Last, so that a
+	// failure here leaves sing-box's users updated all the same.
+	if err := e.x.updateUsers(ctx, data.ByTag); err != nil {
+		return err
+	}
 
 	e.usersHash, e.usersHashSet = hash, true
 	return nil

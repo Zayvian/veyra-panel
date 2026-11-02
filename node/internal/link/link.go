@@ -56,9 +56,11 @@ const (
 // panel without sing-box in the picture, and the data plane be tested without a
 // network.
 type Engine interface {
-	// ApplyConfig replaces the running configuration. It rebuilds listeners and
-	// therefore drops live connections, which is why users travel separately.
-	ApplyConfig(ctx context.Context, config json.RawMessage) error
+	// ApplyConfig replaces the running configuration: config for sing-box,
+	// xray for the inbounds Xray serves (empty for none). It rebuilds
+	// listeners and therefore drops live connections, which is why users
+	// travel separately.
+	ApplyConfig(ctx context.Context, config, xray json.RawMessage) error
 
 	// UpdateUsers swaps the user set on running inbounds without restarting
 	// them, and refreshes the statistics allowlist.
@@ -89,6 +91,10 @@ type Engine interface {
 
 	// SingboxVersion is reported in the hello.
 	SingboxVersion() string
+
+	// XrayVersion is reported in the hello, and empty when this node has no
+	// Xray — in which case it does not offer xray either.
+	XrayVersion() string
 }
 
 type Config struct {
@@ -157,6 +163,16 @@ type Client struct {
 type outgoing struct {
 	seq  uint64
 	data proto.StatsData
+}
+
+// nodeCaps is what this node offers: every node's capabilities, and xray
+// when it has Xray to run.
+func (c *Client) nodeCaps() []string {
+	caps := append([]string(nil), proto.NodeCaps...)
+	if c.cfg.Engine.XrayVersion() != "" {
+		caps = append(caps, proto.CapXray)
+	}
+	return caps
 }
 
 func (c *Client) has(capability string) bool {
@@ -324,8 +340,9 @@ func (c *Client) session(ctx context.Context) error {
 		Arch:           runtime.GOARCH,
 		Hostname:       hostname,
 		SingboxVersion: c.cfg.Engine.SingboxVersion(),
+		XrayVersion:    c.cfg.Engine.XrayVersion(),
 		Proto:          proto.ProtoVersion,
-		Caps:           proto.NodeCaps,
+		Caps:           c.nodeCaps(),
 	}); err != nil {
 		return fmt.Errorf("hello: %w", err)
 	}
@@ -374,7 +391,7 @@ func (c *Client) handle(ctx context.Context, data []byte) {
 		}
 		agreed := map[string]bool{}
 		for _, offered := range w.Caps {
-			for _, mine := range proto.NodeCaps {
+			for _, mine := range c.nodeCaps() {
 				if offered == mine {
 					agreed[mine] = true
 				}
@@ -405,7 +422,7 @@ func (c *Client) handle(ctx context.Context, data []byte) {
 			c.reply(ctx, env.ID, fmt.Errorf("config payload: %w", err))
 			return
 		}
-		err := c.cfg.Engine.ApplyConfig(ctx, cd.Config)
+		err := c.cfg.Engine.ApplyConfig(ctx, cd.Config, cd.Xray)
 		if err != nil {
 			c.log.Error("apply config", "error", err)
 		} else {

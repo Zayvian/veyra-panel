@@ -1,0 +1,8 @@
+# The Xray a node runs beside sing-box, for the inbounds the panel assigns to
+# Xray. CI builds exactly this version to run the node's Xray tests against.
+#
+# XRAY_VERSION is Xray's release tag without the v; XRAY_MODULE is the same
+# release as a Go module version, which is how Xray publishes it to the Go
+# module proxy (26.3.27 is v1.260327.0). Change both lines together.
+XRAY_VERSION=26.3.27
+XRAY_MODULE=v1.260327.0

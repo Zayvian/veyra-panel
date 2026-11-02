@@ -20,14 +20,14 @@ func TestAnIdenticalConfigurationKeepsTheRunningInstance(t *testing.T) {
 
 	port := freePort(t)
 	cfg := configWithShadowsocks(t, port)
-	if err := e.ApplyConfig(context.Background(), cfg); err != nil {
+	if err := e.ApplyConfig(context.Background(), cfg, nil); err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
 	first := e.box
 
 	// Same configuration, different formatting.
 	reformatted := json.RawMessage(strings.ReplaceAll(string(cfg), " ", "  "))
-	if err := e.ApplyConfig(context.Background(), reformatted); err != nil {
+	if err := e.ApplyConfig(context.Background(), reformatted, nil); err != nil {
 		t.Fatalf("second apply: %v", err)
 	}
 	if e.box != first {
@@ -36,7 +36,7 @@ func TestAnIdenticalConfigurationKeepsTheRunningInstance(t *testing.T) {
 	waitListening(t, port, true)
 
 	// A real change still rebuilds.
-	if err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, freePort(t))); err != nil {
+	if err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, freePort(t)), nil); err != nil {
 		t.Fatalf("third apply: %v", err)
 	}
 	if e.box == first {
@@ -51,7 +51,7 @@ func TestTheSameUsersAreAppliedAgainAfterARebuild(t *testing.T) {
 	e := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	defer e.Close()
 
-	if err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, freePort(t))); err != nil {
+	if err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, freePort(t)), nil); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
 	users := proto.UsersData{
@@ -71,7 +71,7 @@ func TestTheSameUsersAreAppliedAgainAfterARebuild(t *testing.T) {
 		t.Fatalf("repeat update: %v", err)
 	}
 
-	if err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, freePort(t))); err != nil {
+	if err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, freePort(t)), nil); err != nil {
 		t.Fatalf("rebuild: %v", err)
 	}
 	if e.usersHashSet {

@@ -57,6 +57,16 @@ jobs:
         with:
           go-version: ${{ env.NODE_GO }}
           cache-dependency-path: veyra/node/go.sum
+      # The node runs Xray as a separate program; its tests run a real one.
+      - name: build xray for the tests
+        working-directory: veyra/node
+        run: |
+          . ./xray.lock
+          GOBIN="$RUNNER_TEMP/xray" go install "github.com/xtls/xray-core/main@$XRAY_MODULE"
+          mv "$RUNNER_TEMP/xray/main" "$RUNNER_TEMP/xray/xray"
+          v=$("$RUNNER_TEMP/xray/xray" version)
+          case "$v" in "Xray $XRAY_VERSION "*) ;; *) echo "$v" >&2; exit 1 ;; esac
+          echo "VEYRA_TEST_XRAY=$RUNNER_TEMP/xray/xray" >> "$GITHUB_ENV"
       - working-directory: veyra/node
         run: go test -race -tags "$NODE_TAGS" ./...
       - working-directory: veyra/node

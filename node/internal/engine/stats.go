@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/Zayvian/veyra-node/internal/proto"
 )
@@ -113,6 +114,14 @@ func (c *counters) delta(gen uint64, now map[string]proto.Usage) map[string]prot
 	return out
 }
 
+// skip makes the coming report carry nothing from these counters, when they
+// could not be read. Nothing is lost: the next reading still holds it all.
+func (c *counters) skip() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.pending, c.carrySent = nil, nil
+}
+
 // commit accepts the reading behind the report that just succeeded.
 //
 // Names absent from it are dropped with the old map. A user removed and later
@@ -159,8 +168,13 @@ func addUsage(m map[string]proto.Usage, name string, u proto.Usage) {
 	m[name] = proto.Usage{Up: cur.Up + u.Up, Down: cur.Down + u.Down}
 }
 
-// Stats reads the current per-user totals and returns the change since the last
-// call. Calling it advances the baseline, so exactly one caller may do so.
+// Stats reads the current per-user totals of both cores and returns the change
+// since the last acknowledged report. It does not move the baseline;
+// StatsReported does.
+//
+// The cores are accounted separately — each has its own counters and is
+// rebuilt on its own schedule — and their deltas added: a user on a sing-box
+// inbound and an Xray one is billed for both.
 func (e *Engine) Stats() (map[string]proto.Usage, *proto.SystemStats, error) {
 	// The generation is taken under the same lock as the context, so the
 	// reading and the baseline it is measured against are of one instance.
@@ -169,24 +183,44 @@ func (e *Engine) Stats() (map[string]proto.Usage, *proto.SystemStats, error) {
 	gen := e.counters.generation()
 	e.mu.Unlock()
 
-	if !running {
+	xgen, xtotals, xrunning, xerr := e.x.totals(context.Background())
+	if !running && !xrunning {
 		return nil, nil, nil
 	}
 
-	totals, err := e.readTotals(ctx)
-	if err != nil {
-		return nil, nil, err
+	out := map[string]proto.Usage{}
+	if running {
+		totals, err := e.readTotals(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		for name, u := range e.counters.delta(gen, totals) {
+			addUsage(out, name, u)
+		}
 	}
-	return e.counters.delta(gen, totals), systemStats(), nil
+	if xerr != nil {
+		// Xray's share waits for the next report rather than holding up
+		// sing-box's: nothing is lost, since its counters are cumulative.
+		e.log.Warn("read xray traffic", "error", xerr)
+		e.x.counters.skip()
+	} else {
+		for name, u := range e.x.counters.delta(xgen, xtotals) {
+			addUsage(out, name, u)
+		}
+	}
+	return out, systemStats(), nil
 }
 
 // StatsReported is called once the panel has acknowledged the last report, and
 // is what advances the baseline. Until it is called, the traffic stays pending
 // and is included again in the next report.
-func (e *Engine) StatsReported() { e.counters.commit() }
+func (e *Engine) StatsReported() {
+	e.counters.commit()
+	e.x.counters.commit()
+}
 
 // Online lists users with at least one live connection, from sing-box's own
-// connection table (see tracker).
+// connection table (see tracker) and Xray's online counters.
 func (e *Engine) Online() ([]string, error) {
 	conns, err := e.connections(context.Background())
 	if err != nil {
@@ -194,12 +228,24 @@ func (e *Engine) Online() ([]string, error) {
 	}
 	seen := map[string]bool{}
 	var out []string
-	for _, c := range conns {
-		if c.User == "" || seen[c.User] {
-			continue
+	add := func(name string) {
+		if name == "" || seen[name] {
+			return
 		}
-		seen[c.User] = true
-		out = append(out, c.User)
+		seen[name] = true
+		out = append(out, name)
+	}
+	for _, c := range conns {
+		add(c.User)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	names, err := e.x.online(ctx)
+	if err != nil {
+		e.log.Debug("read xray online users", "error", err)
+	}
+	for _, name := range names {
+		add(name)
 	}
 	return out, nil
 }

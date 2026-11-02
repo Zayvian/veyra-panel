@@ -35,6 +35,9 @@ type fakeEngine struct {
 
 	ipCounts     map[string]int
 	enforceCount int
+
+	xrays       []json.RawMessage
+	xrayVersion string
 }
 
 func (e *fakeEngine) State() proto.StateData {
@@ -50,13 +53,14 @@ func (e *fakeEngine) EnforceIPLimits(context.Context) (map[string]int, map[strin
 	return e.ipCounts, nil, nil
 }
 
-func (e *fakeEngine) ApplyConfig(_ context.Context, cfg json.RawMessage) error {
+func (e *fakeEngine) ApplyConfig(_ context.Context, cfg, xray json.RawMessage) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.configErr != nil {
 		return e.configErr
 	}
 	e.configs = append(e.configs, cfg)
+	e.xrays = append(e.xrays, xray)
 	return nil
 }
 
@@ -84,6 +88,8 @@ func (e *fakeEngine) Online() ([]string, error) {
 }
 
 func (e *fakeEngine) SingboxVersion() string { return "1.14.0-test" }
+
+func (e *fakeEngine) XrayVersion() string { return e.xrayVersion }
 
 func (e *fakeEngine) StatsReported() {
 	e.mu.Lock()

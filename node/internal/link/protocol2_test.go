@@ -49,6 +49,49 @@ func TestHelloOffersProtocol2(t *testing.T) {
 	}
 }
 
+// A node with Xray says which version it has and offers xray; the xray part
+// of a configuration reaches the engine beside the sing-box part.
+func TestXrayOfferedAndPassedThrough(t *testing.T) {
+	p := newFakePanel(t)
+	e := &fakeEngine{xrayVersion: "26.3.27"}
+	start(t, p, e)
+	h := welcomed(t, p, proto.CapXray)
+	if h.XrayVersion != "26.3.27" {
+		t.Fatalf("hello xray_version = %q", h.XrayVersion)
+	}
+	offered := false
+	for _, c := range h.Caps {
+		offered = offered || c == proto.CapXray
+	}
+	if !offered {
+		t.Fatalf("hello caps = %v, want xray", h.Caps)
+	}
+
+	xray := json.RawMessage(`{"inbounds":[{"tag":"x","protocol":"vless"}]}`)
+	p.push(proto.TypeConfig, 7, proto.ConfigData{Config: json.RawMessage(`{"inbounds":[]}`), Xray: xray})
+	p.await(proto.TypeOK, 3*time.Second)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(e.xrays) != 1 || string(e.xrays[0]) != string(xray) {
+		t.Fatalf("engine got xray %q, want %q", e.xrays, xray)
+	}
+}
+
+// Without Xray the node does not offer it.
+func TestXrayNotOfferedWithoutBinary(t *testing.T) {
+	p := newFakePanel(t)
+	start(t, p, &fakeEngine{})
+	h := welcomed(t, p)
+	for _, c := range h.Caps {
+		if c == proto.CapXray {
+			t.Fatalf("hello caps = %v, offered xray without it", h.Caps)
+		}
+	}
+	if h.XrayVersion != "" {
+		t.Fatalf("hello xray_version = %q, want none", h.XrayVersion)
+	}
+}
+
 // Under stats_ack a report is done when the panel says so, not when it is
 // written; until then the same report is resent and nothing new is read.
 func TestStatsWaitForTheAck(t *testing.T) {

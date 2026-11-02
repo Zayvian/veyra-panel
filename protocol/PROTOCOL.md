@@ -18,9 +18,9 @@
 
 | `t` | 方向 | `d` 的结构 | 说明 |
 |---|---|---|---|
-| `hello` | 节点 → 面板 | `version` `os` `arch` `hostname` `singbox_version`；`proto` `caps`（协议 2 起） | 连接后第一条消息。面板收到后立即下发 `config` 和 `users` |
+| `hello` | 节点 → 面板 | `version` `os` `arch` `hostname` `singbox_version`；`xray_version`（节点有 Xray 时）；`proto` `caps`（协议 2 起） | 连接后第一条消息。面板收到后立即下发 `config` 和 `users` |
 | `welcome` | 面板 → 节点 | `proto` `caps` | 协议 2：只回给 `hello` 里 `proto ≥ 2` 的节点，并且**在 `config` 之前**发送 |
-| `config` | 面板 → 节点 | `config`：完整的 sing-box 配置，入站里不带用户；`rev`：配置的 SHA-256 | 节点重建 sing-box 实例。配置和上次完全相同时节点不重建 |
+| `config` | 面板 → 节点 | `config`：完整的 sing-box 配置，入站里不带用户；`xray`（`xray` 能力，可省略）：由 Xray 承载的入站；`rev`：配置的 SHA-256 | 哪个内核的部分变了就只重建哪个，完全相同时都不重建 |
 | `users` | 面板 → 节点 | `by_tag`：入站 tag → 用户列表；`stats_users`：统计白名单；`ip_limits`：用户名 → 同时在线 IP 上限（可省略） | 全量替换，不是增量。节点热替换用户，不断开其他连接 |
 | `ok` | 双向 | 无 | 节点 → 面板：某个 `id` 的命令执行成功。面板 → 节点（`stats_ack`）：编号为 `id` 的流量报告已经入账 |
 | `error` | 节点 → 面板 | `msg` | 对某个 `id` 的命令执行失败，节点继续运行旧配置 |
@@ -68,6 +68,16 @@
 1. 先检查新地址：只接受 `https://`，并且 `GET <url>/api/v1/node/connect`（不带令牌）必须通过 TLS 证书校验、返回 401。这说明新域名已经解析到面板、证书已经签好。
 2. 检查不通过：回 `error`，继续用旧地址。下次重连时面板会再发。
 3. 检查通过：把新地址写进节点的环境文件（`SKYSBX_PANEL=`，默认是工作目录下的 `node.env`），回 `ok`，然后断开当前连接，用新地址重连。以后升级节点、重启节点，用的都是新地址。
+
+### `xray`：Xray 入站
+
+节点找到了 Xray 程序时，才在 `hello` 里写 `xray_version` 并提供 `xray` 能力。面板只给提供了 `xray` 的节点发 Xray 入站。
+
+- `config.xray` 是 `{"inbounds": [...]}`，入站用 Xray 自己的配置格式，`settings.clients` 为空。目前只接受 `protocol: "vless"`。
+- API、统计、在线计数和出站由节点自己补上，面板不用管。
+- 用户照旧走 `users` 消息，按入站 tag 下发；Xray 入站的 tag 也在 `by_tag` 里。节点用 Xray 的 API 加减用户，不影响其他人的连接。用户名就是 Xray 里的 email。
+- 节点先用 `xray run -test` 检查 `xray` 部分，不通过就整份配置都不应用。`xray` 部分变化会重启 Xray，只断开 Xray 入站上的连接；新进程起不来就恢复上一份。
+- `state.inbounds` 包含 Xray 正在跑的入站。`stats` 和 `online` 是两个内核合计的结果。
 
 ## 修改协议的规矩
 
