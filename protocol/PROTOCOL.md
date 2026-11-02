@@ -80,6 +80,14 @@
 - 节点先用 `xray run -test` 检查 `xray` 部分，不通过就整份配置都不应用。`xray` 部分变化会重启 Xray，只断开 Xray 入站上的连接；新进程起不来就恢复上一份。
 - `state.inbounds` 包含 Xray 正在跑的入站。`stats` 和 `online` 是两个内核合计的结果。
 
+### `xray_unlock`：Xray 入站的分流解锁
+
+有 Xray 的节点同时提供 `xray_unlock`。面板只给提供了它的节点在 `config.xray` 里加下面两项，没提供的节点照旧，Xray 入站直连。
+
+- `outbounds`：面板自己的 Xray 出站，节点把它们加在 `direct` 和 `block` 后面。tag 不能是 `direct`、`block`、`api`，也不能重复。目前面板只发一个：`veyra-unlock`，SOCKS 到本机 sing-box 上的 `veyra-xray-unlock` 入站（127.0.0.1），由 sing-box 按节点的分流规则把站点送到各个出口或用解锁 DNS 解析。
+- `unlock`：`[{"domain_suffix": [...], "outbound": "veyra-unlock"}]`，命中这些域名（后缀匹配，按嗅探到的域名）就走对应出站。`outbound` 必须是 `outbounds` 里的 tag。
+- 分流规则不写进 Xray 的配置文件，而是 Xray 起来后用 API 追加（规则名 `veyra-unlock:<序号>`）。原因是 `veyra-ip-limit:*` 规则只能追加在末尾，分流规则要是在前面，超限的 IP 就能绕过限制访问被分流的站点。所以每次要加 IP 限制规则时，节点会先撤掉分流规则，加完再追加回去。
+
 ## 修改协议的规矩
 
 1. **先改 `testdata/` 里的样例**，再改两边的结构体。

@@ -94,6 +94,8 @@ type conn struct {
 	// xray: the node runs Xray and is sent the Xray part of its
 	// configuration. Offered only by a node that found an Xray binary.
 	xray atomic.Bool
+	// xrayUnlock: the node's Xray part may carry the unlock routing.
+	xrayUnlock atomic.Bool
 
 	// host is the name the node dialled, from the request's Host. It is how
 	// the panel tells a node still on an old domain from one that has moved.
@@ -291,6 +293,8 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 					c.panelURL.Store(true)
 				case CapXray:
 					c.xray.Store(true)
+				case CapXrayUnlock:
+					c.xrayUnlock.Store(true)
 				}
 			}
 			if err := h.send(ctx, c, TypeWelcome, 0,
@@ -483,7 +487,7 @@ func (h *Hub) pushTo(ctx context.Context, c *conn, config, users bool) error {
 		}
 		var xray json.RawMessage
 		if c.xray.Load() {
-			if xray, err = h.svc.NodeXrayConfig(c.nodeID); err != nil {
+			if xray, err = h.svc.NodeXrayConfig(c.nodeID, c.xrayUnlock.Load()); err != nil {
 				return fmt.Errorf("build xray config for node %d: %w", c.nodeID, err)
 			}
 		}
@@ -700,6 +704,15 @@ func (h *Hub) XrayCapable(nodeID int64) (capable, known bool) {
 		return false, false
 	}
 	return c.xray.Load(), true
+}
+
+// XrayUnlockCapable says whether a connected node's Xray takes the unlock
+// routing. False for a node that is not connected.
+func (h *Hub) XrayUnlockCapable(nodeID int64) bool {
+	h.mu.RLock()
+	c := h.conns[nodeID]
+	h.mu.RUnlock()
+	return c != nil && c.xrayUnlock.Load()
 }
 
 func (h *Hub) stateOf(nodeID int64) *StateData {

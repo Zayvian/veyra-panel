@@ -255,6 +255,34 @@ func (a *xrayAPI) BlockSources(ctx context.Context, ruleTag, user string, addrs 
 	return err
 }
 
+// AddDomainRule appends a routing rule, named ruleTag, that sends connections
+// to any of suffixes, or a name under one, to outbound. The domain is the one
+// sniffing found, so the inbounds must sniff.
+func (a *xrayAPI) AddDomainRule(ctx context.Context, ruleTag, outbound string, suffixes []string) error {
+	// RoutingRule { string tag = 1; repeated Domain domain = 2; string rule_tag = 19; }
+	// Domain { Type type = 1; string value = 2; }, where Type Domain = 2 is
+	// the suffix match a "domain:" entry in a configuration file makes.
+	var rule []byte
+	rule = appendString(rule, 1, outbound)
+	for _, d := range suffixes {
+		var dom []byte
+		dom = protowire.AppendTag(dom, 1, protowire.VarintType)
+		dom = protowire.AppendVarint(dom, 2)
+		dom = appendString(dom, 2, d)
+		rule = appendMessage(rule, 2, dom)
+	}
+	rule = appendString(rule, 19, ruleTag)
+
+	var cfg []byte
+	cfg = appendMessage(cfg, 2, rule)
+	var req []byte
+	req = appendMessage(req, 1, typedMessage(xrayRouterConfig, cfg))
+	req = protowire.AppendTag(req, 2, protowire.VarintType)
+	req = protowire.AppendVarint(req, 1)
+	_, err := a.call(ctx, xrayRoutingService+"AddRule", req)
+	return err
+}
+
 // RemoveRule removes the routing rule named ruleTag. One that is not there is
 // already removed.
 func (a *xrayAPI) RemoveRule(ctx context.Context, ruleTag string) error {

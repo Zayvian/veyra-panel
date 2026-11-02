@@ -170,7 +170,7 @@ type outgoing struct {
 func (c *Client) nodeCaps() []string {
 	caps := append([]string(nil), proto.NodeCaps...)
 	if c.cfg.Engine.XrayVersion() != "" {
-		caps = append(caps, proto.CapXray)
+		caps = append(caps, proto.CapXray, proto.CapXrayUnlock)
 	}
 	return caps
 }

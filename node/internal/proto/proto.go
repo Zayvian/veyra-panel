@@ -54,10 +54,15 @@ const (
 	// an xray part. Offered only when an Xray binary was found, so a panel
 	// never sends Xray inbounds to a node that would have to refuse them.
 	CapXray = "xray"
+	// CapXrayUnlock: the xray part may carry outbounds and unlock rules, which
+	// send chosen sites from Xray's inbounds to sing-box for the node's unlock
+	// routing. Offered with xray; a node without it is sent neither, and its
+	// Xray inbounds go straight out as before.
+	CapXrayUnlock = "xray_unlock"
 )
 
-// NodeCaps is what every node offers in its hello. CapXray is added to it at
-// connect time when this node has Xray.
+// NodeCaps is what every node offers in its hello. CapXray and CapXrayUnlock
+// are added to it at connect time when this node has Xray.
 var NodeCaps = []string{CapStatsAck, CapConfigRev, CapPanelURL}
 
 // PanelURLData is the panel's new base URL, after its domain was changed.

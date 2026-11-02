@@ -45,7 +45,7 @@ func TestXrayConfigKeepsThePanelsSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := buildXrayConfig(in, nil, map[string][]proto.User{
+	raw, err := buildXrayConfig(in, xrayRouting{}, map[string][]proto.User{
 		"x": {{Name: "alice", UUID: "6f1c7a52-2c43-4e8e-9d0b-6d6d1c1f0a11", Flow: "xtls-rprx-vision"}},
 	}, "127.0.0.1:9")
 	if err != nil {
@@ -356,11 +356,15 @@ func dialSOCKS(socks, target string) (net.Conn, error) {
 	host, portStr, _ := net.SplitHostPort(target)
 	var port uint16
 	fmt.Sscan(portStr, &port)
-	ip := net.ParseIP(host).To4()
-
-	// No authentication; then CONNECT to an IPv4 address.
-	req := []byte{5, 1, 0, 5, 1, 0, 1}
-	req = append(req, ip...)
+	// No authentication; then CONNECT to an IPv4 address, or to a name.
+	req := []byte{5, 1, 0, 5, 1, 0}
+	if ip := net.ParseIP(host).To4(); ip != nil {
+		req = append(req, 1)
+		req = append(req, ip...)
+	} else {
+		req = append(req, 3, byte(len(host)))
+		req = append(req, host...)
+	}
 	req = binary.BigEndian.AppendUint16(req, port)
 	if _, err := c.Write(req); err != nil {
 		c.Close()
@@ -493,5 +497,66 @@ func TestXrayAppliesThePanelsRoutingRules(t *testing.T) {
 	}
 	if err := roundTrip(xrayClient(t, port, aliceID), echo, 10); err == nil {
 		t.Fatal("a connection the policy blocks got through")
+	}
+}
+
+// Unlock rules send the sites they name to the panel's outbound, and stay
+// behind the address limit's rules however those come and go: an address over
+// the limit is refused the unlocked sites as well as the rest.
+//
+// The panel's outbound here is a freedom that goes to the echo server
+// whatever was asked for, and the site a name that resolves nowhere, so only
+// a connection the unlock rule routed can reach anything.
+func TestXrayUnlockRulesStayBehindTheAddressLimit(t *testing.T) {
+	e := xrayEngine(t)
+	ctx := context.Background()
+	echo := echoServer(t)
+	port := freePort(t)
+	frag := fmt.Sprintf(`{"inbounds":[{"tag":"vx","protocol":"vless","listen":"127.0.0.1","port":%d,
+		"settings":{"clients":[],"decryption":"none"}}],
+		"outbounds":[{"tag":"veyra-unlock","protocol":"freedom","settings":{"redirect":%q}}],
+		"unlock":[{"domain_suffix":["unlock.invalid"],"outbound":"veyra-unlock"}]}`, port, echo)
+	if err := e.ApplyConfig(ctx, configWithShadowsocks(t, freePort(t)), json.RawMessage(frag)); err != nil {
+		t.Fatal(err)
+	}
+	users := func(limit int) proto.UsersData {
+		return proto.UsersData{
+			ByTag:      map[string][]proto.User{"vx": {{Name: "alice", UUID: aliceID}}},
+			StatsUsers: []string{"alice"},
+			IPLimits:   map[string]int{"alice": limit},
+		}
+	}
+	if err := e.UpdateUsers(ctx, users(1)); err != nil {
+		t.Fatal(err)
+	}
+	first := xrayClientFrom(t, port, aliceID, "127.0.0.2")
+	second := xrayClientFrom(t, port, aliceID, "127.0.0.3")
+
+	if err := roundTrip(first, "www.unlock.invalid:443", 10); err != nil {
+		t.Fatalf("the unlocked site: %v", err)
+	}
+	if err := roundTrip(first, "elsewhere.invalid:443", 10); err == nil {
+		t.Fatal("a site the rule does not name was routed by it")
+	}
+
+	held := openTunnel(t, first, echo)
+	defer held.Close()
+	if err := echoOver(held, 10); err != nil {
+		t.Fatal(err)
+	}
+	late := openTunnel(t, second, echo)
+	if err := echoOver(late, 10); err != nil {
+		t.Fatal(err)
+	}
+	if counts, _, _ := e.EnforceIPLimits(ctx); counts["alice"] != 2 {
+		t.Fatalf("alice's addresses = %d, want 2", counts["alice"])
+	}
+	late.Close()
+
+	if err := roundTrip(second, "www.unlock.invalid:443", 10); err == nil {
+		t.Fatal("the address over the limit still reaches the unlocked site")
+	}
+	if err := roundTrip(first, "www.unlock.invalid:443", 10); err != nil {
+		t.Fatalf("the unlock rule is gone after the limit rule went in: %v", err)
 	}
 }

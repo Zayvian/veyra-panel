@@ -29,6 +29,7 @@ type fakeChannel struct {
 }
 
 func (f *fakeChannel) XrayCapable(int64) (bool, bool) { return f.xray, f.connected }
+func (f *fakeChannel) XrayUnlockCapable(int64) bool   { return f.xray && f.connected }
 
 func (f *fakeChannel) AppliedRev(int64) (string, bool) { return f.rev, f.revKnown }
 
@@ -181,7 +182,7 @@ func TestConfigRevDecidesWhetherSettingsTookEffect(t *testing.T) {
 	}
 
 	current := serving(func(svc *service.Service, nodeID int64) string {
-		rev, err := svc.NodeConfigRev(nodeID, false)
+		rev, err := svc.NodeConfigRev(nodeID, false, false)
 		if err != nil {
 			t.Fatal(err)
 		}

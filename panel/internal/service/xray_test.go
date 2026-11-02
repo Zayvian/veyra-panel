@@ -40,7 +40,7 @@ type xrayFragment struct {
 
 func xrayPart(t *testing.T, svc *Service, nodeID int64) xrayFragment {
 	t.Helper()
-	raw, err := svc.NodeXrayConfig(nodeID)
+	raw, err := svc.NodeXrayConfig(nodeID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestXrayInboundIsSentToXrayOnly(t *testing.T) {
 	if err := svc.SetInboundEnabled(xh.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	if raw, err := svc.NodeXrayConfig(node); err != nil || raw != nil {
+	if raw, err := svc.NodeXrayConfig(node, false); err != nil || raw != nil {
 		t.Fatalf("xray part with every xray inbound disabled = %s, %v", raw, err)
 	}
 }
@@ -227,7 +227,7 @@ func TestConfigRevWithoutXrayIsUnchanged(t *testing.T) {
 	sum := sha256.Sum256(raw)
 	want := hex.EncodeToString(sum[:])
 	for _, xray := range []bool{false, true} {
-		got, err := svc.NodeConfigRev(node, xray)
+		got, err := svc.NodeConfigRev(node, xray, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -237,8 +237,8 @@ func TestConfigRevWithoutXrayIsUnchanged(t *testing.T) {
 	}
 
 	mustInbound(t, svc, node, InboundSpec{Protocol: store.ProtoVLESS, Core: store.CoreXray, Port: 8443})
-	without, _ := svc.NodeConfigRev(node, false)
-	with, _ := svc.NodeConfigRev(node, true)
+	without, _ := svc.NodeConfigRev(node, false, false)
+	with, _ := svc.NodeConfigRev(node, true, false)
 	if without != want || with == want {
 		t.Errorf("revs with an xray inbound: without xray %s, with %s; want %s and something else", without, with, want)
 	}
@@ -250,7 +250,7 @@ func TestPolicyReachesXray(t *testing.T) {
 	svc, node, _ := relayFixture(t)
 	mustInbound(t, svc, node, InboundSpec{Protocol: store.ProtoVLESS, Core: store.CoreXray, Port: 443})
 
-	plain, err := svc.NodeXrayConfig(node)
+	plain, err := svc.NodeXrayConfig(node, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,7 +262,7 @@ func TestPolicyReachesXray(t *testing.T) {
 		BlockedDomains: []string{"example.net"}}); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := svc.NodeXrayConfig(node)
+	raw, err := svc.NodeXrayConfig(node, false)
 	if err != nil {
 		t.Fatal(err)
 	}

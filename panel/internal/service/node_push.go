@@ -62,15 +62,32 @@ func (s *Service) NodeConfig(nodeID int64) (*singbox.Config, error) {
 	for _, r := range relays {
 		relayTags = append(relayTags, r.Tag)
 	}
+
+	// Sites this node sends out through somewhere else, and the exits it
+	// serves for other nodes. An exit listener is exempt from the rules like a
+	// relay: what arrives on it was routed by the node that sent it, and
+	// routing it again here could send it straight back.
+	unlock, err := s.unlockFor(node)
+	if err != nil {
+		return nil, err
+	}
+	for _, in := range unlock.exitInbounds {
+		relayTags = append(relayTags, in.Tag)
+	}
 	var route *singbox.ServerRoute
-	if rules := policy.routeRules(relayTags); len(rules) > 0 {
+	if rules := policy.routeRules(relayTags, unlock.rules); len(rules) > 0 {
 		route = &singbox.ServerRoute{Rules: rules}
+	}
+	if unlock.dns != nil {
+		route.DefaultDomainResolver = localDNS
 	}
 
 	cfg := &singbox.Config{
-		Log:       &singbox.Log{Level: "warn", Timestamp: true},
-		Inbounds:  make([]singbox.Inbound, 0, len(inbounds)),
-		Outbounds: []singbox.Outbound{{Type: "direct", Tag: "direct"}},
+		Log:      &singbox.Log{Level: "warn", Timestamp: true},
+		Inbounds: make([]singbox.Inbound, 0, len(inbounds)),
+		// direct first: it is where everything no rule routes goes.
+		Outbounds: append([]singbox.Outbound{{Type: "direct", Tag: "direct"}}, unlock.outbounds...),
+		DNS:       unlock.dns,
 		Route:     route,
 		Experimental: &singbox.Experimental{
 			ClashAPI: &singbox.ClashAPI{ExternalController: clashAPIAddr},
@@ -98,7 +115,31 @@ func (s *Service) NodeConfig(nodeID int64) (*singbox.Config, error) {
 		cfg.Inbounds = append(cfg.Inbounds, sb)
 	}
 	cfg.Inbounds = append(cfg.Inbounds, relays...)
+	cfg.Inbounds = append(cfg.Inbounds, unlock.exitInbounds...)
+
+	// Xray's inbounds hand the unlock routing's sites to sing-box over a
+	// loopback SOCKS listener, so its exits and DNS are configured once, here.
+	// Added whenever there is something to hand over: a node that cannot take
+	// Xray's part of it just leaves the port idle.
+	if !unlock.empty() && hasXrayInbound(inbounds) {
+		taken := map[int]bool{}
+		for _, in := range cfg.Inbounds {
+			taken[in.ListenPort] = true
+		}
+		cfg.Inbounds = append(cfg.Inbounds, singbox.Inbound{
+			Type: "socks", Tag: xrayBridgeTag, Listen: "127.0.0.1", ListenPort: xrayBridgePort(taken),
+		})
+	}
 	return cfg, nil
+}
+
+func hasXrayInbound(inbounds []*store.Inbound) bool {
+	for _, in := range inbounds {
+		if in.Enabled && in.Core == store.CoreXray {
+			return true
+		}
+	}
+	return false
 }
 
 // NodeXrayConfig builds the part of a node's configuration Xray serves:
@@ -109,7 +150,11 @@ func (s *Service) NodeConfig(nodeID int64) (*singbox.Config, error) {
 // Sent only to a node that offered xray. One that did not either has no Xray
 // or predates it, and would refuse or ignore the inbounds; the panel shows
 // them as not running instead.
-func (s *Service) NodeXrayConfig(nodeID int64) (json.RawMessage, error) {
+//
+// unlock says the node offered xray_unlock, and so takes the outbound and
+// unlock rule that hand the unlock routing's sites to sing-box. A node that
+// did not is sent neither, and its Xray inbounds go straight out.
+func (s *Service) NodeXrayConfig(nodeID int64, unlock bool) (json.RawMessage, error) {
 	node, err := s.st.Node(nodeID)
 	if err != nil {
 		return nil, err
@@ -126,6 +171,43 @@ func (s *Service) NodeXrayConfig(nodeID int64) (json.RawMessage, error) {
 		return nil, err
 	}
 	sniff, rules := policy.xrayPolicy()
+
+	// The bridge sing-box listens on, if this node has one: its port is
+	// decided where the listener is, and read back here.
+	var part xrayUnlockPart
+	if unlock {
+		cfg, err := s.NodeConfig(nodeID)
+		if err != nil {
+			return nil, err
+		}
+		plan, err := s.unlockFor(node)
+		if err != nil {
+			return nil, err
+		}
+		for _, in := range cfg.Inbounds {
+			if in.Tag != xrayBridgeTag {
+				continue
+			}
+			part.Outbounds = []json.RawMessage{xrayBridgeOutbound(in.ListenPort)}
+			part.Unlock = []xrayUnlockRule{{
+				DomainSuffix: dedupe(plan.domains), Outbound: xrayUnlockOutbound,
+			}}
+			// The unlock rule matches on the sniffed name, so Xray has to
+			// sniff whether or not the policy needs it — and QUIC as well, as
+			// sing-box does for the same rules.
+			if sniff == nil {
+				sniff = &xraySniffing{Enabled: true, DestOverride: []string{"http", "tls"}, RouteOnly: true}
+			}
+			hasQUIC := false
+			for _, d := range sniff.DestOverride {
+				hasQUIC = hasQUIC || d == "quic"
+			}
+			if !hasQUIC {
+				sniff.DestOverride = append(sniff.DestOverride, "quic")
+			}
+		}
+	}
+
 	var out []json.RawMessage
 	for _, in := range inbounds {
 		if !in.Enabled || in.Core != store.CoreXray {
@@ -147,14 +229,15 @@ func (s *Service) NodeXrayConfig(nodeID int64) (json.RawMessage, error) {
 	type routing struct {
 		Rules []xrayRule `json:"rules"`
 	}
-	part := struct {
+	full := struct {
 		Inbounds []json.RawMessage `json:"inbounds"`
-		Routing  *routing          `json:"routing,omitempty"`
-	}{Inbounds: out}
+		xrayUnlockPart
+		Routing *routing `json:"routing,omitempty"`
+	}{Inbounds: out, xrayUnlockPart: part}
 	if len(rules) > 0 {
-		part.Routing = &routing{rules}
+		full.Routing = &routing{rules}
 	}
-	return json.Marshal(part)
+	return json.Marshal(full)
 }
 
 // NodeUsers builds the authoritative user list for one node, keyed by inbound

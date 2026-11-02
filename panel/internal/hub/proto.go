@@ -53,10 +53,14 @@ const (
 	// CapXray: the node runs Xray beside sing-box and accepts an xray part in
 	// config. A node offers it only when it has an Xray binary.
 	CapXray = "xray"
+	// CapXrayUnlock: the xray part may carry outbounds and unlock rules, which
+	// hand chosen sites from Xray's inbounds to sing-box for the node's unlock
+	// routing. A node without it is sent neither.
+	CapXrayUnlock = "xray_unlock"
 )
 
 // PanelCaps is what this panel offers in its welcome.
-var PanelCaps = []string{CapStatsAck, CapConfigRev, CapPanelURL, CapXray}
+var PanelCaps = []string{CapStatsAck, CapConfigRev, CapPanelURL, CapXray, CapXrayUnlock}
 
 // PanelURLData is the panel's current base URL, sent to a node that reached it
 // through an old domain after the administrator changed it.

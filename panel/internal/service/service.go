@@ -450,6 +450,10 @@ func (s *Service) CreateInbound(nodeID int64, spec InboundSpec) (*store.Inbound,
 		return nil, invalid("inbound tag cannot start with %q; that prefix names "+
 			"relay listeners", RelayTagPrefix)
 	}
+	if strings.HasPrefix(spec.Tag, ReservedTagPrefix) {
+		return nil, invalid("inbound tag cannot start with %q; the panel names "+
+			"its own listeners with it", ReservedTagPrefix)
+	}
 
 	in, err := BuildInbound(spec)
 	if err != nil {

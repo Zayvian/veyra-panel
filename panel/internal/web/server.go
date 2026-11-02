@@ -161,6 +161,9 @@ type NodeChannel interface {
 	// XrayCapable says whether the node runs Xray, and so is sent its Xray
 	// inbounds. known is false for a node that is not connected.
 	XrayCapable(nodeID int64) (capable, known bool)
+	// XrayUnlockCapable says whether that Xray part carries the node's
+	// unlock routing.
+	XrayUnlockCapable(nodeID int64) bool
 }
 
 func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookies bool) (*Server, error) {
@@ -324,6 +327,14 @@ func (s *Server) Handler() http.Handler {
 
 	mux.Handle("GET /policy", s.auth(http.HandlerFunc(s.getPolicy)))
 	mux.Handle("POST /policy", s.auth(s.requireCSRF(http.HandlerFunc(s.setPolicy))))
+
+	mux.Handle("GET /unlock", s.auth(http.HandlerFunc(s.getUnlock)))
+	mux.Handle("POST /unlock/exits", s.auth(s.requireCSRF(http.HandlerFunc(s.createExit))))
+	mux.Handle("GET /unlock/exits/{id}/edit", s.auth(http.HandlerFunc(s.editExit)))
+	mux.Handle("POST /unlock/exits/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.updateExit))))
+	mux.Handle("DELETE /unlock/exits/{id}", s.auth(s.requireCSRF(http.HandlerFunc(s.deleteExit))))
+	mux.Handle("GET /nodes/{id}/unlock", s.auth(http.HandlerFunc(s.getNodeUnlock)))
+	mux.Handle("POST /nodes/{id}/unlock", s.auth(s.requireCSRF(http.HandlerFunc(s.setNodeUnlock))))
 
 	mux.Handle("GET /nodes", s.auth(http.HandlerFunc(s.listNodes)))
 	mux.Handle("POST /nodes", s.auth(s.requireCSRF(http.HandlerFunc(s.createNode))))

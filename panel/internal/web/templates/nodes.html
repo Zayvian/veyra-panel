@@ -126,6 +126,8 @@
           </td>
           <td data-label="入站">
             <a href="{{panelPath "/nodes/"}}{{.ID}}/inbounds">{{index $.InboundCounts .ID}} 个</a>
+            <a href="{{panelPath "/nodes/"}}{{.ID}}/unlock" class="dim" style="margin-left:.5rem;font-size:.8rem"
+               title="指定网站从别的出口出去">分流{{with index $.UnlockCounts .ID}} · {{.}}{{end}}</a>
             {{/* The node told us it refused the last configuration and is
                  still on the previous one. Saying so here means the operator
                  does not have to open the node to find out. */}}

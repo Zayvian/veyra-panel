@@ -49,8 +49,9 @@ type xrayCore struct {
 	// Xray, which is the normal case on most nodes.
 	raw      json.RawMessage
 	inbounds []xrayInbound
-	// rules is the panel's server policy in Xray's routing format.
-	rules []json.RawMessage
+	// routing is the panel's server policy and unlock routing, in Xray's
+	// format.
+	routing xrayRouting
 
 	// want is the latest user list for every tag the panel named, whether or
 	// not that tag is an Xray inbound yet: a configuration that moves an
@@ -182,29 +183,90 @@ func (x *xrayCore) owns(tag string) bool {
 	return false
 }
 
+// xrayRouting is the panel's part of Xray's routing: the rules that carry the
+// server policy, the outbounds the panel adds beside the node's own direct
+// and block, and the unlock rules that send chosen sites to them.
+//
+// Unlock rules are kept out of the configuration file and added through the
+// API once Xray is up, after every address-limit rule. Xray matches rules in
+// order and the limit's rules can only be appended, so an unlock rule in the
+// file would come first and let a blocked address through to the sites it
+// names. Each time a limit rule is added, the unlock rules are taken out and
+// put back behind it.
+type xrayRouting struct {
+	Rules     []json.RawMessage
+	Outbounds []json.RawMessage
+	Unlock    []xrayUnlockRule
+}
+
+// xrayUnlockRule sends connections to the named domains, and everything under
+// them, to one of the panel's outbounds.
+type xrayUnlockRule struct {
+	DomainSuffix []string `json:"domain_suffix"`
+	Outbound     string   `json:"outbound"`
+}
+
+func xrayUnlockRuleTag(i int) string { return fmt.Sprintf("veyra-unlock:%d", i) }
+
+// reservedXrayTags are the tags the node itself gives Xray's handlers. An
+// outbound from the panel may not take one: it would replace where blocked
+// traffic goes, or the API.
+var reservedXrayTags = map[string]bool{"direct": true, xrayBlockOutbound: true, "api": true}
+
 // parseXrayFragment decodes what the panel sent under config.xray: the
-// inbounds, and the routing rules that carry the server policy. Only VLESS is
+// inbounds, the routing rules that carry the server policy, and the outbounds
+// those rules may send to besides the node's own. Only VLESS is
 // accepted: it is what the panel assigns to Xray, and a protocol this node
 // does not know how to give users to must fail here, not silently serve
 // nobody.
-func parseXrayFragment(raw json.RawMessage) ([]xrayInbound, []json.RawMessage, error) {
+func parseXrayFragment(raw json.RawMessage) ([]xrayInbound, xrayRouting, error) {
 	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil, nil
+		return nil, xrayRouting{}, nil
 	}
 	var frag struct {
-		Inbounds []json.RawMessage `json:"inbounds"`
-		Routing  struct {
+		Inbounds  []json.RawMessage `json:"inbounds"`
+		Outbounds []json.RawMessage `json:"outbounds"`
+		Unlock    []xrayUnlockRule  `json:"unlock"`
+		Routing   struct {
 			Rules []json.RawMessage `json:"rules"`
 		} `json:"routing"`
 	}
 	if err := json.Unmarshal(raw, &frag); err != nil {
-		return nil, nil, fmt.Errorf("xray configuration: %w", err)
+		return nil, xrayRouting{}, fmt.Errorf("xray configuration: %w", err)
 	}
 	inbounds, err := parseXrayInbounds(frag.Inbounds)
 	if err != nil {
-		return nil, nil, err
+		return nil, xrayRouting{}, err
 	}
-	return inbounds, frag.Routing.Rules, nil
+	seen := map[string]bool{}
+	for i, rawOut := range frag.Outbounds {
+		var out struct {
+			Tag string `json:"tag"`
+		}
+		if err := json.Unmarshal(rawOut, &out); err != nil {
+			return nil, xrayRouting{}, fmt.Errorf("xray outbound %d: %w", i, err)
+		}
+		switch {
+		case out.Tag == "":
+			return nil, xrayRouting{}, fmt.Errorf("xray outbound %d has no tag", i)
+		case reservedXrayTags[out.Tag]:
+			return nil, xrayRouting{}, fmt.Errorf("xray outbound tag %q is the node's own", out.Tag)
+		case seen[out.Tag]:
+			return nil, xrayRouting{}, fmt.Errorf("xray outbound tag %q is used twice", out.Tag)
+		}
+		seen[out.Tag] = true
+	}
+	for i, u := range frag.Unlock {
+		if !seen[u.Outbound] {
+			return nil, xrayRouting{}, fmt.Errorf("xray unlock rule %d: no outbound %q", i, u.Outbound)
+		}
+		if len(u.DomainSuffix) == 0 {
+			return nil, xrayRouting{}, fmt.Errorf("xray unlock rule %d names no domain", i)
+		}
+	}
+	return inbounds, xrayRouting{
+		Rules: frag.Routing.Rules, Outbounds: frag.Outbounds, Unlock: frag.Unlock,
+	}, nil
 }
 
 func parseXrayInbounds(frag []json.RawMessage) ([]xrayInbound, error) {
@@ -238,9 +300,10 @@ func parseXrayInbounds(frag []json.RawMessage) ([]xrayInbound, error) {
 //
 // The surroundings belong to the node, as sing-box's API listeners do (see
 // apis.go): an API on a loopback port of its choosing, per-user traffic and
-// online counters, and the outbounds. rules, the panel's policy, may send a
-// connection to the block outbound and nowhere else.
-func buildXrayConfig(inbounds []xrayInbound, rules []json.RawMessage, users map[string][]proto.User, apiAddr string) ([]byte, error) {
+// online counters, and the direct and block outbounds. The panel's rules may
+// send a connection to block, or to one of the panel's own outbounds, which
+// is how a node sends chosen sites out through another exit.
+func buildXrayConfig(inbounds []xrayInbound, routing xrayRouting, users map[string][]proto.User, apiAddr string) ([]byte, error) {
 	ins := make([]json.RawMessage, 0, len(inbounds))
 	for _, in := range inbounds {
 		fields := make(map[string]json.RawMessage, len(in.fields))
@@ -291,11 +354,17 @@ func buildXrayConfig(inbounds []xrayInbound, rules []json.RawMessage, users map[
 			},
 		},
 		"inbounds": ins,
-		"outbounds": []map[string]any{
-			{"tag": "direct", "protocol": "freedom"},
-			{"tag": xrayBlockOutbound, "protocol": "blackhole"},
-		},
 	}
+	// direct first: Xray sends whatever no rule matches to the first outbound.
+	outbounds := []any{
+		map[string]any{"tag": "direct", "protocol": "freedom"},
+		map[string]any{"tag": xrayBlockOutbound, "protocol": "blackhole"},
+	}
+	for _, o := range routing.Outbounds {
+		outbounds = append(outbounds, o)
+	}
+	cfg["outbounds"] = outbounds
+	rules := routing.Rules
 	if rules == nil {
 		rules = []json.RawMessage{}
 	}
@@ -325,7 +394,7 @@ func vlessClients(users []proto.User) []vlessClient {
 // anything. Run before the running process is touched, so a fragment Xray
 // refuses costs nothing.
 func (x *xrayCore) check(raw json.RawMessage) error {
-	inbounds, rules, err := parseXrayFragment(raw)
+	inbounds, routing, err := parseXrayFragment(raw)
 	if err != nil {
 		return err
 	}
@@ -346,7 +415,7 @@ func (x *xrayCore) check(raw json.RawMessage) error {
 	}
 
 	// The API port in a test run is never bound, so any address will do.
-	cfg, err := buildXrayConfig(inbounds, rules, users, "127.0.0.1:1")
+	cfg, err := buildXrayConfig(inbounds, routing, users, "127.0.0.1:1")
 	if err != nil {
 		return err
 	}
@@ -388,7 +457,7 @@ func xrayFailure(out []byte) string {
 // stops Xray. A different one restarts it — and if the new process does not
 // come up, the previous configuration is started again and the error returned.
 func (x *xrayCore) apply(raw json.RawMessage) error {
-	inbounds, rules, err := parseXrayFragment(raw)
+	inbounds, routing, err := parseXrayFragment(raw)
 	if err != nil {
 		return err
 	}
@@ -404,10 +473,10 @@ func (x *xrayCore) apply(raw json.RawMessage) error {
 			strings.Join(inboundTags(inbounds), ", "))
 	}
 
-	prevRaw, prevInbounds, prevRules := x.raw, x.inbounds, x.rules
+	prevRaw, prevInbounds, prevRouting := x.raw, x.inbounds, x.routing
 	x.stopLocked()
 
-	x.raw, x.inbounds, x.rules = append(json.RawMessage(nil), raw...), inbounds, rules
+	x.raw, x.inbounds, x.routing = append(json.RawMessage(nil), raw...), inbounds, routing
 	if len(inbounds) == 0 {
 		x.log.Info("no inbounds assigned to xray; stopped")
 		return nil
@@ -417,7 +486,7 @@ func (x *xrayCore) apply(raw json.RawMessage) error {
 		return nil
 	}
 
-	x.raw, x.inbounds, x.rules = prevRaw, prevInbounds, prevRules
+	x.raw, x.inbounds, x.routing = prevRaw, prevInbounds, prevRouting
 	if len(prevInbounds) == 0 {
 		return startErr
 	}
@@ -441,7 +510,7 @@ func (x *xrayCore) startLocked() error {
 	for _, in := range x.inbounds {
 		users[in.Tag] = x.want[in.Tag]
 	}
-	cfg, err := buildXrayConfig(x.inbounds, x.rules, users, apiAddr)
+	cfg, err := buildXrayConfig(x.inbounds, x.routing, users, apiAddr)
 	if err != nil {
 		return err
 	}
@@ -480,6 +549,14 @@ func (x *xrayCore) startLocked() error {
 		<-p.done
 		api.Close()
 		return err
+	}
+
+	if err := x.addUnlockRules(p.api); err != nil {
+		p.stopping = true
+		_ = cmd.Process.Kill()
+		<-p.done
+		api.Close()
+		return fmt.Errorf("xray unlock rules: %w", err)
 	}
 
 	x.proc = p
@@ -783,6 +860,24 @@ func (x *xrayCore) setBlocks(ctx context.Context, over map[string]map[string]boo
 		}
 		delete(x.blocked, user)
 	}
+	// A limit rule is appended, and has to come before the unlock rules to
+	// bite: they are taken out first and put back after the last one.
+	adding := false
+	for user := range want {
+		if _, ok := x.blocked[user]; !ok {
+			adding = true
+		}
+	}
+	if adding && len(x.routing.Unlock) > 0 {
+		if err := x.removeUnlockRules(ctx, api); err != nil {
+			x.log.Warn("take unlock rules out to add a limit rule", "error", err)
+		}
+		defer func() {
+			if err := x.addUnlockRules(api); err != nil {
+				x.log.Warn("put unlock rules back after the limit rules", "error", err)
+			}
+		}()
+	}
 	for user, key := range want {
 		if _, ok := x.blocked[user]; ok {
 			continue
@@ -797,6 +892,27 @@ func (x *xrayCore) setBlocks(ctx context.Context, over map[string]map[string]boo
 }
 
 func xrayLimitRuleTag(user string) string { return "veyra-ip-limit:" + user }
+
+// addUnlockRules appends the unlock rules, in the panel's order.
+func (x *xrayCore) addUnlockRules(api *xrayAPI) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for i, u := range x.routing.Unlock {
+		if err := api.AddDomainRule(ctx, xrayUnlockRuleTag(i), u.Outbound, u.DomainSuffix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (x *xrayCore) removeUnlockRules(ctx context.Context, api *xrayAPI) error {
+	for i := range x.routing.Unlock {
+		if err := api.RemoveRule(ctx, xrayUnlockRuleTag(i)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
 func (x *xrayCore) close() {
 	x.mu.Lock()

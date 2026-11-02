@@ -119,20 +119,23 @@ func cleanDomains(in []string) []string {
 	return out
 }
 
-// routeRules turns a policy into the rules a node runs.
+// routeRules turns a policy, and a node's unlock rules, into the rules the
+// node runs. The unlock rules go last: a site the policy blocks stays blocked
+// whichever exit it would have left through.
 //
 // Order matters and is not adjustable: sniffing has to come first, because
 // every rule below it matches on what sniffing found. A rule that matches on
 // protocol above the sniff rule matches nothing, silently.
 //
 // bypass names inbounds the policy must not touch — relay listeners, which
-// carry another node's already-encrypted traffic. sing-box has no "not this
+// carry another node's already-encrypted traffic, and exit listeners, whose
+// traffic another node has routed already. sing-box has no "not this
 // inbound" matcher, so the exemption is written as a terminal rule above
 // everything else: "route" is final, so a connection matching it never reaches
 // the sniffer or the rejects below.
-func (p Policy) routeRules(bypass []string) []singbox.ServerRouteRule {
+func (p Policy) routeRules(bypass []string, unlock []singbox.ServerRouteRule) []singbox.ServerRouteRule {
 	var rules []singbox.ServerRouteRule
-	if !p.BlockBitTorrent && !p.BlockSpeedtest && len(p.BlockedDomains) == 0 {
+	if !p.BlockBitTorrent && !p.BlockSpeedtest && len(p.BlockedDomains) == 0 && len(unlock) == 0 {
 		return nil
 	}
 	if len(bypass) > 0 {
@@ -146,7 +149,12 @@ func (p Policy) routeRules(bypass []string) []singbox.ServerRouteRule {
 	// protocols nobody is matching on is pure cost.
 	sniffers := []string{"tls", "http"} // domain rules need a hostname
 	if p.BlockBitTorrent {
-		sniffers = append(sniffers, "bittorrent", "quic")
+		sniffers = append(sniffers, "bittorrent")
+	}
+	// QUIC carries its name too, and a site reached over HTTP/3 that the
+	// unlock rules did not recognise would leave from the node's own address.
+	if p.BlockBitTorrent || len(unlock) > 0 {
+		sniffers = append(sniffers, "quic")
 	}
 	rules = append(rules, singbox.ServerRouteRule{
 		Action: "sniff", Sniffer: sniffers, Timeout: "300ms",
@@ -167,5 +175,5 @@ func (p Policy) routeRules(bypass []string) []singbox.ServerRouteRule {
 			DomainSuffix: p.BlockedDomains, Action: "reject",
 		})
 	}
-	return rules
+	return append(rules, unlock...)
 }
