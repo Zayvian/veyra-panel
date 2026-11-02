@@ -113,8 +113,7 @@ function onProto(v) {
   document.querySelector('input[name=hop_interval]').disabled = v !== 'hysteria2';
   var port = document.querySelector('input[name=port]');
   // Hysteria2 gets a random high port: a fixed default is the first port a
-  // blocklist tries, and UDP leaves no reason to
-  // stay on a well-known one.
+  // blocklist tries.
   port.value = v === 'hysteria2' ? 10000 + Math.floor(Math.random() * 50001)
     : ({vless:443,anytls:8443,shadowsocks:8388,tuic:9443})[v];
 }
