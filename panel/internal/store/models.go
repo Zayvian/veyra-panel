@@ -6,18 +6,11 @@ import (
 )
 
 // Protocol values stored in inbounds.protocol. They match sing-box's own
-// inbound type names, because the config column is sing-box JSON — with one
-// exception, ProtoVLESSWS.
+// inbound type names, because the config column is sing-box JSON.
 const (
-	ProtoHysteria2 = "hysteria2"
-	ProtoTUIC      = "tuic"
-	ProtoVLESS     = "vless"
-	// ProtoVLESSWS is VLESS over WebSocket and TLS, meant to sit behind a CDN.
-	// sing-box calls it "vless" too; it gets a value of its own here because
-	// it shares nothing with Reality beyond the user's UUID — no flow, its own
-	// certificate, a path and a Host header — and every switch on the
-	// protocol has to tell the two apart.
-	ProtoVLESSWS     = "vless-ws"
+	ProtoHysteria2   = "hysteria2"
+	ProtoTUIC        = "tuic"
+	ProtoVLESS       = "vless"
 	ProtoAnyTLS      = "anytls"
 	ProtoShadowsocks = "shadowsocks"
 )

@@ -58,15 +58,8 @@ func (s *Server) renderNodesFull(w http.ResponseWriter, r *http.Request, code in
 		connected[n.ID] = s.nodes.Connected(n.ID)
 		bareIP[n.ID] = net.ParseIP(strings.TrimSpace(n.Address)) != nil
 	}
-	probeNodes, err := s.svc.Store().ProbeNodes()
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	data := map[string]any{
 		"Nodes":         nodes,
-		"ProbeNodes":    probeNodes,
-		"Probe":         s.nodeProbes(nodes, inbounds),
 		"InboundCounts": counts,
 		"Connected":     connected,
 		"Rejected":      rejected,
@@ -193,14 +186,6 @@ func (s *Server) updateNode(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	// An unticked checkbox sends nothing, so the form says it carries one;
-	// a request without the marker leaves the role as it was.
-	if r.Form.Has("probe_field") {
-		if err := s.svc.Store().SetProbeNode(n.ID, r.FormValue("probe") != ""); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-	}
 	s.renderNodes(w, r, http.StatusOK, "")
 }
 
@@ -324,7 +309,7 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		"NodeNames":        nodeNames,
 		"RelayPrefix":      service.RelayTagPrefix,
 		"EditRelayNodeID":  int64(0),
-		"Protocols":        []string{store.ProtoVLESS, store.ProtoVLESSWS, store.ProtoAnyTLS, store.ProtoShadowsocks, store.ProtoHysteria2, store.ProtoTUIC},
+		"Protocols":        []string{store.ProtoVLESS, store.ProtoAnyTLS, store.ProtoShadowsocks, store.ProtoHysteria2, store.ProtoTUIC},
 		"DefaultHandshake": service.DefaultHandshake,
 		"Handshakes":       service.HandshakeCandidates,
 		"DefaultMasq":      service.DefaultMasquerade,
@@ -338,7 +323,6 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		"Stale":            stale,
 		"Settle":           settle,
 		"EditID":           editID,
-		"Probe":            s.inboundProbes(inbounds),
 		"CSRFToken":        s.csrf.csrfValue(r),
 	}
 	if editID != 0 {
@@ -408,7 +392,7 @@ func (s *Server) createInbound(w http.ResponseWriter, r *http.Request) {
 		Obfs:        r.FormValue("obfs") != "",
 		Masquerade:  r.FormValue("masquerade"),
 	}
-	if (spec.Protocol == store.ProtoAnyTLS || spec.Protocol == store.ProtoHysteria2 || spec.Protocol == store.ProtoTUIC || spec.Protocol == store.ProtoVLESSWS) && spec.ServerName == "" {
+	if (spec.Protocol == store.ProtoAnyTLS || spec.Protocol == store.ProtoHysteria2 || spec.Protocol == store.ProtoTUIC) && spec.ServerName == "" {
 		if n, err := s.svc.Node(nodeID); err == nil {
 			spec.ServerName = n.Address
 		}
@@ -452,7 +436,6 @@ func (s *Server) inboundEditFields(data map[string]any, inbounds []*store.Inboun
 	data["HopPorts"] = client.HopPorts
 	data["HopInterval"] = client.HopInterval
 	data["SNI"] = client.SNI
-	data["WSPath"] = client.Path
 	data["EditRelayNodeID"] = in.RelayNodeID
 	if sb.TLS != nil {
 		data["CertPath"] = sb.TLS.CertificatePath
