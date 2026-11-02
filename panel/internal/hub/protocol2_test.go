@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/Zayvian/veyra-panel/internal/service"
 )
 
@@ -110,7 +112,7 @@ func TestNewNodeIsWelcomedFirst(t *testing.T) {
 	if err := json.Unmarshal(n.await(TypeConfig, 3*time.Second).Data, &cd); err != nil {
 		t.Fatal(err)
 	}
-	want, err := h.svc.NodeConfigRev(h.node.ID)
+	want, err := h.svc.NodeConfigRev(h.node.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,5 +207,51 @@ func TestRepeatIsRecognisedAcrossAPanelRestart(t *testing.T) {
 	}
 	if got := usedBy(t, h, u.ID); got != 2 {
 		t.Fatalf("traffic_used = %d, want 2", got)
+	}
+}
+
+// A node is sent its Xray inbounds only if it offered xray. One that did not
+// gets the sing-box part alone, with the rev of what it was actually sent.
+func TestXrayInboundsGoOnlyToNodesWithXray(t *testing.T) {
+	h := newHarness(t)
+	h.addInbounds(t)
+	if _, err := h.svc.CreateInbound(h.node.ID, service.InboundSpec{
+		Protocol: "vless", Core: "xray", Transport: service.TransportXHTTP, Port: 2053,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, offered := range []bool{false, true} {
+		caps := []string{CapStatsAck, CapConfigRev}
+		if offered {
+			caps = append(caps, CapXray)
+		}
+		n := dialNode(t, h.srv.URL, h.token)
+		n.send(TypeHello, 0, Hello{Version: "0.2.0", XrayVersion: "26.3.27", Proto: ProtoVersion, Caps: caps})
+		var cd ConfigData
+		if err := json.Unmarshal(n.await(TypeConfig, 3*time.Second).Data, &cd); err != nil {
+			t.Fatal(err)
+		}
+		if got := len(cd.Xray) > 0; got != offered {
+			t.Fatalf("offered xray %v: config has an xray part %v (%s)", offered, got, cd.Xray)
+		}
+		want, err := h.svc.NodeConfigRev(h.node.ID, offered)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cd.Rev != want {
+			t.Fatalf("offered xray %v: rev %s, want %s", offered, cd.Rev, want)
+		}
+		if capable, known := h.hub.XrayCapable(h.node.ID); !known || capable != offered {
+			t.Fatalf("XrayCapable = %v, %v; want %v", capable, known, offered)
+		}
+		n.ws.Close(websocket.StatusNormalClosure, "")
+		deadline := time.Now().Add(3 * time.Second)
+		for h.hub.Connected(h.node.ID) {
+			if time.Now().After(deadline) {
+				t.Fatal("node still connected after closing")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 }

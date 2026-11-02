@@ -49,7 +49,15 @@ func (s *Service) retagNodeInbounds(nodeID int64, newName string) (int, error) {
 	var updates []store.Retag
 
 	for _, in := range inbounds {
-		base := protoSlug(in.Protocol) + "-" + slug
+		sb, err := ParseConfig(in)
+		if err != nil {
+			return 0, err
+		}
+		proto := in.Protocol
+		if sb.XHTTP != nil {
+			proto = TransportXHTTP // as CreateInbound derives it
+		}
+		base := protoSlug(proto) + "-" + slug
 		tag := base
 		for i := 2; taken[tag]; i++ {
 			tag = fmt.Sprintf("%s-%d", base, i)
@@ -63,10 +71,6 @@ func (s *Service) retagNodeInbounds(nodeID int64, newName string) (int, error) {
 		// object the node is sent. Leaving one behind means the node listens
 		// under a tag no user list mentions, and every user on that inbound
 		// stops authenticating.
-		sb, err := ParseConfig(in)
-		if err != nil {
-			return 0, err
-		}
 		sb.Tag = tag
 		cfg, err := json.Marshal(sb)
 		if err != nil {

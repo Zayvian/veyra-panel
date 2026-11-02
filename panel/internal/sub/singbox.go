@@ -33,6 +33,12 @@ func SingBox(entries []Entry, rulesBase string) ([]byte, error) {
 		}
 		switch e.Protocol {
 		case store.ProtoVLESS:
+			if e.Network == xhttp {
+				// sing-box has no XHTTP. Left out rather than sent as plain
+				// VLESS, which would fail to connect on every attempt and
+				// drag down automatic selection with it.
+				continue
+			}
 			ob.Type = "vless"
 			ob.UUID = e.UUID
 			ob.Flow = e.Flow

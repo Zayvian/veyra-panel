@@ -87,7 +87,7 @@ func (s *Service) NodeConfig(nodeID int64) (*singbox.Config, error) {
 	}
 
 	for _, in := range inbounds {
-		if !in.Enabled {
+		if !in.Enabled || in.Core == store.CoreXray {
 			continue
 		}
 		var sb singbox.Inbound
@@ -99,6 +99,48 @@ func (s *Service) NodeConfig(nodeID int64) (*singbox.Config, error) {
 	}
 	cfg.Inbounds = append(cfg.Inbounds, relays...)
 	return cfg, nil
+}
+
+// NodeXrayConfig builds the part of a node's configuration Xray serves:
+// `{"inbounds": [...]}` in Xray's format, or nil when the node has no enabled
+// Xray inbound — which is every node that has not been given one.
+//
+// Sent only to a node that offered xray. One that did not either has no Xray
+// or predates it, and would refuse or ignore the inbounds; the panel shows
+// them as not running instead.
+func (s *Service) NodeXrayConfig(nodeID int64) (json.RawMessage, error) {
+	node, err := s.st.Node(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	if !node.Enabled {
+		return nil, nil
+	}
+	inbounds, err := s.st.NodeInbounds(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	var out []json.RawMessage
+	for _, in := range inbounds {
+		if !in.Enabled || in.Core != store.CoreXray {
+			continue
+		}
+		sb, err := ParseConfig(in)
+		if err != nil {
+			return nil, err
+		}
+		x, err := xrayInbound(sb)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, x)
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(struct {
+		Inbounds []json.RawMessage `json:"inbounds"`
+	}{out})
 }
 
 // NodeUsers builds the authoritative user list for one node, keyed by inbound
@@ -125,6 +167,16 @@ func (s *Service) NodeUsers(nodeID int64) (map[string][]singbox.User, error) {
 		if !in.Enabled {
 			continue
 		}
+		// The flow has to match what the inbound's subscriptions tell clients,
+		// and an Xray inbound over XHTTP has none.
+		flow := FlowVision
+		if in.Core == store.CoreXray {
+			client, err := ParseClient(in)
+			if err != nil {
+				return nil, err
+			}
+			flow = client.Flow
+		}
 		list := make([]singbox.User, 0, len(users))
 		for _, u := range users {
 			if !u.Active(now) {
@@ -138,6 +190,9 @@ func (s *Service) NodeUsers(nodeID int64) (map[string][]singbox.User, error) {
 			su, ok := singboxUser(u, in.Protocol)
 			if !ok {
 				continue
+			}
+			if in.Protocol == store.ProtoVLESS {
+				su.Flow = flow
 			}
 			list = append(list, su)
 		}

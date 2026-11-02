@@ -47,7 +47,7 @@
                      {{if .Allowed}}checked{{end}}>
             </td>
             <td>{{.Inbound.Tag}}</td>
-            <td class="dim">{{.Inbound.Protocol}}</td>
+            <td class="dim">{{protoLabel .Inbound}}</td>
             <td class="num dim">{{.Inbound.Port}}</td>
             <td style="text-align:right">
               {{if not .Inbound.Enabled}}<span class="pill off">已停用</span>{{end}}

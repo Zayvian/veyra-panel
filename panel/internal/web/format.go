@@ -18,6 +18,9 @@ func templateFuncs() template.FuncMap {
 		"ago":   formatAgo,
 		"pct":   percent,
 
+		// How an inbound's protocol is named, Xray inbounds included.
+		"protoLabel": service.ProtocolLabel,
+
 		// Form values. These differ from their display counterparts by
 		// rendering "unset" as an empty field rather than a dash or a zero —
 		// putting "—" in a date input silently clears the date on save.

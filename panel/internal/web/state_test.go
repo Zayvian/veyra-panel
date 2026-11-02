@@ -24,7 +24,11 @@ type fakeChannel struct {
 	// What a config_rev node reports; revKnown false is an older node.
 	rev      string
 	revKnown bool
+
+	xray bool
 }
+
+func (f *fakeChannel) XrayCapable(int64) (bool, bool) { return f.xray, f.connected }
 
 func (f *fakeChannel) AppliedRev(int64) (string, bool) { return f.rev, f.revKnown }
 
@@ -177,7 +181,7 @@ func TestConfigRevDecidesWhetherSettingsTookEffect(t *testing.T) {
 	}
 
 	current := serving(func(svc *service.Service, nodeID int64) string {
-		rev, err := svc.NodeConfigRev(nodeID)
+		rev, err := svc.NodeConfigRev(nodeID, false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -193,5 +197,28 @@ func TestConfigRevDecidesWhetherSettingsTookEffect(t *testing.T) {
 	}
 	if !strings.Contains(previous, "确认中") {
 		t.Error("an older rev should read 确认中 while the page waits for the node")
+	}
+}
+
+// An Xray inbound on a node without Xray says so, instead of the 未生效 that
+// would send the operator looking for a configuration error. The new-inbound
+// menu offers the Xray choices with their labels.
+func TestInboundPageNamesAMissingXray(t *testing.T) {
+	for _, xray := range []bool{false, true} {
+		ch := &fakeChannel{connected: true, known: true, tags: map[string]bool{}, xray: xray}
+		body := inboundPageWith(t, ch, func(svc *service.Service, nodeID int64) {
+			if _, err := svc.CreateInbound(nodeID, service.InboundSpec{
+				Protocol: store.ProtoVLESS, Core: store.CoreXray,
+				Transport: service.TransportXHTTP, Port: 2053,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		})
+		if got := strings.Contains(body, ">节点没有 Xray</span>"); got != !xray {
+			t.Errorf("node with xray %v: page says 节点没有 Xray = %v", xray, got)
+		}
+		if !strings.Contains(body, "vless-xhttp（Xray）") || !strings.Contains(body, `value="xray-xhttp"`) {
+			t.Errorf("page lacks the xhttp label or menu entry")
+		}
 	}
 }

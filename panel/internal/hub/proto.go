@@ -56,7 +56,7 @@ const (
 )
 
 // PanelCaps is what this panel offers in its welcome.
-var PanelCaps = []string{CapStatsAck, CapConfigRev, CapPanelURL}
+var PanelCaps = []string{CapStatsAck, CapConfigRev, CapPanelURL, CapXray}
 
 // PanelURLData is the panel's current base URL, sent to a node that reached it
 // through an old domain after the administrator changed it.

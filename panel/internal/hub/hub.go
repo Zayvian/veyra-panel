@@ -91,6 +91,9 @@ type conn struct {
 	statsAck  atomic.Bool
 	configRev atomic.Bool
 	panelURL  atomic.Bool
+	// xray: the node runs Xray and is sent the Xray part of its
+	// configuration. Offered only by a node that found an Xray binary.
+	xray atomic.Bool
 
 	// host is the name the node dialled, from the request's Host. It is how
 	// the panel tells a node still on an old domain from one that has moved.
@@ -262,13 +265,16 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 		// dozen characters; a node that sends a megabyte of one is either broken
 		// or hostile, and either way it does not get to put that in the nodes
 		// table and on every render of the nodes page.
-		version := clip(strings.TrimSpace(
-			clip(hello.Version, 64)+" / sing-box "+clip(hello.SingboxVersion, 64)), 160)
+		version := clip(hello.Version, 64) + " / sing-box " + clip(hello.SingboxVersion, 64)
+		if hello.XrayVersion != "" {
+			version += " / xray " + clip(hello.XrayVersion, 32)
+		}
+		version = clip(strings.TrimSpace(version), 160)
 		if err := h.svc.MarkNodeSeen(c.nodeID, version); err != nil {
 			h.log.Warn("mark node seen", "node", c.nodeID, "error", err)
 		}
 		h.log.Info("node connected", "node", c.nodeID,
-			"version", hello.Version, "singbox", hello.SingboxVersion,
+			"version", hello.Version, "singbox", hello.SingboxVersion, "xray", hello.XrayVersion,
 			"host", hello.Hostname, "proto", hello.Proto, "caps", hello.Caps)
 		// Protocol 2: answer with what this panel supports, before anything
 		// else — a node that receives a config first takes the panel for an
@@ -283,6 +289,8 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 					c.configRev.Store(true)
 				case CapPanelURL:
 					c.panelURL.Store(true)
+				case CapXray:
+					c.xray.Store(true)
 				}
 			}
 			if err := h.send(ctx, c, TypeWelcome, 0,
@@ -473,13 +481,19 @@ func (h *Hub) pushTo(ctx context.Context, c *conn, config, users bool) error {
 		if err != nil {
 			return fmt.Errorf("build config for node %d: %w", c.nodeID, err)
 		}
-		rev, err := service.ConfigRev(cfg)
+		var xray json.RawMessage
+		if c.xray.Load() {
+			if xray, err = h.svc.NodeXrayConfig(c.nodeID); err != nil {
+				return fmt.Errorf("build xray config for node %d: %w", c.nodeID, err)
+			}
+		}
+		rev, err := service.ConfigRev(cfg, xray)
 		if err != nil {
 			return fmt.Errorf("config rev for node %d: %w", c.nodeID, err)
 		}
 		// Sent to every node; one older than config_rev ignores the field.
 		if err := h.send(ctx, c, TypeConfig, h.nextID.Add(1),
-			ConfigData{Rev: rev, Config: cfg}); err != nil {
+			ConfigData{Rev: rev, Config: cfg, Xray: xray}); err != nil {
 			return err
 		}
 	}
@@ -674,6 +688,18 @@ func (h *Hub) AppliedRev(nodeID int64) (rev string, known bool) {
 		return "", false
 	}
 	return st.AppliedRev, true
+}
+
+// XrayCapable says whether a node runs Xray. known is false for a node that is
+// not connected.
+func (h *Hub) XrayCapable(nodeID int64) (capable, known bool) {
+	h.mu.RLock()
+	c := h.conns[nodeID]
+	h.mu.RUnlock()
+	if c == nil {
+		return false, false
+	}
+	return c.xray.Load(), true
 }
 
 func (h *Hub) stateOf(nodeID int64) *StateData {

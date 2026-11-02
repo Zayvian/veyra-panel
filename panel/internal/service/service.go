@@ -434,7 +434,11 @@ func (s *Service) CreateInbound(nodeID int64, spec InboundSpec) (*store.Inbound,
 	// keep the field as an override rather than a requirement.
 	spec.Tag = strings.TrimSpace(spec.Tag)
 	if spec.Tag == "" {
-		spec.Tag = s.deriveInboundTag(spec.Protocol, node.Name)
+		slug := spec.Protocol
+		if spec.Transport == TransportXHTTP {
+			slug = TransportXHTTP
+		}
+		spec.Tag = s.deriveInboundTag(slug, node.Name)
 	}
 	if err := checkDisplayName("inbound tag", spec.Tag); err != nil {
 		return nil, err

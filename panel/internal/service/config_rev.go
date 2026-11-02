@@ -19,20 +19,37 @@ import (
 //
 // encoding/json writes struct fields in declaration order and map keys sorted,
 // so the same configuration always has the same rev.
-func ConfigRev(cfg *singbox.Config) (string, error) {
+//
+// xray is the Xray part, if the node is sent one. Without it the rev is the
+// hash of the sing-box part alone, as it was before Xray, so no node sees its
+// configuration change on upgrade.
+func ConfigRev(cfg *singbox.Config, xray json.RawMessage) (string, error) {
 	raw, err := json.Marshal(cfg)
 	if err != nil {
 		return "", err
 	}
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:]), nil
+	h := sha256.New()
+	h.Write(raw)
+	if len(xray) > 0 {
+		h.Write([]byte("\nxray\n"))
+		h.Write(xray)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // NodeConfigRev is the rev of the configuration this node should be running.
-func (s *Service) NodeConfigRev(nodeID int64) (string, error) {
+// xray says whether the node is sent its Xray part, which it is only when it
+// offered xray.
+func (s *Service) NodeConfigRev(nodeID int64, xray bool) (string, error) {
 	cfg, err := s.NodeConfig(nodeID)
 	if err != nil {
 		return "", err
 	}
-	return ConfigRev(cfg)
+	var x json.RawMessage
+	if xray {
+		if x, err = s.NodeXrayConfig(nodeID); err != nil {
+			return "", err
+		}
+	}
+	return ConfigRev(cfg, x)
 }

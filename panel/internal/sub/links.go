@@ -47,7 +47,13 @@ func shareLink(e Entry) string {
 	case store.ProtoVLESS:
 		q := url.Values{}
 		q.Set("encryption", "none")
-		q.Set("type", "tcp")
+		if e.Network == xhttp {
+			q.Set("type", xhttp)
+			q.Set("path", e.Path)
+			q.Set("mode", e.Mode)
+		} else {
+			q.Set("type", "tcp")
+		}
 		q.Set("security", "reality")
 		q.Set("sni", e.SNI)
 		q.Set("pbk", e.PBK)
@@ -100,6 +106,9 @@ func shareLink(e Entry) string {
 	}
 	return ""
 }
+
+// xhttp is Xray's XHTTP transport, as Entry.Network names it.
+const xhttp = "xhttp"
 
 // hostPort joins an address and port, bracketing a bare IPv6 literal.
 func hostPort(addr string, port int) string {

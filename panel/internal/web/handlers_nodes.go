@@ -273,8 +273,12 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 	// "serving it with these settings": until the revs match, the node is
 	// still on the previous configuration. stale says so.
 	stale := false
+	// A connected node without Xray is not sent its Xray inbounds: they are
+	// left out of the rev it should be running, and say why on the page
+	// rather than just 未生效.
+	xrayCapable, xrayKnown := s.nodes.XrayCapable(nodeID)
 	if rev, revKnown := s.nodes.AppliedRev(nodeID); revKnown && applyErr == "" {
-		want, err := s.svc.NodeConfigRev(nodeID)
+		want, err := s.svc.NodeConfigRev(nodeID, xrayCapable)
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -309,7 +313,8 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 		"NodeNames":        nodeNames,
 		"RelayPrefix":      service.RelayTagPrefix,
 		"EditRelayNodeID":  int64(0),
-		"Protocols":        []string{store.ProtoVLESS, store.ProtoAnyTLS, store.ProtoShadowsocks, store.ProtoHysteria2, store.ProtoTUIC},
+		"Protocols":        service.ProtocolChoices,
+		"NoXray":           xrayKnown && !xrayCapable,
 		"DefaultHandshake": service.DefaultHandshake,
 		"Handshakes":       service.HandshakeCandidates,
 		"DefaultMasq":      service.DefaultMasquerade,
@@ -376,8 +381,11 @@ func (s *Server) createInbound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	relayNodeID, relayPort := relayForm(r)
+	protocol, core, transport := service.ParseProtocolChoice(r.FormValue("protocol"))
 	spec := service.InboundSpec{
-		Protocol:    r.FormValue("protocol"),
+		Protocol:    protocol,
+		Core:        core,
+		Transport:   transport,
 		Tag:         r.FormValue("tag"),
 		Port:        port,
 		Address:     strings.TrimSpace(r.FormValue("address")),

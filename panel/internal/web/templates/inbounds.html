@@ -8,7 +8,7 @@
           hx-target="#inbounds" hx-swap="outerHTML">
       <label>协议
         <select name="protocol" onchange="onProto(this.value)">
-          {{range .Protocols}}<option value="{{.}}">{{.}}</option>{{end}}
+          {{range .Protocols}}<option value="{{.Value}}">{{.Label}}</option>{{end}}
         </select>
       </label>
       <label>tag<input name="tag" required placeholder="vless-{{.Node.Name}}"
@@ -81,6 +81,9 @@
       两者是<strong>二选一生效</strong>的：<strong>不开混淆</strong>时，端口看起来就是一个 HTTP/3 网站，探测者看到的是伪装网站；
       <strong>开了混淆</strong>，探测者连握手都完成不了，到不了伪装网站这一步，伪装填不填都行（留着不碍事，以后关掉混淆就会生效）。
       想让节点像个正常网站就不开混淆、填伪装；客户网络会干扰 QUIC、HY2 老超时就开混淆。<br>
+      <strong>Xray</strong> 的两个选项由节点上的 Xray 承载，其余协议仍由 sing-box 承载，同一个节点可以混用。
+      <strong>vless-xhttp</strong> 只有 Xray 内核的客户端（v2rayN、v2rayNG、Shadowrocket 等）和 Clash Verge / mihomo 能用，
+      不会出现在 sing-box 订阅里。需要节点装了 Xray，没有的会显示「节点没有 Xray」。<br>
       <strong>Reality 握手站点</strong>可以点「检测」，从面板确认它支持 TLS 1.3 和 HTTP/2；面板能通不代表每个地区都好用。<br>
       Hysteria2 跳端口仅支持直连 Linux 节点，需要放行对应 UDP 端口范围。
       TUIC 当前使用固定端口。跳跃间隔仅在 sing-box / Mihomo 配置中下发，分享链接导入使用客户端自身间隔。<br>
@@ -104,7 +107,9 @@
 <script>
 function onProto(v) {
   var show = function (id, on) { document.getElementById(id).hidden = !on; };
-  show('f-handshake', v === 'vless');
+  // The Xray choices are VLESS + Reality too, and borrow a handshake the same way.
+  var reality = ['vless', 'xray-vless', 'xray-xhttp'].includes(v);
+  show('f-handshake', reality);
   var tls = ['anytls', 'hysteria2', 'tuic'].includes(v);
   show('f-cert', tls); show('f-key', tls); show('f-sni', tls);
   show('f-hop', v === 'hysteria2'); show('f-hop-interval', v === 'hysteria2');
@@ -115,7 +120,7 @@ function onProto(v) {
   // Hysteria2 gets a random high port: a fixed default is the first port a
   // blocklist tries.
   port.value = v === 'hysteria2' ? 10000 + Math.floor(Math.random() * 50001)
-    : ({vless:443,anytls:8443,shadowsocks:8388,tuic:9443})[v];
+    : ({vless:443,'xray-vless':443,'xray-xhttp':443,anytls:8443,shadowsocks:8388,tuic:9443})[v];
 }
 // The two relay fields are alternatives, so picking one takes the other away
 // rather than leaving a form that can be filled in contradictorily and only
@@ -289,7 +294,7 @@ function randomMasq(btn) {
       {{else}}
       <tr>
         <td>{{.Tag}}<div class="dim" style="font-size:.75rem">排序 {{.SortOrder}}</div></td>
-        <td class="dim" data-label="协议">{{.Protocol}}</td>
+        <td class="dim" data-label="协议">{{protoLabel .}}</td>
         <td class="num" data-label="端口">{{.Port}}</td>
         {{/* What a client is told to dial, which is not always where the node
              listens: a relay puts this inbound on a port the node cannot have. */}}
@@ -318,6 +323,8 @@ function randomMasq(btn) {
                 {{else if and $.Stale $.Settle}}<span class="pill off">确认中…</span>
                 {{else if $.Stale}}<span class="pill warn-pill">等待节点应用</span>
                 {{else}}<span class="pill live">已生效</span>{{end}}
+              {{else if and $.NoXray (eq .Core "xray")}}<span class="pill bad"
+                    title="节点上没有找到 Xray 程序，这个入站不会下发。升级节点后就会生效。">节点没有 Xray</span>
               {{else if $.Settle}}<span class="pill off">确认中…</span>
               {{else if $.StateKnown}}<span class="pill bad">未生效</span>
               {{else}}<span class="pill off">节点离线</span>{{end}}

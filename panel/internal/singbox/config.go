@@ -103,6 +103,19 @@ type Inbound struct {
 	// browser, or someone probing — instead of an error that names a proxy.
 	// Server-side only: clients never see it.
 	Masquerade *Masquerade `json:"masquerade,omitempty"`
+
+	// XHTTP is not sing-box's: it marks a VLESS inbound served by Xray over
+	// its XHTTP transport, which sing-box does not have. Such an inbound is
+	// stored in this shape like every other and never reaches sing-box — it
+	// is translated into Xray's format when the node's configuration is built.
+	XHTTP *XHTTP `json:"veyra_xhttp,omitempty"`
+}
+
+// XHTTP is Xray's HTTP-based transport: requests on a path, with the upload
+// and download carried as the mode says.
+type XHTTP struct {
+	Path string `json:"path"`
+	Mode string `json:"mode"` // always "auto": the client picks
 }
 
 // Obfs is Hysteria2's salamander obfuscation.
