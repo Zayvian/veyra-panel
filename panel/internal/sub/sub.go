@@ -31,8 +31,15 @@ type Entry struct {
 	HopInterval string
 
 	// Credentials, already resolved for this protocol.
-	UUID     string // VLESS
-	Flow     string // VLESS
+	UUID string // VLESS
+	Flow string // VLESS
+
+	// Network is "xhttp" for VLESS over Xray's XHTTP transport, with the
+	// path and mode to use; empty is plain TCP.
+	Network string
+	Path    string
+	Mode    string
+
 	Password string // AnyTLS, or the "serverPSK:userPSK" pair for Shadowsocks
 	Method   string // Shadowsocks
 
@@ -156,6 +163,7 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 		case store.ProtoVLESS:
 			e.UUID = u.VlessUUID
 			e.Flow = client.Flow
+			e.Network, e.Path, e.Mode = client.Network, client.Path, client.Mode
 		case store.ProtoTUIC:
 			e.UUID = u.VlessUUID
 			e.Password = u.Password

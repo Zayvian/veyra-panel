@@ -27,10 +27,11 @@ type clashProxy struct {
 	Obfs              string   `yaml:"obfs,omitempty"`
 	ObfsPassword      string   `yaml:"obfs-password,omitempty"`
 
-	UUID    string `yaml:"uuid,omitempty"`
-	Flow    string `yaml:"flow,omitempty"`
-	Network string `yaml:"network,omitempty"`
-	TLS     bool   `yaml:"tls,omitempty"`
+	UUID      string          `yaml:"uuid,omitempty"`
+	Flow      string          `yaml:"flow,omitempty"`
+	Network   string          `yaml:"network,omitempty"`
+	XHTTPOpts *clashXHTTPOpts `yaml:"xhttp-opts,omitempty"`
+	TLS       bool            `yaml:"tls,omitempty"`
 
 	Password string `yaml:"password,omitempty"`
 	Cipher   string `yaml:"cipher,omitempty"`
@@ -39,6 +40,12 @@ type clashProxy struct {
 	AnyTLSSNI         string            `yaml:"sni,omitempty"`
 	ClientFingerprint string            `yaml:"client-fingerprint,omitempty"`
 	RealityOpts       *clashRealityOpts `yaml:"reality-opts,omitempty"`
+}
+
+// clashXHTTPOpts is mihomo's form of Xray's XHTTP transport.
+type clashXHTTPOpts struct {
+	Path string `yaml:"path"`
+	Mode string `yaml:"mode,omitempty"`
 }
 
 type clashRealityOpts struct {
@@ -95,6 +102,10 @@ func Clash(entries []Entry, rulesBase string) ([]byte, error) {
 			p.UUID = e.UUID
 			p.Flow = e.Flow
 			p.Network = "tcp"
+			if e.Network == xhttp {
+				p.Network = xhttp
+				p.XHTTPOpts = &clashXHTTPOpts{Path: e.Path, Mode: e.Mode}
+			}
 			p.TLS = true
 			p.SNI = e.SNI
 			p.RealityOpts = &clashRealityOpts{PublicKey: e.PBK, ShortID: e.SID}

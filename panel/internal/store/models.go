@@ -15,6 +15,10 @@ const (
 	ProtoShadowsocks = "shadowsocks"
 )
 
+// CoreXray in inbounds.core runs the inbound in Xray beside sing-box on its
+// node. The empty string is sing-box.
+const CoreXray = "xray"
+
 type User struct {
 	ID   int64
 	Name string
@@ -169,11 +173,19 @@ type Inbound struct {
 	// Config is the sing-box inbound object, with an empty users array. Users
 	// are pushed separately so they can be hot-swapped without rebuilding the
 	// listener.
+	//
+	// It keeps that shape for an Xray inbound too, and is translated into
+	// Xray's format only when the node's configuration is built (see
+	// service/xray.go): every edit, rename and lookup reads one shape.
 	Config string
 	// Client holds the parameters a client needs but the server does not:
 	// Reality's public key and short id, the SNI, the flow. Derived once when
 	// the inbound is created rather than recomputed per subscription.
 	Client string
+
+	// Core is the program that serves this inbound on its node: "" for
+	// sing-box, CoreXray for Xray. Fixed at creation, like the protocol.
+	Core string
 
 	Enabled bool
 }

@@ -6,7 +6,7 @@ import (
 )
 
 const inboundCols = `id, node_id, tag, protocol, port, address, ` +
-	`relay_node_id, relay_port, config, client, enabled, sort_order`
+	`relay_node_id, relay_port, config, client, enabled, sort_order, core`
 
 func scanInbound(sc interface{ Scan(...any) error }) (*Inbound, error) {
 	var in Inbound
@@ -15,7 +15,7 @@ func scanInbound(sc interface{ Scan(...any) error }) (*Inbound, error) {
 	var relayNode sql.NullInt64
 	if err := sc.Scan(&in.ID, &in.NodeID, &in.Tag, &in.Protocol, &in.Port,
 		&in.Address, &relayNode, &in.RelayPort,
-		&in.Config, &in.Client, &in.Enabled, &in.SortOrder); err != nil {
+		&in.Config, &in.Client, &in.Enabled, &in.SortOrder, &in.Core); err != nil {
 		return nil, err
 	}
 	in.RelayNodeID = relayNode.Int64
@@ -34,11 +34,11 @@ func relayNodeValue(id int64) any {
 
 func (s *Store) CreateInbound(in *Inbound) error {
 	res, err := s.db.Exec(`INSERT INTO inbounds
-		(node_id, tag, protocol, port, address, relay_node_id, relay_port, config, client, enabled)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(node_id, tag, protocol, port, address, relay_node_id, relay_port, config, client, enabled, core)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		in.NodeID, in.Tag, in.Protocol, in.Port, in.Address,
 		relayNodeValue(in.RelayNodeID), in.RelayPort,
-		in.Config, in.Client, in.Enabled)
+		in.Config, in.Client, in.Enabled, in.Core)
 	if err != nil {
 		return asConflict(fmt.Errorf("create inbound %q: %w", in.Tag, err))
 	}

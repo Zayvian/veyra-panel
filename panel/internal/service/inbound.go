@@ -18,7 +18,12 @@ import (
 // server PSKs — is derived, because there is no reason to make a human type a
 // 32-byte key correctly.
 type InboundSpec struct {
-	Protocol    string
+	Protocol string
+	// Core is store.CoreXray to serve the inbound with Xray; empty is
+	// sing-box. Transport is TransportXHTTP for VLESS over XHTTP, which only
+	// Xray has; empty is plain TCP. See xray.go.
+	Core        string
+	Transport   string
 	Tag         string
 	Port        int
 	HopPorts    string
@@ -69,6 +74,12 @@ type ClientParams struct {
 	FP          string `json:"fp,omitempty"`  // uTLS fingerprint
 	Flow        string `json:"flow,omitempty"`
 
+	// Network is the VLESS transport when it is not plain TCP: "xhttp", with
+	// the path and mode the client must use.
+	Network string `json:"network,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Mode    string `json:"mode,omitempty"`
+
 	Method    string `json:"method,omitempty"`     // Shadowsocks
 	ServerPSK string `json:"server_psk,omitempty"` // Shadowsocks, server half of the key pair
 
@@ -116,6 +127,15 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 		return nil, err
 	}
 
+	switch {
+	case spec.Core != "" && spec.Core != store.CoreXray:
+		return nil, invalid("unknown core %q", spec.Core)
+	case spec.Core == store.CoreXray && spec.Protocol != store.ProtoVLESS:
+		return nil, invalid("only vless can be served by Xray")
+	case spec.Transport != "" && (spec.Transport != TransportXHTTP || spec.Core != store.CoreXray):
+		return nil, invalid("transport %q needs vless on Xray", spec.Transport)
+	}
+
 	switch spec.Protocol {
 	case store.ProtoVLESS:
 		host, port, err := splitHandshake(spec.Handshake)
@@ -141,6 +161,15 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 		}
 		client = ClientParams{SNI: host, PBK: pub, SID: shortID, FP: "chrome",
 			Flow: FlowVision}
+		if spec.Transport == TransportXHTTP {
+			// A path nobody would guess, so the port answers like an ordinary
+			// web server to anything that does not know it. No Vision: it
+			// is defined for the raw TCP stream, not for XHTTP's.
+			path := "/" + NewShortID() + NewShortID()
+			in.XHTTP = &singbox.XHTTP{Path: path, Mode: "auto"}
+			client.Flow = ""
+			client.Network, client.Path, client.Mode = TransportXHTTP, path, "auto"
+		}
 
 	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC:
 		// Blank means "wherever the installer put it". Refusing instead would
@@ -205,7 +234,7 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 	}
 
 	return &store.Inbound{
-		Tag: spec.Tag, Protocol: spec.Protocol, Port: spec.Port,
+		Tag: spec.Tag, Protocol: spec.Protocol, Port: spec.Port, Core: spec.Core,
 		Config: string(cfgJSON), Client: string(clientJSON), Enabled: true,
 	}, nil
 }

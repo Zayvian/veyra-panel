@@ -158,6 +158,9 @@ type NodeChannel interface {
 	// AppliedRev is the rev of the configuration the node says it runs.
 	// known is false when it has not said — including every node too old to.
 	AppliedRev(nodeID int64) (rev string, known bool)
+	// XrayCapable says whether the node runs Xray, and so is sent its Xray
+	// inbounds. known is false for a node that is not connected.
+	XrayCapable(nodeID int64) (capable, known bool)
 }
 
 func New(svc *service.Service, nodes NodeChannel, log *slog.Logger, secureCookies bool) (*Server, error) {
