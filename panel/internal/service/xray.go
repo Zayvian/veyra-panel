@@ -67,7 +67,9 @@ func ProtocolLabel(in *store.Inbound) string {
 // xrayInbound translates a stored VLESS + Reality inbound into Xray's inbound
 // format. The client list is left empty: users reach the node separately, as
 // for sing-box, and the node fills them in.
-func xrayInbound(sb singbox.Inbound) (json.RawMessage, error) {
+//
+// sniff is the sniffing block a policy needs, or nil for none.
+func xrayInbound(sb singbox.Inbound, sniff *xraySniffing) (json.RawMessage, error) {
 	if sb.Type != store.ProtoVLESS || sb.TLS == nil || sb.TLS.Reality == nil {
 		return nil, fmt.Errorf("inbound %s: only VLESS with Reality can be served by Xray", sb.Tag)
 	}
@@ -100,6 +102,7 @@ func xrayInbound(sb singbox.Inbound) (json.RawMessage, error) {
 		Port     int            `json:"port"`
 		Settings settings       `json:"settings"`
 		Stream   streamSettings `json:"streamSettings"`
+		Sniffing *xraySniffing  `json:"sniffing,omitempty"`
 	}
 
 	out := inbound{
@@ -108,6 +111,7 @@ func xrayInbound(sb singbox.Inbound) (json.RawMessage, error) {
 		Listen:   sb.Listen,
 		Port:     sb.ListenPort,
 		Settings: settings{Clients: []struct{}{}, Decryption: "none"},
+		Sniffing: sniff,
 		Stream: streamSettings{
 			Network:  "tcp",
 			Security: "reality",
@@ -126,4 +130,59 @@ func xrayInbound(sb singbox.Inbound) (json.RawMessage, error) {
 		out.Stream.XHTTP = &xhttpSettings{Path: sb.XHTTP.Path, Mode: sb.XHTTP.Mode}
 	}
 	return json.Marshal(out)
+}
+
+// xraySniffing is an Xray inbound's sniffing block.
+type xraySniffing struct {
+	Enabled      bool     `json:"enabled"`
+	DestOverride []string `json:"destOverride"`
+	// RouteOnly uses what was sniffed for routing only, and still connects to
+	// the address the client asked for: the policy decides, it does not
+	// redirect.
+	RouteOnly bool `json:"routeOnly"`
+}
+
+// xrayRule is one of Xray's routing rules.
+type xrayRule struct {
+	Type        string   `json:"type"`
+	Protocol    []string `json:"protocol,omitempty"`
+	Domain      []string `json:"domain,omitempty"`
+	OutboundTag string   `json:"outboundTag"`
+}
+
+// xrayBlock is the outbound the node's Xray configuration drops traffic into.
+const xrayBlock = "block"
+
+// xrayPolicy is the policy written for Xray: the sniffing its inbounds need
+// and the rules that act on it, the same blocks routeRules gives sing-box.
+// Nil for an empty policy, so a node without one is configured as before.
+//
+// Relay listeners are sing-box's, so there is nothing to exempt here.
+func (p Policy) xrayPolicy() (*xraySniffing, []xrayRule) {
+	if !p.BlockBitTorrent && !p.BlockSpeedtest && len(p.BlockedDomains) == 0 {
+		return nil, nil
+	}
+	// Xray sniffs BitTorrent whenever sniffing is on; destOverride only names
+	// what may supply a domain.
+	sniff := &xraySniffing{Enabled: true, DestOverride: []string{"http", "tls"}, RouteOnly: true}
+	var rules []xrayRule
+	if p.BlockBitTorrent {
+		sniff.DestOverride = append(sniff.DestOverride, "quic")
+		rules = append(rules, xrayRule{Type: "field", Protocol: []string{"bittorrent"}, OutboundTag: xrayBlock})
+	}
+	var domains []string
+	if p.BlockSpeedtest {
+		domains = append(domains, speedtestDomains...)
+	}
+	domains = append(domains, p.BlockedDomains...)
+	if len(domains) > 0 {
+		// "domain:" is Xray's suffix match, the same as sing-box's
+		// domain_suffix: the name and everything under it.
+		d := make([]string, len(domains))
+		for i, v := range domains {
+			d[i] = "domain:" + v
+		}
+		rules = append(rules, xrayRule{Type: "field", Domain: d, OutboundTag: xrayBlock})
+	}
+	return sniff, rules
 }

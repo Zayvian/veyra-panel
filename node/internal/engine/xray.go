@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,6 +49,8 @@ type xrayCore struct {
 	// Xray, which is the normal case on most nodes.
 	raw      json.RawMessage
 	inbounds []xrayInbound
+	// rules is the panel's server policy in Xray's routing format.
+	rules []json.RawMessage
 
 	// want is the latest user list for every tag the panel named, whether or
 	// not that tag is an Xray inbound yet: a configuration that moves an
@@ -57,6 +60,11 @@ type xrayCore struct {
 	live map[string]map[string]proto.User
 
 	proc *xrayProcess
+
+	// blocked is what the address limit currently blocks, per user, as the
+	// key of the routing rule that does it (see setBlocks). Reset with every
+	// process: a new Xray starts with no rules but the policy's.
+	blocked map[string]string
 
 	// Set by Close, and checked by the supervisor so a deliberate stop is not
 	// mistaken for a crash.
@@ -174,23 +182,35 @@ func (x *xrayCore) owns(tag string) bool {
 	return false
 }
 
-// parseXrayFragment decodes what the panel sent under config.xray. Only VLESS
-// is accepted: it is what the panel assigns to Xray, and a protocol this node
+// parseXrayFragment decodes what the panel sent under config.xray: the
+// inbounds, and the routing rules that carry the server policy. Only VLESS is
+// accepted: it is what the panel assigns to Xray, and a protocol this node
 // does not know how to give users to must fail here, not silently serve
 // nobody.
-func parseXrayFragment(raw json.RawMessage) ([]xrayInbound, error) {
+func parseXrayFragment(raw json.RawMessage) ([]xrayInbound, []json.RawMessage, error) {
 	if len(raw) == 0 || string(raw) == "null" {
-		return nil, nil
+		return nil, nil, nil
 	}
 	var frag struct {
 		Inbounds []json.RawMessage `json:"inbounds"`
+		Routing  struct {
+			Rules []json.RawMessage `json:"rules"`
+		} `json:"routing"`
 	}
 	if err := json.Unmarshal(raw, &frag); err != nil {
-		return nil, fmt.Errorf("xray configuration: %w", err)
+		return nil, nil, fmt.Errorf("xray configuration: %w", err)
 	}
-	out := make([]xrayInbound, 0, len(frag.Inbounds))
+	inbounds, err := parseXrayInbounds(frag.Inbounds)
+	if err != nil {
+		return nil, nil, err
+	}
+	return inbounds, frag.Routing.Rules, nil
+}
+
+func parseXrayInbounds(frag []json.RawMessage) ([]xrayInbound, error) {
+	out := make([]xrayInbound, 0, len(frag))
 	seen := map[string]bool{}
-	for i, rawIn := range frag.Inbounds {
+	for i, rawIn := range frag {
 		var in xrayInbound
 		if err := json.Unmarshal(rawIn, &in); err != nil {
 			return nil, fmt.Errorf("xray inbound %d: %w", i, err)
@@ -218,8 +238,9 @@ func parseXrayFragment(raw json.RawMessage) ([]xrayInbound, error) {
 //
 // The surroundings belong to the node, as sing-box's API listeners do (see
 // apis.go): an API on a loopback port of its choosing, per-user traffic and
-// online counters, and the outbounds.
-func buildXrayConfig(inbounds []xrayInbound, users map[string][]proto.User, apiAddr string) ([]byte, error) {
+// online counters, and the outbounds. rules, the panel's policy, may send a
+// connection to the block outbound and nowhere else.
+func buildXrayConfig(inbounds []xrayInbound, rules []json.RawMessage, users map[string][]proto.User, apiAddr string) ([]byte, error) {
 	ins := make([]json.RawMessage, 0, len(inbounds))
 	for _, in := range inbounds {
 		fields := make(map[string]json.RawMessage, len(in.fields))
@@ -257,7 +278,7 @@ func buildXrayConfig(inbounds []xrayInbound, users map[string][]proto.User, apiA
 		"api": map[string]any{
 			"tag":      "api",
 			"listen":   apiAddr,
-			"services": []string{"HandlerService", "StatsService"},
+			"services": []string{"HandlerService", "StatsService", "RoutingService"},
 		},
 		"stats": map[string]any{},
 		"policy": map[string]any{
@@ -272,11 +293,19 @@ func buildXrayConfig(inbounds []xrayInbound, users map[string][]proto.User, apiA
 		"inbounds": ins,
 		"outbounds": []map[string]any{
 			{"tag": "direct", "protocol": "freedom"},
-			{"tag": "block", "protocol": "blackhole"},
+			{"tag": xrayBlockOutbound, "protocol": "blackhole"},
 		},
 	}
+	if rules == nil {
+		rules = []json.RawMessage{}
+	}
+	cfg["routing"] = map[string]any{"rules": rules}
 	return json.MarshalIndent(cfg, "", "  ")
 }
+
+// xrayBlockOutbound is where blocked connections go: the policy's, and those
+// of addresses over a user's limit.
+const xrayBlockOutbound = "block"
 
 type vlessClient struct {
 	ID    string `json:"id"`
@@ -296,7 +325,7 @@ func vlessClients(users []proto.User) []vlessClient {
 // anything. Run before the running process is touched, so a fragment Xray
 // refuses costs nothing.
 func (x *xrayCore) check(raw json.RawMessage) error {
-	inbounds, err := parseXrayFragment(raw)
+	inbounds, rules, err := parseXrayFragment(raw)
 	if err != nil {
 		return err
 	}
@@ -317,7 +346,7 @@ func (x *xrayCore) check(raw json.RawMessage) error {
 	}
 
 	// The API port in a test run is never bound, so any address will do.
-	cfg, err := buildXrayConfig(inbounds, users, "127.0.0.1:1")
+	cfg, err := buildXrayConfig(inbounds, rules, users, "127.0.0.1:1")
 	if err != nil {
 		return err
 	}
@@ -359,7 +388,7 @@ func xrayFailure(out []byte) string {
 // stops Xray. A different one restarts it — and if the new process does not
 // come up, the previous configuration is started again and the error returned.
 func (x *xrayCore) apply(raw json.RawMessage) error {
-	inbounds, err := parseXrayFragment(raw)
+	inbounds, rules, err := parseXrayFragment(raw)
 	if err != nil {
 		return err
 	}
@@ -375,10 +404,10 @@ func (x *xrayCore) apply(raw json.RawMessage) error {
 			strings.Join(inboundTags(inbounds), ", "))
 	}
 
-	prevRaw, prevInbounds := x.raw, x.inbounds
+	prevRaw, prevInbounds, prevRules := x.raw, x.inbounds, x.rules
 	x.stopLocked()
 
-	x.raw, x.inbounds = append(json.RawMessage(nil), raw...), inbounds
+	x.raw, x.inbounds, x.rules = append(json.RawMessage(nil), raw...), inbounds, rules
 	if len(inbounds) == 0 {
 		x.log.Info("no inbounds assigned to xray; stopped")
 		return nil
@@ -388,7 +417,7 @@ func (x *xrayCore) apply(raw json.RawMessage) error {
 		return nil
 	}
 
-	x.raw, x.inbounds = prevRaw, prevInbounds
+	x.raw, x.inbounds, x.rules = prevRaw, prevInbounds, prevRules
 	if len(prevInbounds) == 0 {
 		return startErr
 	}
@@ -412,7 +441,7 @@ func (x *xrayCore) startLocked() error {
 	for _, in := range x.inbounds {
 		users[in.Tag] = x.want[in.Tag]
 	}
-	cfg, err := buildXrayConfig(x.inbounds, users, apiAddr)
+	cfg, err := buildXrayConfig(x.inbounds, x.rules, users, apiAddr)
 	if err != nil {
 		return err
 	}
@@ -454,6 +483,7 @@ func (x *xrayCore) startLocked() error {
 	}
 
 	x.proc = p
+	x.blocked = map[string]string{}
 	x.live = map[string]map[string]proto.User{}
 	for tag, list := range users {
 		m := make(map[string]proto.User, len(list))
@@ -659,6 +689,114 @@ func (x *xrayCore) online(ctx context.Context) ([]string, error) {
 	}
 	return p.api.OnlineUsers(ctx)
 }
+
+// conns lists who is connected to Xray from where, one entry per user and
+// source address — Xray counts addresses, not connections. The IDs are not
+// connections either: nothing can close an Xray connection from outside, so
+// the address limit blocks the address instead (setBlocks).
+func (x *xrayCore) conns(ctx context.Context) ([]conn, error) {
+	x.mu.Lock()
+	p := x.proc
+	x.mu.Unlock()
+	if p == nil {
+		return nil, nil
+	}
+	users, err := p.api.OnlineUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []conn
+	for _, user := range users {
+		ips, err := p.api.OnlineIPs(ctx, user)
+		if err != nil {
+			return nil, err
+		}
+		for raw := range ips {
+			addr, ok := xrayAddr(raw)
+			if !ok {
+				continue
+			}
+			ip := addr.String()
+			out = append(out, conn{ID: xrayConnPrefix + user + "|" + ip, User: user, IP: ip})
+		}
+	}
+	return out, nil
+}
+
+// xrayConnPrefix marks a conn that came from Xray rather than sing-box.
+const xrayConnPrefix = "xray|"
+
+// xrayAddr reads an address as Xray writes it — IPv6 in brackets — into the
+// form sing-box's connections use, so one client is one address whichever
+// core it reached.
+func xrayAddr(s string) (netip.Addr, bool) {
+	addr, err := netip.ParseAddr(strings.Trim(s, "[]"))
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return addr.Unmap(), true
+}
+
+// setBlocks makes Xray refuse new connections from the addresses each user
+// is over their limit with, and accept them again once they are not. One
+// routing rule per user, replaced when the set changes.
+//
+// This is coarser than what sing-box gets: a connection already open from a
+// blocked address carries on until it closes by itself. New ones — and a
+// client reconnects all the time — are refused.
+func (x *xrayCore) setBlocks(ctx context.Context, over map[string]map[string]bool) {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if x.proc == nil {
+		return
+	}
+	api := x.proc.api
+
+	want := map[string]string{}
+	addrs := map[string][]netip.Addr{}
+	for user, ips := range over {
+		var list []netip.Addr
+		for ip := range ips {
+			if a, err := netip.ParseAddr(ip); err == nil {
+				list = append(list, a)
+			}
+		}
+		if len(list) == 0 {
+			continue
+		}
+		sort.Slice(list, func(i, j int) bool { return list[i].Less(list[j]) })
+		key := make([]string, len(list))
+		for i, a := range list {
+			key[i] = a.String()
+		}
+		want[user] = strings.Join(key, ",")
+		addrs[user] = list
+	}
+
+	for user, key := range x.blocked {
+		if want[user] == key {
+			continue
+		}
+		if err := api.RemoveRule(ctx, xrayLimitRuleTag(user)); err != nil {
+			x.log.Warn("unblock addresses over the limit", "user", user, "error", err)
+			continue
+		}
+		delete(x.blocked, user)
+	}
+	for user, key := range want {
+		if _, ok := x.blocked[user]; ok {
+			continue
+		}
+		if err := api.BlockSources(ctx, xrayLimitRuleTag(user), user, addrs[user]); err != nil {
+			x.log.Warn("block addresses over the limit", "user", user, "error", err)
+			continue
+		}
+		x.blocked[user] = key
+		x.log.Info("blocked addresses over the limit", "user", user, "addresses", key)
+	}
+}
+
+func xrayLimitRuleTag(user string) string { return "veyra-ip-limit:" + user }
 
 func (x *xrayCore) close() {
 	x.mu.Lock()
