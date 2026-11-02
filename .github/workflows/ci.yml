@@ -78,11 +78,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           sh -n install.sh && sh -n install-node.sh && sh -n install-panel-and-node.sh
+          sh -n node/deploy/build-xray.sh
           bash -n panel/deploy/install-panel.sh && bash -n node/deploy/install-node.sh
           bash -n deploy/veyra-menu.sh
       - run: python3 tests/test_same_host_upgrade.py
       - run: python3 tests/test_panel_unit_args.py
       - run: python3 tests/test_release_download.py
+      - run: python3 tests/test_node_xray_install.py
 
   # Every push to main that passes the tests becomes a release with prebuilt
   # binaries, so installing or upgrading a node downloads one instead of
@@ -139,6 +141,14 @@ jobs:
             CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -tags "$NODE_TAGS" \
               -ldflags "-s -w -X main.version=$ver -X github.com/sagernet/sing-box/constant.Version=$core" \
               -o "$GITHUB_WORKSPACE/dist/veyra-node-linux-$arch" ./cmd/node
+          done
+      # The Xray the node runs beside sing-box, shipped with each release so
+      # installing it is a download like the node itself.
+      - name: build xray
+        working-directory: veyra/node
+        run: |
+          for arch in amd64 arm64; do
+            GOARCH=$arch deploy/build-xray.sh "$GITHUB_WORKSPACE/dist/veyra-xray-linux-$arch"
           done
 
       - run: ls -l dist

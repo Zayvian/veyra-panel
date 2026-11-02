@@ -201,6 +201,16 @@
 
 所有密钥、short id、Shadowsocks 的服务端密钥都自动生成。
 
+### 由 Xray 承载的入站
+
+协议菜单里的「vless（Xray）」和「vless-xhttp（Xray）」由节点上的 Xray 承载，其余协议仍由 sing-box 承载，两个内核在同一台节点上同时运行，各占各的端口。
+
+- **vless（Xray）**：VLESS + Reality + Vision，客户端看来和普通的 VLESS Reality 一样。适合想和 sing-box 的 VLESS Reality 对比效果时用。
+- **vless-xhttp（Xray）**：VLESS + Reality + XHTTP。路径自动生成。Clash Verge / mihomo、v2rayN、小火箭等支持 XHTTP 的客户端可以用；sing-box 不支持 XHTTP，所以 sing-box 格式的订阅里不会出现这个入站。
+- 流量统计、同时在线 IP 限制、服务端策略（屏蔽 BT、测速站点、自定义域名）对 Xray 入站同样生效。同时在线 IP 按用户合计两个内核。区别是 Xray 没法断开已有连接：超出上限的 IP 是被拒绝新连接，已有的连接会自然结束。
+- 安装脚本会把 Xray 一起装在 `/opt/skysbx/xray`，`--upgrade` 时一并升级。节点没有 Xray 时（例如老版本节点还没升级），入站列表会标出「节点没有 Xray」，这些入站不会运行，其他入站不受影响。
+- 修改 Xray 入站只会重启 Xray，只断开 Xray 入站上的连接。
+
 ### 通用字段
 
 - **tag（入站名称）**：客户端里显示的名字，例如「香港 01」，支持中文，整个面板内不能重复。
