@@ -34,12 +34,19 @@ func main() {
 			"log level: debug, info, warn, error")
 		envFile = flag.String("env-file", envOr("SKYSBX_ENV_FILE", "node.env"),
 			"environment file holding SKYSBX_PANEL; rewritten when the panel moves to a new domain")
+		xrayPath = flag.String("xray", envOr("SKYSBX_XRAY", ""),
+			"Xray binary for inbounds the panel assigns to Xray; default: beside this binary, then PATH; \"off\" to disable")
 		showVersion = flag.Bool("version", false, "print the version and exit")
 	)
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Printf("veyra-node %s (sing-box %s)\n", version, engine.New(nil).SingboxVersion())
+		eng := engine.New(nil)
+		line := fmt.Sprintf("veyra-node %s (sing-box %s", version, eng.SingboxVersion())
+		if err := eng.UseXray(*xrayPath); err == nil && eng.XrayVersion() != "" {
+			line += ", xray " + eng.XrayVersion()
+		}
+		fmt.Println(line + ")")
 		return
 	}
 
@@ -55,6 +62,11 @@ func main() {
 
 	eng := engine.New(log)
 	defer eng.Close()
+	// A broken Xray costs the node its Xray inbounds, not everything else: it
+	// then serves sing-box alone and does not offer xray to the panel.
+	if err := eng.UseXray(*xrayPath); err != nil {
+		log.Error("xray unavailable; serving sing-box inbounds only", "error", err)
+	}
 
 	client, err := link.New(link.Config{
 		PanelURL: *panelURL,
@@ -72,7 +84,8 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	log.Info("starting", "version", version, "sing-box", eng.SingboxVersion(), "panel", *panelURL)
+	log.Info("starting", "version", version, "sing-box", eng.SingboxVersion(),
+		"xray", eng.XrayVersion(), "panel", *panelURL)
 	if err := porthop.CleanupStale(); err != nil {
 		log.Error("clean up stale hopping rules", "error", err)
 		os.Exit(1)

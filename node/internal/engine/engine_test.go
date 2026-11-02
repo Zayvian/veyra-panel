@@ -22,7 +22,7 @@ func TestAFailedStartRestoresThePreviousConfiguration(t *testing.T) {
 
 	good := freePort(t)
 	cfg := configWithShadowsocks(t, good)
-	if err := e.ApplyConfig(context.Background(), cfg); err != nil {
+	if err := e.ApplyConfig(context.Background(), cfg, nil); err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
 	waitListening(t, good, true)
@@ -31,7 +31,7 @@ func TestAFailedStartRestoresThePreviousConfiguration(t *testing.T) {
 	taken, release := heldPort(t)
 	defer release()
 
-	err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, taken))
+	err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, taken), nil)
 	if err == nil {
 		t.Fatal("applying a configuration on a taken port succeeded")
 	}
@@ -50,7 +50,7 @@ func TestABuildFailureLeavesTheRunningInstanceAlone(t *testing.T) {
 	defer e.Close()
 
 	good := freePort(t)
-	if err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, good)); err != nil {
+	if err := e.ApplyConfig(context.Background(), configWithShadowsocks(t, good), nil); err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
 
@@ -58,7 +58,7 @@ func TestABuildFailureLeavesTheRunningInstanceAlone(t *testing.T) {
 		"listen_port":%d,"tls":{"enabled":true,"server_name":"example.com",
 		"certificate_path":"/nonexistent/cert.pem","key_path":"/nonexistent/key.pem"}}]}`,
 		freePort(t))
-	if err := e.ApplyConfig(context.Background(), json.RawMessage(bad)); err == nil {
+	if err := e.ApplyConfig(context.Background(), json.RawMessage(bad), nil); err == nil {
 		t.Fatal("applying a configuration with a missing certificate succeeded")
 	}
 	if !e.running {

@@ -55,7 +55,7 @@ func TestHysteria2WithObfsAndMasquerade(t *testing.T) {
 	e := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
 	defer e.Close()
 	ctx := context.Background()
-	if err := e.ApplyConfig(ctx, raw); err != nil {
+	if err := e.ApplyConfig(ctx, raw, nil); err != nil {
 		t.Fatalf("the node refused the panel's Hysteria2 config: %v", err)
 	}
 	alice := proto.User{Name: "alice", Password: "alice-password"}

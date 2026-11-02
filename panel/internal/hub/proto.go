@@ -50,6 +50,9 @@ const (
 	// CapPanelURL: the panel may tell a node that dialled an old domain where
 	// to find it now, and the node switches over and remembers it.
 	CapPanelURL = "panel_url"
+	// CapXray: the node runs Xray beside sing-box and accepts an xray part in
+	// config. A node offers it only when it has an Xray binary.
+	CapXray = "xray"
 )
 
 // PanelCaps is what this panel offers in its welcome.
@@ -81,6 +84,8 @@ type Hello struct {
 	Arch           string `json:"arch"`
 	Hostname       string `json:"hostname"`
 	SingboxVersion string `json:"singbox_version"`
+	// XrayVersion is empty on a node without Xray.
+	XrayVersion string `json:"xray_version,omitempty"`
 
 	// Proto and Caps are absent from nodes older than protocol 2.
 	Proto int      `json:"proto,omitempty"`
@@ -103,6 +108,11 @@ type ConfigData struct {
 	// tells a configuration that took effect from one still pending or refused.
 	Rev    string          `json:"rev,omitempty"`
 	Config *singbox.Config `json:"config"`
+
+	// Xray is the part of the node's inbounds served by Xray instead of
+	// sing-box: `{"inbounds": [...]}` in Xray's format, client lists empty.
+	// Sent only to a node that offered xray; absent means none.
+	Xray json.RawMessage `json:"xray,omitempty"`
 }
 
 // UsersData is the authoritative user list keyed by inbound tag. It replaces

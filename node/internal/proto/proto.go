@@ -50,9 +50,14 @@ const (
 	// CapPanelURL: the panel may name a new address for itself, which the node
 	// checks, remembers and reconnects to. See protocol/PROTOCOL.md.
 	CapPanelURL = "panel_url"
+	// CapXray: this node can run Xray beside sing-box, and config may carry
+	// an xray part. Offered only when an Xray binary was found, so a panel
+	// never sends Xray inbounds to a node that would have to refuse them.
+	CapXray = "xray"
 )
 
-// NodeCaps is what this node offers in its hello.
+// NodeCaps is what every node offers in its hello. CapXray is added to it at
+// connect time when this node has Xray.
 var NodeCaps = []string{CapStatsAck, CapConfigRev, CapPanelURL}
 
 // PanelURLData is the panel's new base URL, after its domain was changed.
@@ -80,6 +85,8 @@ type Hello struct {
 	Arch           string `json:"arch"`
 	Hostname       string `json:"hostname"`
 	SingboxVersion string `json:"singbox_version"`
+	// XrayVersion is empty on a node without Xray.
+	XrayVersion string `json:"xray_version,omitempty"`
 
 	Proto int      `json:"proto,omitempty"`
 	Caps  []string `json:"caps,omitempty"`
@@ -118,6 +125,12 @@ type ConfigData struct {
 	// Rev identifies the configuration; echoed back in state under config_rev.
 	Rev    string          `json:"rev,omitempty"`
 	Config json.RawMessage `json:"config"`
+
+	// Xray holds the inbounds this node serves through Xray rather than
+	// sing-box, under xray: `{"inbounds": [...]}` in Xray's own format, with
+	// empty client lists. Absent means none. Users for these inbounds arrive
+	// in the same users message as everyone else's, keyed by tag.
+	Xray json.RawMessage `json:"xray,omitempty"`
 }
 
 // UsersData is the authoritative user list per inbound tag. It replaces

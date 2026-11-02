@@ -57,7 +57,7 @@ func TestQUICHotSwapAndRevocation(t *testing.T) {
 			raw := json.RawMessage(fmt.Sprintf(`{"log":{"level":"error"},"inbounds":[{"type":%q,"tag":"quic","listen":"127.0.0.1","listen_port":%d,"tls":{"enabled":true,"server_name":"localhost","alpn":["h3"],"certificate_path":%q,"key_path":%q}}],"outbounds":[{"type":"direct","tag":"direct"}],"experimental":{"clash_api":{"external_controller":"127.0.0.1:9090"},"v2ray_api":{"listen":"127.0.0.1:6450","stats":{"enabled":true}}}}`, protocol, port, cert, key))
 			e := New(slog.New(slog.NewTextHandler(io.Discard, nil)))
 			defer e.Close()
-			if err := e.ApplyConfig(ctx, raw); err != nil {
+			if err := e.ApplyConfig(ctx, raw, nil); err != nil {
 				t.Fatal(err)
 			}
 			alice := proto.User{Name: "alice", UUID: "d7c78a62-4d10-4ecf-a4c4-1931745a98b8", Password: "alice-password"}
