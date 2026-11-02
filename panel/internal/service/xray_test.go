@@ -243,3 +243,58 @@ func TestConfigRevWithoutXrayIsUnchanged(t *testing.T) {
 		t.Errorf("revs with an xray inbound: without xray %s, with %s; want %s and something else", without, with, want)
 	}
 }
+
+// The server policy reaches Xray inbounds too: sniffing on the inbounds and
+// rules that send what it blocks to the node's block outbound.
+func TestPolicyReachesXray(t *testing.T) {
+	svc, node, _ := relayFixture(t)
+	mustInbound(t, svc, node, InboundSpec{Protocol: store.ProtoVLESS, Core: store.CoreXray, Port: 443})
+
+	plain, err := svc.NodeXrayConfig(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(plain), "sniffing") || strings.Contains(string(plain), "routing") {
+		t.Fatalf("xray part without a policy = %s", plain)
+	}
+
+	if err := svc.SetPolicy(Policy{BlockBitTorrent: true, BlockSpeedtest: true,
+		BlockedDomains: []string{"example.net"}}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := svc.NodeXrayConfig(node)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var part struct {
+		Inbounds []struct {
+			Sniffing *struct {
+				Enabled      bool     `json:"enabled"`
+				DestOverride []string `json:"destOverride"`
+				RouteOnly    bool     `json:"routeOnly"`
+			} `json:"sniffing"`
+		} `json:"inbounds"`
+		Routing struct {
+			Rules []struct {
+				Protocol    []string `json:"protocol"`
+				Domain      []string `json:"domain"`
+				OutboundTag string   `json:"outboundTag"`
+			} `json:"rules"`
+		} `json:"routing"`
+	}
+	if err := json.Unmarshal(raw, &part); err != nil {
+		t.Fatal(err)
+	}
+	s := part.Inbounds[0].Sniffing
+	if s == nil || !s.Enabled || !s.RouteOnly || strings.Join(s.DestOverride, ",") != "http,tls,quic" {
+		t.Errorf("sniffing = %+v", s)
+	}
+	rules := part.Routing.Rules
+	if len(rules) != 2 || rules[0].Protocol[0] != "bittorrent" || rules[0].OutboundTag != "block" {
+		t.Fatalf("rules = %+v", rules)
+	}
+	d := rules[1].Domain
+	if rules[1].OutboundTag != "block" || d[0] != "domain:speedtest.net" || d[len(d)-1] != "domain:example.net" {
+		t.Errorf("domain rule = %+v", rules[1])
+	}
+}

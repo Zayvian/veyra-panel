@@ -49,6 +49,11 @@ type limiter struct {
 	mu     sync.Mutex
 	limits map[string]int             // user -> max distinct addresses
 	seen   map[string]map[string]slot // user -> address -> when it was first and last seen
+
+	// over is the last enforce's verdict: per user, the addresses beyond
+	// the limit. Xray cannot close connections, so for its inbounds the node
+	// blocks these addresses instead, and needs them by address.
+	over map[string]map[string]bool
 }
 
 type slot struct {
@@ -131,6 +136,7 @@ func (l *limiter) enforce(conns []conn, now time.Time) (close []string, counts m
 		}
 	}
 
+	l.over = map[string]map[string]bool{}
 	counts = make(map[string]int, len(live))
 	for user, ips := range live {
 		counts[user] = len(ips)
@@ -162,6 +168,7 @@ func (l *limiter) enforce(conns []conn, now time.Time) (close []string, counts m
 		for _, e := range entries[limit:] {
 			over[e.ip] = true
 		}
+		l.over[user] = over
 		for _, c := range conns {
 			if c.User == user && over[c.IP] {
 				close = append(close, c.ID)
@@ -169,6 +176,23 @@ func (l *limiter) enforce(conns []conn, now time.Time) (close []string, counts m
 		}
 	}
 	return close, counts
+}
+
+// overAddrs is a copy of the addresses the last enforce found over each user's
+// limit — including ones with nothing open at that moment, which still hold
+// their place in the order until their grace runs out.
+func (l *limiter) overAddrs() map[string]map[string]bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := make(map[string]map[string]bool, len(l.over))
+	for user, ips := range l.over {
+		m := make(map[string]bool, len(ips))
+		for ip := range ips {
+			m[ip] = true
+		}
+		out[user] = m
+	}
+	return out
 }
 
 // forget drops everything remembered about users that no longer exist, so a
@@ -297,23 +321,46 @@ func (e *Engine) closeConnection(_ context.Context, id string) error {
 // Called on a timer rather than per connection: sing-box has no hook that fires
 // as one is accepted, and polling a few seconds apart is enough to make a
 // shared subscription useless without spending anything per connection.
+//
+// The limit is per user across both cores: an address counts once whether it
+// reached a sing-box inbound or an Xray one. Xray's connections cannot be
+// closed one by one, so its share of the verdict is a block on the address.
 func (e *Engine) EnforceIPLimits(ctx context.Context) (map[string]int, map[string]proto.Activity, error) {
 	conns, err := e.connections(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	// Sampled before anything is closed: what the panel is shown is what the
-	// user was doing, not what was left of it afterwards.
+	// user was doing, not what was left of it afterwards. sing-box's only:
+	// Xray reports addresses, not connections or where they go.
 	acts := activity(conns)
 
+	xctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	xconns, err := e.x.conns(xctx)
+	if err != nil {
+		// Without them the limit is applied to sing-box's connections alone
+		// this round, which is better than to none.
+		e.log.Debug("read xray connections", "error", err)
+	}
+	conns = append(conns, xconns...)
+
 	toClose, counts := e.limits.enforce(conns, time.Now())
+	if err == nil {
+		e.x.setBlocks(xctx, e.limits.overAddrs())
+	}
+	closed := 0
 	for _, id := range toClose {
+		if strings.HasPrefix(id, xrayConnPrefix) {
+			continue // blocked above
+		}
 		if err := e.closeConnection(ctx, id); err != nil {
 			e.log.Debug("close connection over the address limit", "id", id, "error", err)
 		}
+		closed++
 	}
-	if len(toClose) > 0 {
-		e.log.Info("closed connections over the address limit", "connections", len(toClose))
+	if closed > 0 {
+		e.log.Info("closed connections over the address limit", "connections", closed)
 	}
 	return counts, acts, nil
 }

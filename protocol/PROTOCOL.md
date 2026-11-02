@@ -73,8 +73,9 @@
 
 节点找到了 Xray 程序时，才在 `hello` 里写 `xray_version` 并提供 `xray` 能力。面板只给提供了 `xray` 的节点发 Xray 入站。
 
-- `config.xray` 是 `{"inbounds": [...]}`，入站用 Xray 自己的配置格式，`settings.clients` 为空。目前只接受 `protocol: "vless"`。
-- API、统计、在线计数和出站由节点自己补上，面板不用管。
+- `config.xray` 是 `{"inbounds": [...], "routing": {"rules": [...]}}`，入站用 Xray 自己的配置格式，`settings.clients` 为空。目前只接受 `protocol: "vless"`。`routing` 可省略，是服务端策略翻译成的 Xray 路由规则，丢弃的流量写 `outboundTag: "block"`。
+- API、统计、在线计数和出站（`direct` 和 `block`）由节点自己补上，面板不用管。
+- `ip_limits` 对 Xray 入站同样生效，按用户合计两个内核的在线 IP。Xray 没法断开已有连接，所以超出上限的 IP 是被拒绝新连接（节点给每个超限用户加一条 `veyra-ip-limit:<用户名>` 路由规则），已有连接自然结束；回到上限以内就撤掉规则。
 - 用户照旧走 `users` 消息，按入站 tag 下发；Xray 入站的 tag 也在 `by_tag` 里。节点用 Xray 的 API 加减用户，不影响其他人的连接。用户名就是 Xray 里的 email。
 - 节点先用 `xray run -test` 检查 `xray` 部分，不通过就整份配置都不应用。`xray` 部分变化会重启 Xray，只断开 Xray 入站上的连接；新进程起不来就恢复上一份。
 - `state.inbounds` 包含 Xray 正在跑的入站。`stats` 和 `online` 是两个内核合计的结果。

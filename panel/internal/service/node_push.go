@@ -102,7 +102,8 @@ func (s *Service) NodeConfig(nodeID int64) (*singbox.Config, error) {
 }
 
 // NodeXrayConfig builds the part of a node's configuration Xray serves:
-// `{"inbounds": [...]}` in Xray's format, or nil when the node has no enabled
+// `{"inbounds": [...], "routing": {"rules": [...]}}` in Xray's format, the
+// routing only when the policy blocks something, or nil when the node has no enabled
 // Xray inbound — which is every node that has not been given one.
 //
 // Sent only to a node that offered xray. One that did not either has no Xray
@@ -120,6 +121,11 @@ func (s *Service) NodeXrayConfig(nodeID int64) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+	policy, err := s.Policy()
+	if err != nil {
+		return nil, err
+	}
+	sniff, rules := policy.xrayPolicy()
 	var out []json.RawMessage
 	for _, in := range inbounds {
 		if !in.Enabled || in.Core != store.CoreXray {
@@ -129,7 +135,7 @@ func (s *Service) NodeXrayConfig(nodeID int64) (json.RawMessage, error) {
 		if err != nil {
 			return nil, err
 		}
-		x, err := xrayInbound(sb)
+		x, err := xrayInbound(sb, sniff)
 		if err != nil {
 			return nil, err
 		}
@@ -138,9 +144,17 @@ func (s *Service) NodeXrayConfig(nodeID int64) (json.RawMessage, error) {
 	if len(out) == 0 {
 		return nil, nil
 	}
-	return json.Marshal(struct {
+	type routing struct {
+		Rules []xrayRule `json:"rules"`
+	}
+	part := struct {
 		Inbounds []json.RawMessage `json:"inbounds"`
-	}{out})
+		Routing  *routing          `json:"routing,omitempty"`
+	}{Inbounds: out}
+	if len(rules) > 0 {
+		part.Routing = &routing{rules}
+	}
+	return json.Marshal(part)
 }
 
 // NodeUsers builds the authoritative user list for one node, keyed by inbound

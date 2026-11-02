@@ -3,11 +3,15 @@ package engine
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"strings"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
@@ -50,6 +54,8 @@ func (a *xrayAPI) call(ctx context.Context, method string, req []byte) ([]byte, 
 const (
 	xrayHandlerService = "/xray.app.proxyman.command.HandlerService/"
 	xrayStatsService   = "/xray.app.stats.command.StatsService/"
+	xrayRoutingService = "/xray.app.router.command.RoutingService/"
+	xrayRouterConfig   = "xray.app.router.Config"
 
 	xrayAddUserOp    = "xray.app.proxyman.command.AddUserOperation"
 	xrayRemoveUserOp = "xray.app.proxyman.command.RemoveUserOperation"
@@ -162,6 +168,104 @@ func (a *xrayAPI) OnlineUsers(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("decode GetAllOnlineUsersResponse: %w", err)
 	}
 	return out, nil
+}
+
+// OnlineIPs lists the source addresses a user has live connections from, with
+// when each was last seen. A user Xray has never seen online is not an error:
+// they simply have none.
+func (a *xrayAPI) OnlineIPs(ctx context.Context, user string) (map[string]time.Time, error) {
+	// GetStatsRequest { string name = 1; bool reset = 2; }
+	var req []byte
+	req = appendString(req, 1, userPrefix+user+">>>online")
+	resp, err := a.call(ctx, xrayStatsService+"GetStatsOnlineIpList", req)
+	if status.Code(err) == codes.NotFound {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	// GetStatsOnlineIpListResponse { string name = 1; map<string, int64> ips = 2; }
+	// A map entry is a message { string key = 1; int64 value = 2; }.
+	out := map[string]time.Time{}
+	err = eachField(resp, func(num protowire.Number, typ protowire.Type, v []byte, _ uint64) error {
+		if num != 2 || typ != protowire.BytesType {
+			return nil
+		}
+		var ip string
+		var seen int64
+		err := eachField(v, func(num protowire.Number, typ protowire.Type, v []byte, n uint64) error {
+			switch {
+			case num == 1 && typ == protowire.BytesType:
+				ip = string(v)
+			case num == 2 && typ == protowire.VarintType:
+				seen = int64(n)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		if ip != "" {
+			out[ip] = time.Unix(seen, 0)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("decode GetStatsOnlineIpListResponse: %w", err)
+	}
+	return out, nil
+}
+
+// BlockSources adds a routing rule, named ruleTag, that sends every new
+// connection of user from one of addrs to the node's block outbound.
+// Connections already open are not affected: Xray has no way to close one
+// from outside.
+func (a *xrayAPI) BlockSources(ctx context.Context, ruleTag, user string, addrs []netip.Addr) error {
+	// RoutingRule { string tag = 1; repeated GeoIP source_geoip = 11;
+	//               repeated string user_email = 7; string rule_tag = 19; }
+	// GeoIP { repeated CIDR cidr = 2; }  CIDR { bytes ip = 1; uint32 prefix = 2; }
+	var geoip []byte
+	for _, addr := range addrs {
+		ip := addr.Unmap().AsSlice()
+		var cidr []byte
+		cidr = protowire.AppendTag(cidr, 1, protowire.BytesType)
+		cidr = protowire.AppendBytes(cidr, ip)
+		cidr = protowire.AppendTag(cidr, 2, protowire.VarintType)
+		cidr = protowire.AppendVarint(cidr, uint64(len(ip)*8))
+		geoip = appendMessage(geoip, 2, cidr)
+	}
+	var rule []byte
+	rule = appendString(rule, 1, xrayBlockOutbound)
+	rule = appendString(rule, 7, user)
+	rule = appendMessage(rule, 11, geoip)
+	rule = appendString(rule, 19, ruleTag)
+
+	// router.Config { repeated RoutingRule rule = 2; }
+	var cfg []byte
+	cfg = appendMessage(cfg, 2, rule)
+
+	// AddRuleRequest { TypedMessage config = 1; bool shouldAppend = 2; }
+	// Appended: the rules already there are the panel's policy, which only
+	// blocks, so nothing ahead of this rule can let the address through.
+	var req []byte
+	req = appendMessage(req, 1, typedMessage(xrayRouterConfig, cfg))
+	req = protowire.AppendTag(req, 2, protowire.VarintType)
+	req = protowire.AppendVarint(req, 1)
+	_, err := a.call(ctx, xrayRoutingService+"AddRule", req)
+	return err
+}
+
+// RemoveRule removes the routing rule named ruleTag. One that is not there is
+// already removed.
+func (a *xrayAPI) RemoveRule(ctx context.Context, ruleTag string) error {
+	// RemoveRuleRequest { string ruleTag = 1; }
+	var req []byte
+	req = appendString(req, 1, ruleTag)
+	_, err := a.call(ctx, xrayRoutingService+"RemoveRule", req)
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		return nil
+	}
+	return err
 }
 
 // typedMessage encodes Xray's TypedMessage { string type = 1; bytes value = 2; },

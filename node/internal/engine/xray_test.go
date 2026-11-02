@@ -25,12 +25,12 @@ func TestXrayFragmentAcceptsVLESSOnly(t *testing.T) {
 		"duplicate tag": `{"inbounds":[{"tag":"a","protocol":"vless"},{"tag":"a","protocol":"vless"}]}`,
 		"not json":      `{"inbounds":`,
 	} {
-		if _, err := parseXrayFragment(json.RawMessage(raw)); err == nil {
+		if _, _, err := parseXrayFragment(json.RawMessage(raw)); err == nil {
 			t.Errorf("%s: accepted %s", name, raw)
 		}
 	}
 	for _, raw := range []string{"", "null", `{"inbounds":[]}`} {
-		in, err := parseXrayFragment(json.RawMessage(raw))
+		in, _, err := parseXrayFragment(json.RawMessage(raw))
 		if err != nil || len(in) != 0 {
 			t.Errorf("%q: got %v, %v; want nothing to serve", raw, in, err)
 		}
@@ -39,13 +39,13 @@ func TestXrayFragmentAcceptsVLESSOnly(t *testing.T) {
 
 // The panel's inbound reaches Xray exactly as sent, with the users filled in.
 func TestXrayConfigKeepsThePanelsSettings(t *testing.T) {
-	in, err := parseXrayFragment(json.RawMessage(`{"inbounds":[{"tag":"x","protocol":"vless","port":2053,
+	in, _, err := parseXrayFragment(json.RawMessage(`{"inbounds":[{"tag":"x","protocol":"vless","port":2053,
 		"settings":{"decryption":"none","fallbacks":[]},
 		"streamSettings":{"network":"xhttp","xhttpSettings":{"path":"/p"}}}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := buildXrayConfig(in, map[string][]proto.User{
+	raw, err := buildXrayConfig(in, nil, map[string][]proto.User{
 		"x": {{Name: "alice", UUID: "6f1c7a52-2c43-4e8e-9d0b-6d6d1c1f0a11", Flow: "xtls-rprx-vision"}},
 	}, "127.0.0.1:9")
 	if err != nil {
@@ -292,11 +292,19 @@ func checkOnlineNames(t *testing.T, e *Engine) {
 // SOCKS address.
 func xrayClient(t *testing.T, serverPort int, id string) string {
 	t.Helper()
+	return xrayClientFrom(t, serverPort, id, "127.0.0.1")
+}
+
+// xrayClientFrom is xrayClient connecting from a chosen loopback address, so
+// one test can be several clients. Xray leaves 127.0.0.1 out of its online
+// addresses, so address-limit tests use others in 127.0.0.0/8.
+func xrayClientFrom(t *testing.T, serverPort int, id, source string) string {
+	t.Helper()
 	socks := freePort(t)
 	cfg := fmt.Sprintf(`{"log":{"loglevel":"none"},
 		"inbounds":[{"listen":"127.0.0.1","port":%d,"protocol":"socks","settings":{"udp":false}}],
-		"outbounds":[{"protocol":"vless","settings":{"vnext":[{"address":"127.0.0.1","port":%d,
-			"users":[{"id":%q,"encryption":"none"}]}]}}]}`, socks, serverPort, id)
+		"outbounds":[{"protocol":"vless","sendThrough":%q,"settings":{"vnext":[{"address":"127.0.0.1","port":%d,
+			"users":[{"id":%q,"encryption":"none"}]}]}}]}`, socks, source, serverPort, id)
 	path := filepath.Join(t.TempDir(), "client.json")
 	if err := os.WriteFile(path, []byte(cfg), 0o600); err != nil {
 		t.Fatal(err)
@@ -395,4 +403,95 @@ func echoOver(c net.Conn, n int) error {
 		return err
 	}
 	return nil
+}
+
+// The address limit covers Xray inbounds: a second address over the limit is
+// refused new connections while the first keeps working, and is let back in
+// when the limit allows it.
+func TestXrayAddressLimit(t *testing.T) {
+	e := xrayEngine(t)
+	ctx := context.Background()
+	echo := echoServer(t)
+	port := freePort(t)
+	if err := e.ApplyConfig(ctx, configWithShadowsocks(t, freePort(t)), xrayVLESS(t, "vx", port)); err != nil {
+		t.Fatal(err)
+	}
+	users := func(limit int) proto.UsersData {
+		return proto.UsersData{
+			ByTag:      map[string][]proto.User{"vx": {{Name: "alice", UUID: aliceID}}},
+			StatsUsers: []string{"alice"},
+			IPLimits:   map[string]int{"alice": limit},
+		}
+	}
+	if err := e.UpdateUsers(ctx, users(1)); err != nil {
+		t.Fatal(err)
+	}
+
+	first := xrayClientFrom(t, port, aliceID, "127.0.0.2")
+	second := xrayClientFrom(t, port, aliceID, "127.0.0.3")
+
+	held := openTunnel(t, first, echo)
+	defer held.Close()
+	if err := echoOver(held, 10); err != nil {
+		t.Fatal(err)
+	}
+	counts, _, err := e.EnforceIPLimits(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts["alice"] != 1 {
+		t.Fatalf("alice's addresses = %d, want 1", counts["alice"])
+	}
+
+	// The second address connects; the next round finds it over the limit.
+	late := openTunnel(t, second, echo)
+	if err := echoOver(late, 10); err != nil {
+		t.Fatalf("second address before the limit was enforced: %v", err)
+	}
+	if counts, _, _ = e.EnforceIPLimits(ctx); counts["alice"] != 2 {
+		t.Fatalf("alice's addresses = %d, want 2", counts["alice"])
+	}
+	late.Close()
+
+	if err := roundTrip(second, echo, 10); err == nil {
+		t.Fatal("the address over the limit still gets new connections through")
+	}
+	if err := roundTrip(first, echo, 10); err != nil {
+		t.Fatalf("the first address lost its place: %v", err)
+	}
+
+	// Raising the limit lets the second address back in.
+	if err := e.UpdateUsers(ctx, users(2)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := e.EnforceIPLimits(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := roundTrip(second, echo, 10); err != nil {
+		t.Fatalf("second address after the limit was raised: %v", err)
+	}
+}
+
+// Routing rules the panel sends with the Xray part are applied: here, one
+// that blocks the echo server's port.
+func TestXrayAppliesThePanelsRoutingRules(t *testing.T) {
+	e := xrayEngine(t)
+	ctx := context.Background()
+	echo := echoServer(t)
+	_, echoPort, _ := net.SplitHostPort(echo)
+	port := freePort(t)
+	frag := fmt.Sprintf(`{"inbounds":[{"tag":"vx","protocol":"vless","listen":"127.0.0.1","port":%d,
+		"settings":{"clients":[],"decryption":"none"}}],
+		"routing":{"rules":[{"type":"field","port":%q,"outboundTag":"block"}]}}`, port, echoPort)
+	if err := e.ApplyConfig(ctx, configWithShadowsocks(t, freePort(t)), json.RawMessage(frag)); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.UpdateUsers(ctx, proto.UsersData{
+		ByTag: map[string][]proto.User{"vx": {{Name: "alice", UUID: aliceID}}}, StatsUsers: []string{"alice"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := roundTrip(xrayClient(t, port, aliceID), echo, 10); err == nil {
+		t.Fatal("a connection the policy blocks got through")
+	}
 }
