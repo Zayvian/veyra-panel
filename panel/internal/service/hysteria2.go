@@ -45,32 +45,18 @@ func RandomMasquerade() string {
 	return MasqueradeCandidates[rand.IntN(len(MasqueradeCandidates))]
 }
 
-// applyHysteria2 sets the two Hysteria2-only options on an inbound and its
-// client parameters.
+// applyHysteria2 sets the Hysteria2-only option on an inbound.
 //
-// Obfs (salamander) disguises every packet so the flow no longer looks like
-// QUIC, for networks that throttle or block QUIC on sight. The password is
-// generated, kept as long as obfs stays on — changing it would cut off every
-// client until it refreshed — and goes in the subscription, because clients
-// need it. Turning obfs on or off on an inbound in use has the same effect, so
-// the form says to add a new inbound instead.
+// There is no salamander obfuscation: it was removed because it did not help
+// where it was meant to. Where QUIC is throttled, it is usually all UDP to
+// the address that is, which obfuscation cannot hide, and with it on the port
+// is no longer a working HTTP/3 site, so the masquerade below stops working.
 //
 // Masquerade is what the port answers to anything that is not a client: the
 // node proxies such requests to a real site, so a browser or a prober sees
 // that site rather than an error naming a proxy. Server-side only; changing it
 // never affects clients.
-func applyHysteria2(in *singbox.Inbound, client *ClientParams, obfs bool, masquerade string) error {
-	switch {
-	case !obfs:
-		in.Obfs = nil
-	case in.Obfs == nil || in.Obfs.Password == "":
-		in.Obfs = &singbox.Obfs{Type: "salamander", Password: NewPassword()}
-	}
-	client.Obfs = ""
-	if in.Obfs != nil {
-		client.Obfs = in.Obfs.Password
-	}
-
+func applyHysteria2(in *singbox.Inbound, masquerade string) error {
 	masquerade = strings.TrimSpace(masquerade)
 	if masquerade == "" {
 		in.Masquerade = nil

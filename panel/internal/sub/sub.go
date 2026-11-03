@@ -49,9 +49,6 @@ type Entry struct {
 	PBK string // Reality public key
 	SID string // Reality short id
 
-	// Obfs is the Hysteria2 salamander password; empty when obfs is off.
-	Obfs string
-
 	// Info marks an entry that is a message, not a node — an announcement or
 	// an account notice. It is listed like any other so the user reads it,
 	// but kept out of automatic selection, which would only measure it as
@@ -156,7 +153,6 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 			FP:          client.FP,
 			PBK:         client.PBK,
 			SID:         client.SID,
-			Obfs:        client.Obfs,
 		}
 
 		switch in.Protocol {

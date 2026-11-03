@@ -40,8 +40,7 @@ type InboundEdit struct {
 	KeyPath    string
 	ServerName string
 
-	// Hysteria2. Obfs keeps its password while it stays on; see applyHysteria2.
-	Obfs       bool
+	// Hysteria2.
 	Masquerade string
 }
 
@@ -131,7 +130,7 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		sb.TLS.KeyPath = e.KeyPath
 		client.SNI = e.ServerName
 		if in.Protocol == store.ProtoHysteria2 {
-			if err := applyHysteria2(&sb, &client, e.Obfs, e.Masquerade); err != nil {
+			if err := applyHysteria2(&sb, e.Masquerade); err != nil {
 				return nil, err
 			}
 		}

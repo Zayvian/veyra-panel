@@ -24,8 +24,6 @@ type clashProxy struct {
 	HopInterval       int      `yaml:"hop-interval,omitempty"`
 	ALPN              []string `yaml:"alpn,omitempty"`
 	CongestionControl string   `yaml:"congestion-controller,omitempty"`
-	Obfs              string   `yaml:"obfs,omitempty"`
-	ObfsPassword      string   `yaml:"obfs-password,omitempty"`
 
 	UUID      string          `yaml:"uuid,omitempty"`
 	Flow      string          `yaml:"flow,omitempty"`
@@ -125,9 +123,6 @@ func Clash(entries []Entry, rulesBase string) ([]byte, error) {
 				p.Ports = e.HopPorts
 				d, _ := time.ParseDuration(e.HopInterval)
 				p.HopInterval = int(d / time.Second)
-			}
-			if e.Protocol == store.ProtoHysteria2 && e.Obfs != "" {
-				p.Obfs, p.ObfsPassword = "salamander", e.Obfs
 			}
 		case store.ProtoShadowsocks:
 			p.Type = "ss"

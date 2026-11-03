@@ -230,7 +230,7 @@ journalctl -u skysbx-node -n 100 --no-pager
 | node online but an inbound shows 「未生效」(not in effect) | port conflicts, certificate path and SNI, the error at the top of the inbounds page |
 | an inbound stuck at 「等待节点应用」(waiting for the node) | configuration errors in the node log; an outdated node |
 | Hysteria2 / TUIC cannot connect | **UDP** allowed in the firewall, a valid certificate; for hopping, the whole range allowed |
-| Hysteria2 flaky, frequent timeouts | the customer's network may interfere with QUIC: add a Hysteria2 inbound with obfs on |
+| Hysteria2 flaky, frequent timeouts | check a TCP protocol (Reality) on the same node: if it works, the customer's network is throttling UDP, so have them use a TCP protocol; if it fails too, it is the address or the server |
 | a customer's subscription has no usable nodes | is the user disabled, expired, out of traffic; their allowed inbounds; disabled nodes or inbounds |
 | customers keep getting disconnected | a low concurrent-IP limit (phones change address when switching networks) |
 | a renamed entry still shows the old name | the client needs to update the subscription |
