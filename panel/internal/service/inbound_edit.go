@@ -72,6 +72,9 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		if strings.HasPrefix(tag, RelayTagPrefix) {
 			return nil, invalid("inbound tag cannot start with %q; that prefix names relay listeners", RelayTagPrefix)
 		}
+		if strings.HasPrefix(tag, ReservedTagPrefix) {
+			return nil, invalid("inbound tag cannot start with %q; the panel names its own listeners with it", ReservedTagPrefix)
+		}
 	}
 	if e.Port < 1 || e.Port > 65535 {
 		return nil, invalid("port %d out of range", e.Port)

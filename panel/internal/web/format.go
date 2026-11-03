@@ -42,6 +42,13 @@ func templateFuncs() template.FuncMap {
 
 		// Plans: a blank one for the create form, and the reset day in words.
 		"emptyplan": func() *store.Plan { return &store.Plan{} },
+		// exitform is what the exit fields need: the page's menus, and the
+		// exit being edited (a service.Exit) or nil for a new one.
+		"exitform": func(page map[string]any, e any) map[string]any {
+			return map[string]any{
+				"Exit": e, "Kinds": page["Kinds"], "Methods": page["Methods"], "Nodes": page["Nodes"],
+			}
+		},
 		"plandesc":  planResetLabel,
 
 		// csrfField emits the hidden input that posts the CSRF token

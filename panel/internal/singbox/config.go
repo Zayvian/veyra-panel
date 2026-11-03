@@ -17,6 +17,7 @@ type Config struct {
 	Log          *Log          `json:"log,omitempty"`
 	Inbounds     []Inbound     `json:"inbounds"`
 	Outbounds    []Outbound    `json:"outbounds"`
+	DNS          *ServerDNS    `json:"dns,omitempty"`
 	Route        *ServerRoute  `json:"route,omitempty"`
 	Experimental *Experimental `json:"experimental,omitempty"`
 }
@@ -31,6 +32,29 @@ type Config struct {
 // refuses to carry.
 type ServerRoute struct {
 	Rules []ServerRouteRule `json:"rules,omitempty"`
+
+	// DefaultDomainResolver names the DNS server outbounds resolve their own
+	// server addresses with. Set whenever DNS is: with servers configured,
+	// sing-box wants to be told which one that is.
+	DefaultDomainResolver string `json:"default_domain_resolver,omitempty"`
+}
+
+// ServerDNS is the node's resolver. Absent means the system's, which is what
+// every node without a DNS unlock exit gets. Apart from the client's DNS for
+// the same reason ServerRoute is apart from Route.
+type ServerDNS struct {
+	Servers []ServerDNSServer `json:"servers"`
+	// Final is the server for every lookup no rule picks another for.
+	Final string `json:"final,omitempty"`
+}
+
+// ServerDNSServer is one resolver. Type "local" is the system's; "udp" is a
+// plain DNS server, which is what DNS unlock services give out.
+type ServerDNSServer struct {
+	Type       string `json:"type"`
+	Tag        string `json:"tag"`
+	Server     string `json:"server,omitempty"`
+	ServerPort int    `json:"server_port,omitempty"`
 }
 
 // ServerRouteRule matches a connection and says what to do with it. The fields
@@ -59,6 +83,11 @@ type ServerRouteRule struct {
 
 	// Outbound is where action "route" sends the connection.
 	Outbound string `json:"outbound,omitempty"`
+
+	// Server is the DNS server action "resolve" looks the destination up
+	// with. The connection carries on to the rules below with the address it
+	// got, which is how a DNS unlock exit works.
+	Server string `json:"server,omitempty"`
 }
 
 type Log struct {
@@ -170,9 +199,40 @@ type Handshake struct {
 	ServerPort int    `json:"server_port"`
 }
 
+// Outbound is where the node sends a connection: "direct", or one of the
+// proxies a node's unlock routing sends chosen sites through.
 type Outbound struct {
 	Type string `json:"type"`
 	Tag  string `json:"tag"`
+
+	Server     string `json:"server,omitempty"`
+	ServerPort int    `json:"server_port,omitempty"`
+
+	// SOCKS.
+	Version  string `json:"version,omitempty"`
+	Username string `json:"username,omitempty"`
+	// SOCKS and Shadowsocks.
+	Password string `json:"password,omitempty"`
+	// Shadowsocks.
+	Method string `json:"method,omitempty"`
+	// VLESS.
+	UUID string       `json:"uuid,omitempty"`
+	Flow string       `json:"flow,omitempty"`
+	TLS  *OutboundTLS `json:"tls,omitempty"`
+}
+
+// OutboundTLS is the client half of TLS, with Reality.
+type OutboundTLS struct {
+	Enabled    bool             `json:"enabled"`
+	ServerName string           `json:"server_name,omitempty"`
+	UTLS       *UTLS            `json:"utls,omitempty"`
+	Reality    *OutboundReality `json:"reality,omitempty"`
+}
+
+type OutboundReality struct {
+	Enabled   bool   `json:"enabled"`
+	PublicKey string `json:"public_key"`
+	ShortID   string `json:"short_id,omitempty"`
 }
 
 type Experimental struct {

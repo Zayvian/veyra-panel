@@ -58,9 +58,17 @@ func (s *Server) renderNodesFull(w http.ResponseWriter, r *http.Request, code in
 		connected[n.ID] = s.nodes.Connected(n.ID)
 		bareIP[n.ID] = net.ParseIP(strings.TrimSpace(n.Address)) != nil
 	}
+	// How many exits each node sends sites to, beside its inbounds.
+	unlockCounts := map[int64]int{}
+	if u, err := s.svc.Unlock(); err == nil {
+		for id, rules := range u.Nodes {
+			unlockCounts[id] = len(rules)
+		}
+	}
 	data := map[string]any{
 		"Nodes":         nodes,
 		"InboundCounts": counts,
+		"UnlockCounts":  unlockCounts,
 		"Connected":     connected,
 		"Rejected":      rejected,
 		"NewToken":      newToken,
@@ -278,7 +286,7 @@ func (s *Server) renderInboundsFull(w http.ResponseWriter, r *http.Request, node
 	// rather than just 未生效.
 	xrayCapable, xrayKnown := s.nodes.XrayCapable(nodeID)
 	if rev, revKnown := s.nodes.AppliedRev(nodeID); revKnown && applyErr == "" {
-		want, err := s.svc.NodeConfigRev(nodeID, xrayCapable)
+		want, err := s.svc.NodeConfigRev(nodeID, xrayCapable, s.nodes.XrayUnlockCapable(nodeID))
 		if err != nil {
 			s.fail(w, r, err)
 			return

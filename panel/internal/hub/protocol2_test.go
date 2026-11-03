@@ -112,7 +112,7 @@ func TestNewNodeIsWelcomedFirst(t *testing.T) {
 	if err := json.Unmarshal(n.await(TypeConfig, 3*time.Second).Data, &cd); err != nil {
 		t.Fatal(err)
 	}
-	want, err := h.svc.NodeConfigRev(h.node.ID, false)
+	want, err := h.svc.NodeConfigRev(h.node.ID, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestXrayInboundsGoOnlyToNodesWithXray(t *testing.T) {
 		if got := len(cd.Xray) > 0; got != offered {
 			t.Fatalf("offered xray %v: config has an xray part %v (%s)", offered, got, cd.Xray)
 		}
-		want, err := h.svc.NodeConfigRev(h.node.ID, offered)
+		want, err := h.svc.NodeConfigRev(h.node.ID, offered, false)
 		if err != nil {
 			t.Fatal(err)
 		}

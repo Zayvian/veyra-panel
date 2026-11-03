@@ -39,15 +39,16 @@ func ConfigRev(cfg *singbox.Config, xray json.RawMessage) (string, error) {
 
 // NodeConfigRev is the rev of the configuration this node should be running.
 // xray says whether the node is sent its Xray part, which it is only when it
-// offered xray.
-func (s *Service) NodeConfigRev(nodeID int64, xray bool) (string, error) {
+// offered xray, and xrayUnlock whether that part carries the unlock routing
+// (see NodeXrayConfig).
+func (s *Service) NodeConfigRev(nodeID int64, xray, xrayUnlock bool) (string, error) {
 	cfg, err := s.NodeConfig(nodeID)
 	if err != nil {
 		return "", err
 	}
 	var x json.RawMessage
 	if xray {
-		if x, err = s.NodeXrayConfig(nodeID); err != nil {
+		if x, err = s.NodeXrayConfig(nodeID, xrayUnlock); err != nil {
 			return "", err
 		}
 	}
