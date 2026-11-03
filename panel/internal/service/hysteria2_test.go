@@ -14,7 +14,7 @@ import (
 	"github.com/Zayvian/veyra-panel/internal/store"
 )
 
-func TestHysteria2ObfsAndMasquerade(t *testing.T) {
+func TestHysteria2Masquerade(t *testing.T) {
 	svc := newTestService(t)
 	n, _, err := svc.CreateNode("tokyo", "jp.example.com", "JP")
 	if err != nil {
@@ -22,66 +22,50 @@ func TestHysteria2ObfsAndMasquerade(t *testing.T) {
 	}
 	in, err := svc.CreateInbound(n.ID, InboundSpec{
 		Protocol: store.ProtoHysteria2, Tag: "hy2", Port: 8443, ServerName: "jp.example.com",
-		Obfs: true, Masquerade: " https://www.bing.com ",
+		Masquerade: " https://www.bing.com ",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	sb, _ := ParseConfig(in)
-	client, _ := ParseClient(in)
-	if sb.Obfs == nil || sb.Obfs.Type != "salamander" || sb.Obfs.Password == "" {
-		t.Fatalf("obfs = %+v", sb.Obfs)
-	}
-	if client.Obfs != sb.Obfs.Password {
-		t.Fatal("clients are not given the server's obfs password")
-	}
 	if sb.Masquerade == nil || sb.Masquerade.URL != "https://www.bing.com" || !sb.Masquerade.RewriteHost {
 		t.Fatalf("masquerade = %+v", sb.Masquerade)
 	}
-	password := sb.Obfs.Password
-
-	edit := func(obfs bool, masq string) (*store.Inbound, error) {
-		return svc.EditInbound(in.ID, InboundEdit{Port: 8443, ServerName: "jp.example.com",
-			Obfs: obfs, Masquerade: masq})
+	if strings.Contains(in.Config, "obfs") || strings.Contains(in.Client, "obfs") {
+		t.Fatalf("obfuscation in a new inbound: %s / %s", in.Config, in.Client)
 	}
 
-	// Changing the masquerade keeps the obfs password: clients are unaffected.
-	got, err := edit(true, "https://www.apple.com")
+	edit := func(masq string) (*store.Inbound, error) {
+		return svc.EditInbound(in.ID, InboundEdit{Port: 8443, ServerName: "jp.example.com", Masquerade: masq})
+	}
+	got, err := edit("https://www.apple.com")
 	if err != nil {
 		t.Fatal(err)
 	}
-	sb, _ = ParseConfig(got)
-	if sb.Obfs == nil || sb.Obfs.Password != password {
-		t.Fatal("an edit that left obfs on changed its password")
-	}
-	if sb.Masquerade.URL != "https://www.apple.com" {
+	if sb, _ = ParseConfig(got); sb.Masquerade.URL != "https://www.apple.com" {
 		t.Fatalf("masquerade not updated: %+v", sb.Masquerade)
 	}
-
-	// Off removes it from both sides; on again mints a new password.
-	got, err = edit(false, "")
+	got, err = edit("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	sb, _ = ParseConfig(got)
-	client, _ = ParseClient(got)
-	if sb.Obfs != nil || client.Obfs != "" || sb.Masquerade != nil {
-		t.Fatalf("after turning both off: obfs=%+v client=%q masq=%+v", sb.Obfs, client.Obfs, sb.Masquerade)
+	if sb, _ = ParseConfig(got); sb.Masquerade != nil {
+		t.Fatalf("masquerade after clearing it = %+v", sb.Masquerade)
 	}
 
 	for _, bad := range []string{"www.bing.com", "ftp://x.example", "https://"} {
-		if _, err := edit(true, bad); !errors.Is(err, ErrInvalid) {
+		if _, err := edit(bad); !errors.Is(err, ErrInvalid) {
 			t.Errorf("masquerade %q accepted: %v", bad, err)
 		}
 	}
 
-	// Other protocols are untouched by the fields.
+	// Other protocols are untouched by it.
 	tuic, err := svc.CreateInbound(n.ID, InboundSpec{Protocol: store.ProtoTUIC, Tag: "tuic",
-		Port: 9443, ServerName: "jp.example.com", Obfs: true, Masquerade: "https://www.bing.com"})
+		Port: 9443, ServerName: "jp.example.com", Masquerade: "https://www.bing.com"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sb, _ := ParseConfig(tuic); sb.Obfs != nil || sb.Masquerade != nil {
+	if sb, _ := ParseConfig(tuic); sb.Masquerade != nil {
 		t.Fatal("TUIC got Hysteria2 options")
 	}
 }
@@ -139,8 +123,7 @@ func TestCheckHandshake(t *testing.T) {
 func TestMasqueradeCandidatesAreAccepted(t *testing.T) {
 	for _, site := range MasqueradeCandidates {
 		var in singbox.Inbound
-		var client ClientParams
-		if err := applyHysteria2(&in, &client, false, site); err != nil {
+		if err := applyHysteria2(&in, site); err != nil {
 			t.Errorf("%s: %v", site, err)
 		}
 	}

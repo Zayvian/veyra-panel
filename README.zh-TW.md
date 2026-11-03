@@ -10,7 +10,7 @@
 
 ## 功能
 
-- **協定**：VLESS Reality、Hysteria2（混淆、偽裝網站、跳連接埠）、AnyTLS、Shadowsocks 2022、TUIC v5
+- **協定**：VLESS Reality、Hysteria2（偽裝網站、跳連接埠）、AnyTLS、Shadowsocks 2022、TUIC v5
 - **使用者**：到期時間、流量上限、每月自動重設、同時線上 IP 限制、依入站分配權限、一鍵續費、方案範本
 - **訂閱**：Clash / mihomo、sing-box、Shadowrocket、通用分享連結，自動辨識用戶端；Clash 和 sing-box 內建群組（AI、YouTube、Netflix 等）和中國大陸直連規則；QR Code 和可直接傳給客戶的說明文字；訂閱公告；帳號失效時顯示原因
 - **節點**：流量倍率（例如 0.5 倍、不扣流量）、站內中轉、每台節點的流量統計

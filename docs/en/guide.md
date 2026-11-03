@@ -194,10 +194,10 @@ An inbound is one proxy port on a node, and one entry in a client's node list. C
 | Protocol | Example port | Firewall | You fill in | Good for |
 | --- | --- | --- | --- | --- |
 | VLESS Reality | 443 | TCP | the Reality handshake site | **the main one** — most robust, no certificate |
-| Hysteria2 | 8443 | UDP | certificate, SNI; optional obfs, masquerade, port hopping | fast; turn on obfs where QUIC is interfered with |
+| Hysteria2 | 8443 | UDP | certificate, SNI; optional masquerade, port hopping | fast |
 | AnyTLS | 8443 | TCP | certificate, SNI | a fallback |
 | Shadowsocks 2022 | 8388 | TCP and UDP | nothing (keys are generated) | a fallback with the widest client support |
-| TUIC v5 | 9443 | UDP | certificate, SNI | rarely needed: a subset of Hysteria2 (no obfs, masquerade or port hopping) |
+| TUIC v5 | 9443 | UDP | certificate, SNI | rarely needed: a subset of Hysteria2 (no masquerade or port hopping) |
 
 Give every node at least one **TCP** protocol (VLESS Reality) and one **UDP** protocol (Hysteria2), so whichever way a customer's network misbehaves, one of them works.
 
@@ -217,19 +217,11 @@ Reality borrows a real website's TLS handshake. Pick one from the 「常用站�
 
 「检测」(**check**) confirms from the panel that the site does TLS 1.3 with HTTP/2 and a valid certificate. Passing means it works from the panel, not necessarily from everywhere your users are; failing means it will not work anywhere.
 
-### Hysteria2: obfs and masquerade
+### Hysteria2: masquerade
 
-They guard against different things:
+Masquerade is what a browser or a prober sees when it connects to the port: a real website (e.g. bing.com) served over HTTP/3, instead of an error that gives the proxy away. Server-side only; clients are unaffected. Pick from the dropdown, click 「随机」(random), or type any https URL; different inbounds should use different sites.
 
-- **Obfs (salamander)** wraps every packet so the traffic **no longer looks like QUIC**. Use it when Hysteria2 is flaky or times out while Reality works — the customer's network is throttling or interfering with QUIC. The password is generated and put in subscriptions; Clash Verge / mihomo, sing-box and Shadowrocket support it.
-- **Masquerade** is what a browser or a prober sees when it connects to the port: a real website (e.g. bing.com) instead of an error that gives the proxy away. Server-side only; clients are unaffected. Pick from the dropdown, click 「随机」(random), or type any https URL; different inbounds should use different sites.
-
-**Only one of them is in effect at a time**: with obfs on, a prober cannot even complete the handshake, so it never reaches the masquerade site. Leaving a masquerade set does no harm and takes over if you later turn obfs off.
-
-| Situation | Choose |
-| --- | --- |
-| Hysteria2 often times out, Reality is fine | obfs on |
-| Hysteria2 works; you just want it harder to identify | obfs off, set a masquerade site |
+Hysteria2 and TUIC both run over UDP. Where a network throttles UDP, or UDP to the address is blocked, they time out together, and no protocol setting changes that: keep a TCP protocol on every node as well (VLESS Reality, vless-xhttp or AnyTLS), and clients' auto-select switches to it.
 
 ### Hysteria2 port hopping
 
@@ -262,7 +254,7 @@ Two ways, pick one:
 ### Changing an inbound
 
 - Adding, changing or disabling any inbound **rebuilds that node's configuration, dropping every connection on it once**.
-- **Changing the handshake site, switching obfs, or changing the port cuts customers off until they update their subscription.** For an inbound in use, add a new one instead, run both for a week or two, and disable the old one once most customers have refreshed.
+- **Changing the handshake site or the port cuts customers off until they update their subscription.** For an inbound in use, add a new one instead, run both for a week or two, and disable the old one once most customers have refreshed.
 - The masquerade site, certificate paths, name and order can change without affecting clients.
 
 ---

@@ -54,9 +54,7 @@ type InboundSpec struct {
 	RelayNodeID int64
 	RelayPort   int
 
-	// Hysteria2: salamander obfuscation (password generated) and the website
-	// non-clients are shown. See applyHysteria2.
-	Obfs       bool
+	// Hysteria2: the website non-clients are shown. See applyHysteria2.
 	Masquerade string
 }
 
@@ -82,8 +80,6 @@ type ClientParams struct {
 
 	Method    string `json:"method,omitempty"`     // Shadowsocks
 	ServerPSK string `json:"server_psk,omitempty"` // Shadowsocks, server half of the key pair
-
-	Obfs string `json:"obfs,omitempty"` // Hysteria2 salamander password
 }
 
 // SSMethod is the only Shadowsocks method this panel emits. The user PSK it
@@ -207,7 +203,7 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 			client.HopInterval = hopInterval
 		}
 		if spec.Protocol == store.ProtoHysteria2 {
-			if err := applyHysteria2(&in, &client, spec.Obfs, spec.Masquerade); err != nil {
+			if err := applyHysteria2(&in, spec.Masquerade); err != nil {
 				return nil, err
 			}
 		}

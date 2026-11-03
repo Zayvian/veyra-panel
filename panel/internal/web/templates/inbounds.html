@@ -51,8 +51,6 @@
         </span>
         <span id="hs-new" style="font-size:.75rem"></span></label>
 
-      <label id="f-obfs" hidden style="flex-direction:row;align-items:center;gap:.4rem">
-        <input type="checkbox" name="obfs" value="1" checked style="min-width:0">混淆（salamander）</label>
       <label id="f-masq" hidden>伪装网站（留空 = 不伪装）
         <span style="display:flex;gap:.4rem;align-items:center">
           <input name="masquerade" value="{{.RandomMasq}}" placeholder="{{.DefaultMasq}}"
@@ -74,13 +72,9 @@
       <button>新建</button>
     </form>
     <p class="dim" style="margin:.8rem 0 0;font-size:.85rem">
-      <strong>Hysteria2 混淆</strong>把每个数据包再包一层，看起来不再像 QUIC，适合会限速或干扰 QUIC 的网络；
-      密码自动生成并写进订阅，Clash Verge / mihomo、sing-box、Shadowrocket 都支持。
-      <strong>伪装网站</strong>是非客户端（浏览器、探测）访问这个端口时看到的网站，只影响服务器端，客户端不用变。
-      新建时随机挑一个，也可以从下拉列表选、点「随机」换，或者填任意 https 网址。不同入站最好用不同的网站。<br>
-      两者是<strong>二选一生效</strong>的：<strong>不开混淆</strong>时，端口看起来就是一个 HTTP/3 网站，探测者看到的是伪装网站；
-      <strong>开了混淆</strong>，探测者连握手都完成不了，到不了伪装网站这一步，伪装填不填都行（留着不碍事，以后关掉混淆就会生效）。
-      想让节点像个正常网站就不开混淆、填伪装；客户网络会干扰 QUIC、HY2 老超时就开混淆。<br>
+      <strong>Hysteria2 伪装网站</strong>是非客户端（浏览器、探测）访问这个端口时看到的网站，端口看起来就是一个 HTTP/3 网站。
+      只影响服务器端，客户端不用变。新建时随机挑一个，也可以从下拉列表选、点「随机」换，或者填任意 https 网址。不同入站最好用不同的网站。<br>
+      HY2 和 TUIC 都走 UDP，运营商限 UDP 时会一起超时：每台节点再留一个 TCP 协议（VLESS Reality、vless-xhttp 或 AnyTLS）当备用。<br>
       <strong>Xray</strong> 的两个选项由节点上的 Xray 承载，其余协议仍由 sing-box 承载，同一个节点可以混用。
       <strong>vless-xhttp</strong> 只有 Xray 内核的客户端（v2rayN、v2rayNG、Shadowrocket 等）和 Clash Verge / mihomo 能用，
       不会出现在 sing-box 订阅里。需要节点装了 Xray，没有的会显示「节点没有 Xray」。<br>
@@ -113,7 +107,7 @@ function onProto(v) {
   var tls = ['anytls', 'hysteria2', 'tuic'].includes(v);
   show('f-cert', tls); show('f-key', tls); show('f-sni', tls);
   show('f-hop', v === 'hysteria2'); show('f-hop-interval', v === 'hysteria2');
-  show('f-obfs', v === 'hysteria2'); show('f-masq', v === 'hysteria2');
+  show('f-masq', v === 'hysteria2');
   document.querySelector('input[name=hop_ports]').disabled = v !== 'hysteria2';
   document.querySelector('input[name=hop_interval]').disabled = v !== 'hysteria2';
   var port = document.querySelector('input[name=port]');
@@ -240,8 +234,6 @@ function randomMasq(btn) {
                 <span id="hs-edit" style="font-size:.75rem"></span></label>
             {{end}}
             {{if $.EditHysteria2}}
-              <label style="flex-direction:row;align-items:center;gap:.4rem">
-                <input type="checkbox" name="obfs" value="1" {{if $.Obfs}}checked{{end}} style="min-width:0">混淆（salamander）</label>
               <label>伪装网站（留空 = 不伪装）
                 <span style="display:flex;gap:.4rem;align-items:center">
                   <input name="masquerade" value="{{$.Masquerade}}" placeholder="{{$.DefaultMasq}}"
@@ -262,15 +254,16 @@ function randomMasq(btn) {
             <button type="button" class="ghost" hx-get="{{panelPath "/nodes/"}}{{$.Node.ID}}/inbounds"
                     hx-target="#inbounds" hx-swap="outerHTML">取消</button>
           </form>
-          {{if or $.EditHandshake $.EditHysteria2}}
+          {{if $.EditHandshake}}
           <p style="margin:.6rem 0 0;font-size:.8rem">
             <span class="pill warn-pill">注意</span>
-            {{if $.EditHandshake}}改<strong>握手站点</strong>{{end}}{{if and $.EditHandshake $.EditHysteria2}}或{{end}}{{if $.EditHysteria2}}开关<strong>混淆</strong>{{end}}后，
+            改<strong>握手站点</strong>后，
             客户在<strong>刷新订阅之前会一直连不上</strong>。正在使用的入站建议不要直接改：
             新建一个入站，和这个并行运行一两周，大部分客户刷新过订阅后再停用这个。
-            {{if $.EditHysteria2}}伪装网站只影响服务器端，可以随时改；它只在<strong>不开混淆</strong>时起作用，
-            开了混淆的入站探测者到不了伪装网站这一步。{{end}}
           </p>
+          {{end}}
+          {{if $.EditHysteria2}}
+          <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">伪装网站只影响服务器端，可以随时改。</p>
           {{end}}
           <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
             Reality 密钥对、short id、Shadowsocks 服务端 PSK 都会原样保留，

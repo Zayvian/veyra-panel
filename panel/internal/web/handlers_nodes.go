@@ -405,7 +405,6 @@ func (s *Server) createInbound(w http.ResponseWriter, r *http.Request) {
 		ServerName:  strings.TrimSpace(r.FormValue("server_name")),
 		HopPorts:    strings.TrimSpace(r.FormValue("hop_ports")),
 		HopInterval: strings.TrimSpace(r.FormValue("hop_interval")),
-		Obfs:        r.FormValue("obfs") != "",
 		Masquerade:  r.FormValue("masquerade"),
 	}
 	if (spec.Protocol == store.ProtoAnyTLS || spec.Protocol == store.ProtoHysteria2 || spec.Protocol == store.ProtoTUIC) && spec.ServerName == "" {
@@ -444,7 +443,6 @@ func (s *Server) inboundEditFields(data map[string]any, inbounds []*store.Inboun
 	data["EditTLS"] = tls
 	data["EditHopping"] = in.Protocol == store.ProtoHysteria2
 	data["EditHysteria2"] = in.Protocol == store.ProtoHysteria2
-	data["Obfs"] = sb.Obfs != nil
 	data["Masquerade"] = ""
 	if sb.Masquerade != nil {
 		data["Masquerade"] = sb.Masquerade.URL
@@ -516,7 +514,6 @@ func (s *Server) updateInbound(w http.ResponseWriter, r *http.Request) {
 		ServerName:  strings.TrimSpace(r.FormValue("server_name")),
 		HopPorts:    strings.TrimSpace(r.FormValue("hop_ports")),
 		HopInterval: strings.TrimSpace(r.FormValue("hop_interval")),
-		Obfs:        r.FormValue("obfs") != "",
 		Masquerade:  r.FormValue("masquerade"),
 	})
 	if err != nil {
