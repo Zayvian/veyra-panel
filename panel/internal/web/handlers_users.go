@@ -359,12 +359,28 @@ func (s *Server) renewUser(w http.ResponseWriter, r *http.Request) {
 		s.errorBanner(w, http.StatusBadRequest, "bad user id")
 		return
 	}
-	days, err := strconv.Atoi(strings.TrimSpace(r.FormValue("days")))
+	// The 续费 row sends count and unit (month or day). A bare days field is
+	// what the row sent before months existed, and is still taken.
+	unit, count := r.FormValue("unit"), r.FormValue("count")
+	if count == "" {
+		unit, count = "day", r.FormValue("days")
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(count))
 	if err != nil {
-		s.errorBanner(w, http.StatusBadRequest, "renewal must be a whole number of days")
+		s.errorBanner(w, http.StatusBadRequest, "renewal must be a whole number of months or days")
 		return
 	}
-	if _, err := s.svc.RenewUser(id, days, r.FormValue("reset_traffic") != ""); err != nil {
+	reset := r.FormValue("reset_traffic") != ""
+	switch unit {
+	case "month":
+		_, err = s.svc.RenewUserMonths(id, n, reset)
+	case "day":
+		_, err = s.svc.RenewUser(id, n, reset)
+	default:
+		s.errorBanner(w, http.StatusBadRequest, "renewal unit must be month or day")
+		return
+	}
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}

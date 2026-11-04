@@ -242,6 +242,9 @@ func (s *Service) ResetUserTraffic(id int64) error {
 // bound is there so a typo cannot overflow the expiry.
 const MaxRenewDays = 3650
 
+// MaxRenewMonths bounds one renewal by months, ten years like MaxRenewDays.
+const MaxRenewMonths = 120
+
 // RenewUser is what a payment turns into: the account extended by days from
 // its current expiry or now, whichever is later, switched back on, and with
 // resetTraffic its counter zeroed. See store.RenewUser for the details.
@@ -249,7 +252,21 @@ func (s *Service) RenewUser(id int64, days int, resetTraffic bool) (*store.User,
 	if days < 1 || days > MaxRenewDays {
 		return nil, invalid("renewal must be between 1 and %d days", MaxRenewDays)
 	}
-	if err := s.st.RenewUser(id, days, resetTraffic, time.Now()); err != nil {
+	return s.renew(id, 0, days, resetTraffic)
+}
+
+// RenewUserMonths is RenewUser by calendar months: 12-04 plus one month is
+// 01-04, however long December is. A month-end date the target month does not
+// have lands on its last day.
+func (s *Service) RenewUserMonths(id int64, months int, resetTraffic bool) (*store.User, error) {
+	if months < 1 || months > MaxRenewMonths {
+		return nil, invalid("renewal must be between 1 and %d months", MaxRenewMonths)
+	}
+	return s.renew(id, months, 0, resetTraffic)
+}
+
+func (s *Service) renew(id int64, months, days int, resetTraffic bool) (*store.User, error) {
+	if err := s.st.RenewUser(id, months, days, resetTraffic, time.Now()); err != nil {
 		return nil, err
 	}
 	// Renewing can bring an expired, disabled or exhausted account back, and the

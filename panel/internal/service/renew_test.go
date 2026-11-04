@@ -188,3 +188,46 @@ func TestRenewingALapsedAccountMovesTheResetDay(t *testing.T) {
 		})
 	}
 }
+
+// By months, the renewal is calendar months from the later of the current
+// expiry and now: an early renewal lands on the same day of a later month.
+func TestRenewUserMonths(t *testing.T) {
+	svc := newTestService(t)
+	exp := time.Now().Add(20 * 24 * time.Hour).Truncate(time.Second)
+	u, err := svc.CreateUser(NewUser{Name: "alice", ExpiresAt: &exp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.RenewUserMonths(u.ID, 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := store.AddMonths(exp.In(time.Local), 1); !got.ExpiresAt.Equal(want) {
+		t.Fatalf("expiry %v, want %v", got.ExpiresAt, want)
+	}
+	if got.ExpiresAt.Day() != exp.In(time.Local).Day() && exp.In(time.Local).Day() <= 28 {
+		t.Fatalf("expiry %v is not on the same day of the month as %v", got.ExpiresAt, exp)
+	}
+
+	// Lapsed: from now.
+	past := time.Now().Add(-5 * 24 * time.Hour)
+	v, err := svc.CreateUser(NewUser{Name: "bob", ExpiresAt: &past})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := time.Now().Truncate(time.Second)
+	got, err = svc.RenewUserMonths(v.ID, 3, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := time.Now()
+	if lo, hi := store.AddMonths(before, 3), store.AddMonths(after, 3); got.ExpiresAt.Before(lo) || got.ExpiresAt.After(hi) {
+		t.Fatalf("lapsed expiry %v, want 3 months from now", got.ExpiresAt)
+	}
+
+	for _, n := range []int{0, -1, MaxRenewMonths + 1} {
+		if _, err := svc.RenewUserMonths(u.ID, n, false); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("%d months: err = %v, want ErrInvalid", n, err)
+		}
+	}
+}

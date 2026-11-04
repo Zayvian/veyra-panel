@@ -175,10 +175,16 @@ func (s *Store) ReissueUser(c UserCredentials, subToken string) error {
 	return nil
 }
 
-// RenewUser extends one account by a number of days and turns it back on, in
-// one transaction, so a renewal can never land half-applied.
+// RenewUser extends one account by a number of calendar months and days and
+// turns it back on, in one transaction, so a renewal can never land
+// half-applied.
 //
-// The days count from whichever is later, the current expiry or now: renewing
+// A month is a calendar month: 12-04 plus one is 01-04, whatever the lengths
+// of the months between. A date the target month does not have lands on its
+// last day — 01-31 plus one is 02-28 — rather than spilling into the month
+// after, as time.AddDate would. The months are added first, then the days.
+//
+// The period counts from whichever is later, the current expiry or now: renewing
 // early adds to what is left, and renewing a lapsed account does not hand back
 // the days it spent expired. An account with no expiry keeps none — a renewal
 // is not the place to start limiting it. With resetTraffic the counter is
@@ -188,7 +194,7 @@ func (s *Store) ReissueUser(c UserCredentials, subToken string) error {
 // moment, because that is where the new period starts: the new expiry counts
 // from now, and keeping the old day would make the first month short. An early
 // renewal keeps the old day, since its expiry still lines up with it.
-func (s *Store) RenewUser(id int64, days int, resetTraffic bool, now time.Time) error {
+func (s *Store) RenewUser(id int64, months, days int, resetTraffic bool, now time.Time) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
@@ -211,9 +217,9 @@ func (s *Store) RenewUser(id int64, days int, resetTraffic bool, now time.Time) 
 			from = now
 			lapsed = true
 		}
-		// AddDate in local time, so a day is a calendar day and the
-		// time of day the account expires at stays where it was.
-		next = from.In(time.Local).AddDate(0, 0, days).Unix()
+		// In local time, so a day is a calendar day and the time of day
+		// the account expires at stays where it was.
+		next = AddMonths(from.In(time.Local), months).AddDate(0, 0, days).Unix()
 	}
 	if _, err := tx.Exec(`UPDATE users SET expires_at = ?, enabled = 1 WHERE id = ?`, next, id); err != nil {
 		return fmt.Errorf("renew user %d: %w", id, err)
@@ -237,6 +243,21 @@ func (s *Store) RenewUser(id int64, days int, resetTraffic bool, now time.Time) 
 		}
 	}
 	return tx.Commit()
+}
+
+// AddMonths adds calendar months to t, keeping its time of day. A day of the
+// month the target month does not have becomes that month's last day.
+func AddMonths(t time.Time, months int) time.Time {
+	if months == 0 {
+		return t
+	}
+	y, m, d := t.Date()
+	first := time.Date(y, m+time.Month(months), 1, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+	last := first.AddDate(0, 1, -1).Day()
+	if d > last {
+		d = last
+	}
+	return first.AddDate(0, 0, d-1)
 }
 
 func (s *Store) DeleteUser(id int64) error {

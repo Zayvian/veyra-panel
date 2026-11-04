@@ -46,7 +46,7 @@ func TestRenewThroughAdminForm(t *testing.T) {
 	req.AddCookie(session)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `name="days"`) {
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `name="count"`) {
 		t.Fatalf("renew form: %d %s", rec.Code, rec.Body)
 	}
 
@@ -88,5 +88,25 @@ func TestRenewThroughAdminForm(t *testing.T) {
 	}
 	if left := time.Until(*u.ExpiresAt); left < 29*24*time.Hour || left > 31*24*time.Hour {
 		t.Fatalf("expiry %v is not about 30 days out", u.ExpiresAt)
+	}
+
+	// The form as it is now: count and unit. An early renewal by one month
+	// lands on the same day of the next calendar month.
+	from := *u.ExpiresAt
+	if code := post(true, url.Values{"count": {"1"}, "unit": {"month"}}); code != http.StatusOK {
+		t.Fatalf("renew by month: %d", code)
+	}
+	if u, _ = svc.User(user.ID); !u.ExpiresAt.Equal(store.AddMonths(from.In(time.Local), 1)) {
+		t.Fatalf("expiry %v, want one calendar month after %v", u.ExpiresAt, from)
+	}
+	from = *u.ExpiresAt
+	if code := post(true, url.Values{"count": {"10"}, "unit": {"day"}}); code != http.StatusOK {
+		t.Fatalf("renew by day: %d", code)
+	}
+	if u, _ = svc.User(user.ID); !u.ExpiresAt.Equal(from.In(time.Local).AddDate(0, 0, 10)) {
+		t.Fatalf("expiry %v, want ten days after %v", u.ExpiresAt, from)
+	}
+	if code := post(true, url.Values{"count": {"1"}, "unit": {"year"}}); code != http.StatusBadRequest {
+		t.Fatalf("unknown unit: %d, want 400", code)
 	}
 }
