@@ -89,9 +89,11 @@ Users you disabled yourself are not listed.
 
 ### Renewing
 
-Click 「续费」, enter a number of days (or pick a plan), choose whether to reset used traffic, and confirm:
+Click 「续费」, enter a length and pick its unit (1 month by default, or days; or pick a plan), choose whether to reset used traffic, and confirm:
 
-- New expiry = **the later of the current expiry and now** + the days. Renewing early keeps the remaining days; renewing after expiry starts from now, without giving back the lapsed days.
+- New expiry = **the later of the current expiry and now** + the length. Renewing early keeps the remaining days; renewing after expiry starts from now, without giving back the lapsed days.
+- Months are **calendar months**: December 4 plus one month is January 4, however long the months in between are. A day the target month does not have becomes its last day, so January 31 plus one month is February 28 (29 in a leap year).
+- Renewing by a plan uses months for whole multiples of 30 days (30, 90, 180) and for 365 days, and days otherwise.
 - Renewing after expiry also moves the reset day (if one is set) to the renewal moment, so the new month starts at the renewal; an early renewal keeps the reset day.
 - Renewing also **enables** the account.
 - An account with no expiry gets none; only the traffic reset applies.

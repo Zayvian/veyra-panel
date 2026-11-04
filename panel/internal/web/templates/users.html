@@ -40,6 +40,20 @@
     </p>
   </div>
 <script>
+// The 续费 row's plan picker. A plan's length is in days; whole months of it
+// (30, 90, 180 days; 365 is a year) are renewed as calendar months, which is
+// what such a plan means, and anything else as days.
+function applyRenewPlan(sel) {
+  const o = sel.selectedOptions[0], f = sel.form;
+  if (!o || !o.value || !o.dataset.days) return;
+  const d = parseInt(o.dataset.days, 10);
+  let count = d, unit = 'day';
+  if (d === 365 || d === 366) { count = 12; unit = 'month'; }
+  else if (d % 30 === 0) { count = d / 30; unit = 'month'; }
+  f.elements['count'].value = count;
+  f.elements['unit'].value = unit;
+}
+
 // Copies a plan's values into the form it sits in. Only fields the form has
 // are touched, so the create form and the renew row can share it.
 function applyPlan(sel) {
@@ -129,16 +143,18 @@ function applyPlan(sel) {
         <div class="dim" style="font-size:.8rem">当前到期：{{if .User.ExpiresAt}}{{date .User.ExpiresAt}}{{else}}不限{{end}}</div></div>
       {{if .Plans}}
       <label>按套餐
-        <select onchange="applyPlan(this)" style="min-width:9rem">
-          <option value="">自己填天数</option>
+        <select onchange="applyRenewPlan(this)" style="min-width:9rem">
+          <option value="">自己填</option>
           {{template "plan-options" .Plans}}
         </select></label>
       {{end}}
-      <label>续费天数<input name="days" type="number" min="1" max="3650" step="1" value="30"
-             required list="renew-days" style="min-width:7rem"></label>
-      <datalist id="renew-days">
-        <option value="30"><option value="90"><option value="180"><option value="365">
-      </datalist>
+      <label>续费时长<input name="count" type="number" min="1" max="3650" step="1" value="1"
+             required style="min-width:6rem"></label>
+      <label>单位
+        <select name="unit" style="min-width:5rem">
+          <option value="month" selected>个月</option>
+          <option value="day">天</option>
+        </select></label>
       <label style="flex-direction:row;align-items:center;gap:.4rem">
         <input type="checkbox" name="reset_traffic" value="1" checked>已用流量清零</label>
       <button>确认续费</button>
@@ -147,6 +163,7 @@ function applyPlan(sel) {
     </form>
     <p class="dim" style="margin:.6rem 0 0;font-size:.8rem">
       {{if .User.ExpiresAt}}从<strong>当前到期时间和现在中较晚的那个</strong>往后加：提前续费不吃亏，过期后再续也不会把过期那几天补回去。
+      按月是按日历月加，12 月 4 日续 1 个月就到 1 月 4 日，不管这个月有几天；下个月没有的日子（比如 31 号）落在那个月最后一天。
       {{else}}该用户没有到期时间，续费不会加上到期，只会按下面的勾选清零流量。{{end}}
       续费后账号会自动启用，节点马上生效，订阅链接不变。
     </p>
