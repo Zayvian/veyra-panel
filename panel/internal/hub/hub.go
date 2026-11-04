@@ -97,6 +97,10 @@ type conn struct {
 	// xrayUnlock: the node's Xray part may carry the unlock routing.
 	xrayUnlock atomic.Bool
 
+	// remoteIP is the address the connection came from. The panel terminates
+	// TLS itself, so it is the node's public address.
+	remoteIP string
+
 	// host is the name the node dialled, from the request's Host. It is how
 	// the panel tells a node still on an old domain from one that has moved.
 	host string
@@ -153,7 +157,7 @@ func (h *Hub) Handler() http.HandlerFunc {
 		if hn, _, err := net.SplitHostPort(host); err == nil {
 			host = hn
 		}
-		h.serve(r.Context(), nodeID, strings.ToLower(host), ws)
+		h.serve(r.Context(), nodeID, strings.ToLower(host), ratelimit.ClientIP(r), ws)
 	}
 }
 
@@ -179,11 +183,11 @@ func bearer(r *http.Request) string {
 	return ""
 }
 
-func (h *Hub) serve(ctx context.Context, nodeID int64, host string, ws *websocket.Conn) {
+func (h *Hub) serve(ctx context.Context, nodeID int64, host, remoteIP string, ws *websocket.Conn) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	c := &conn{nodeID: nodeID, ws: ws, host: host}
+	c := &conn{nodeID: nodeID, ws: ws, host: host, remoteIP: remoteIP}
 	c.lastSeen.Store(time.Now().Unix())
 
 	// One connection per node. A reconnect after a network drop arrives before
@@ -298,7 +302,7 @@ func (h *Hub) dispatch(ctx context.Context, c *conn, data []byte) error {
 				}
 			}
 			if err := h.send(ctx, c, TypeWelcome, 0,
-				Welcome{Proto: ProtoVersion, Caps: PanelCaps}); err != nil {
+				Welcome{Proto: ProtoVersion, Caps: PanelCaps, RemoteIP: c.remoteIP}); err != nil {
 				return err
 			}
 		}

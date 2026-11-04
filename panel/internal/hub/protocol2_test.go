@@ -107,6 +107,10 @@ func TestNewNodeIsWelcomedFirst(t *testing.T) {
 	if w.Proto != ProtoVersion || len(w.Caps) != len(PanelCaps) {
 		t.Fatalf("welcome = %+v", w)
 	}
+	// The test node dials from loopback; that is the address it is told.
+	if w.RemoteIP != "127.0.0.1" {
+		t.Fatalf("welcome remote_ip = %q, want 127.0.0.1", w.RemoteIP)
+	}
 
 	var cd ConfigData
 	if err := json.Unmarshal(n.await(TypeConfig, 3*time.Second).Data, &cd); err != nil {

@@ -74,6 +74,10 @@ type PanelURLData struct {
 type Welcome struct {
 	Proto int      `json:"proto"`
 	Caps  []string `json:"caps"`
+	// RemoteIP is the address this node's connection came from, as the panel
+	// sees it: the node's public address, even behind NAT. Empty from a panel
+	// that predates it.
+	RemoteIP string `json:"remote_ip,omitempty"`
 }
 
 // Envelope wraps every frame. ID correlates a command with its reply and is

@@ -560,3 +560,45 @@ func TestXrayUnlockRulesStayBehindTheAddressLimit(t *testing.T) {
 		t.Fatalf("the unlock rule is gone after the limit rule went in: %v", err)
 	}
 }
+
+// RestartXray brings up a new process on the same inbound and users, so a
+// user who got through before gets through after; and with nothing to serve it
+// does nothing.
+func TestXrayRestartKeepsInboundsAndUsers(t *testing.T) {
+	e := xrayEngine(t)
+	if err := e.RestartXray("test"); err != nil {
+		t.Fatalf("restart with nothing to serve: %v", err)
+	}
+
+	ctx := context.Background()
+	echo := echoServer(t)
+	port := freePort(t)
+	if err := e.ApplyConfig(ctx, configWithShadowsocks(t, freePort(t)), xrayVLESS(t, "vx", port)); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	if err := e.UpdateUsers(ctx, proto.UsersData{
+		ByTag:      map[string][]proto.User{"vx": {{Name: "alice", UUID: aliceID}}},
+		StatsUsers: []string{"alice"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	e.x.mu.Lock()
+	before := e.x.proc
+	e.x.mu.Unlock()
+
+	if err := e.RestartXray("test"); err != nil {
+		t.Fatalf("restart: %v", err)
+	}
+	e.x.mu.Lock()
+	after := e.x.proc
+	e.x.mu.Unlock()
+	if after == nil || after == before {
+		t.Fatal("restart did not start a new xray process")
+	}
+	if err := roundTrip(xrayClient(t, port, aliceID), echo, 1000); err != nil {
+		t.Fatalf("alice after the restart: %v", err)
+	}
+	if st := e.State(); !containsTag(st.Inbounds, "vx") {
+		t.Fatalf("state inbounds = %v, want vx", st.Inbounds)
+	}
+}

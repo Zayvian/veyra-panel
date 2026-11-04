@@ -72,6 +72,11 @@ type PanelURLData struct {
 type Welcome struct {
 	Proto int      `json:"proto"`
 	Caps  []string `json:"caps"`
+	// RemoteIP is the address the node's connection came from, as the panel
+	// sees it. A node behind NAT cannot see its own public address; this is
+	// how it learns that the address changed, which Xray does not recover
+	// from without a restart.
+	RemoteIP string `json:"remote_ip,omitempty"`
 }
 
 // Envelope wraps every frame. ID correlates a command with its reply and is

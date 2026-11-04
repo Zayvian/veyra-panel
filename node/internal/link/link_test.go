@@ -38,6 +38,21 @@ type fakeEngine struct {
 
 	xrays       []json.RawMessage
 	xrayVersion string
+
+	xrayRestarts int
+}
+
+func (e *fakeEngine) RestartXray(string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.xrayRestarts++
+	return nil
+}
+
+func (e *fakeEngine) restarts() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.xrayRestarts
 }
 
 func (e *fakeEngine) State() proto.StateData {

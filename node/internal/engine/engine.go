@@ -114,6 +114,10 @@ func (e *Engine) UseXray(path string) error {
 // none.
 func (e *Engine) XrayVersion() string { return e.x.version }
 
+// RestartXray restarts Xray on the configuration it is serving. Nothing
+// happens when it serves nothing.
+func (e *Engine) RestartXray(reason string) error { return e.x.restart(reason) }
+
 // ApplyConfig serves a configuration: raw for sing-box, xray for the inbounds
 // Xray serves (empty when there are none).
 //
