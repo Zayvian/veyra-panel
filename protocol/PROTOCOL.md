@@ -19,7 +19,7 @@
 | `t` | 方向 | `d` 的结构 | 说明 |
 |---|---|---|---|
 | `hello` | 节点 → 面板 | `version` `os` `arch` `hostname` `singbox_version`；`xray_version`（节点有 Xray 时）；`proto` `caps`（协议 2 起） | 连接后第一条消息。面板收到后立即下发 `config` 和 `users` |
-| `welcome` | 面板 → 节点 | `proto` `caps` | 协议 2：只回给 `hello` 里 `proto ≥ 2` 的节点，并且**在 `config` 之前**发送 |
+| `welcome` | 面板 → 节点 | `proto` `caps` `remote_ip` | 协议 2：只回给 `hello` 里 `proto ≥ 2` 的节点，并且**在 `config` 之前**发送 |
 | `config` | 面板 → 节点 | `config`：完整的 sing-box 配置，入站里不带用户；`xray`（`xray` 能力，可省略）：由 Xray 承载的入站；`rev`：配置的 SHA-256 | 哪个内核的部分变了就只重建哪个，完全相同时都不重建 |
 | `users` | 面板 → 节点 | `by_tag`：入站 tag → 用户列表；`stats_users`：统计白名单；`ip_limits`：用户名 → 同时在线 IP 上限（可省略） | 全量替换，不是增量。节点热替换用户，不断开其他连接 |
 | `ok` | 双向 | 无 | 节点 → 面板：某个 `id` 的命令执行成功。面板 → 节点（`stats_ack`）：编号为 `id` 的流量报告已经入账 |
@@ -40,6 +40,7 @@
 - 旧节点不发 `proto`，面板就不发 `welcome`，一切照旧。
 - 旧面板不认识 `proto`，直接发 `config`。节点没先收到 `welcome`，就按旧方式工作。
 - 每次重连都重新协商：中间面板可能升级或回退过。
+- `remote_ip` 是面板看到的这条连接的来源地址，也就是节点的公网 IP（节点在 NAT 后面时自己看不到）。旧面板不发这个字段。节点记住上一次的值；重连后发现变了，就重启 Xray，因为 Xray 的入站在机器换公网 IP 后不会自己恢复（sing-box 会）。第一次连上只记录，不重启。
 
 ### `stats_ack`：流量报告确认
 

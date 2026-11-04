@@ -499,6 +499,21 @@ func (x *xrayCore) apply(raw json.RawMessage) error {
 	return startErr
 }
 
+// restart stops Xray and starts it again on the same fragment and users. It is
+// for when the process is fine but the world under it changed — the machine's
+// public address — and its listeners and outbound sockets are left on the old
+// one. A configuration with no inbounds has nothing to restart.
+func (x *xrayCore) restart(reason string) error {
+	x.mu.Lock()
+	defer x.mu.Unlock()
+	if len(x.inbounds) == 0 || !x.available() {
+		return nil
+	}
+	x.log.Info("restarting xray", "reason", reason)
+	x.stopLocked()
+	return x.startLocked()
+}
+
 // startLocked starts Xray on the current fragment and the wanted users, and
 // waits until its API answers. x.mu must be held.
 func (x *xrayCore) startLocked() error {

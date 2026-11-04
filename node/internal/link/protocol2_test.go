@@ -242,3 +242,35 @@ func TestStateCarriesNoRevForAnOlderPanel(t *testing.T) {
 		t.Fatalf("applied_rev = %q sent to a panel that never asked", st.AppliedRev)
 	}
 }
+
+// welcomedFrom answers the hello as a panel that saw the node at ip, then
+// waits until the node has read the welcome.
+func welcomedFrom(t *testing.T, p *fakePanel, ip string) {
+	t.Helper()
+	p.await(proto.TypeHello, 10*time.Second)
+	p.push(proto.TypeWelcome, 0, proto.Welcome{Proto: 2, RemoteIP: ip})
+	p.push(proto.TypePing, 99, nil)
+	p.await(proto.TypePong, 3*time.Second)
+}
+
+// Xray is restarted when the node comes back from a different public address,
+// and only then: not on its first connection, not on a reconnect from the same
+// address, and not because a panel did not say which address it saw.
+func TestXrayRestartedWhenPublicAddressChanges(t *testing.T) {
+	p := newFakePanel(t)
+	e := &fakeEngine{xrayVersion: "26.3.27"}
+	start(t, p, e)
+
+	for _, ip := range []string{"203.0.113.1", "", "203.0.113.1"} {
+		welcomedFrom(t, p, ip)
+		if n := e.restarts(); n != 0 {
+			t.Fatalf("welcome from %q: %d restarts, want 0", ip, n)
+		}
+		p.dropConnection()
+	}
+
+	welcomedFrom(t, p, "198.51.100.2")
+	if n := e.restarts(); n != 1 {
+		t.Fatalf("new address: %d restarts, want 1", n)
+	}
+}

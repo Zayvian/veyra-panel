@@ -95,6 +95,11 @@ type Engine interface {
 	// XrayVersion is reported in the hello, and empty when this node has no
 	// Xray — in which case it does not offer xray either.
 	XrayVersion() string
+
+	// RestartXray restarts Xray on its current configuration, if it is
+	// serving anything. Called when the node's public address changes: Xray's
+	// inbounds do not recover from that on their own, sing-box's do.
+	RestartXray(reason string) error
 }
 
 type Config struct {
@@ -157,6 +162,9 @@ type Client struct {
 	// panel says it has moved (panel_url).
 	panelURL string
 	wsURL    string
+	// publicIP is the address the panel last saw this node connect from. It
+	// outlives a session: comparing it across reconnects is the point.
+	publicIP string
 }
 
 // outgoing is one stats report under stats_ack, kept exactly as first sent.
@@ -399,8 +407,23 @@ func (c *Client) handle(ctx context.Context, data []byte) {
 		}
 		c.stateMu.Lock()
 		c.caps = agreed
+		prevIP := c.publicIP
+		if w.RemoteIP != "" {
+			c.publicIP = w.RemoteIP
+		}
 		c.stateMu.Unlock()
-		c.log.Info("panel protocol", "proto", w.Proto, "caps", w.Caps)
+		c.log.Info("panel protocol", "proto", w.Proto, "caps", w.Caps, "public_ip", w.RemoteIP)
+		// The first address seen is only recorded: Xray started with this
+		// process, on whatever address it has now. A later change means the
+		// machine moved under a running Xray, whose inbounds then stop
+		// answering until it is restarted. Its connections went with the old
+		// address, so the restart costs none that still worked.
+		if prevIP != "" && w.RemoteIP != "" && w.RemoteIP != prevIP {
+			c.log.Warn("public address changed; restarting xray", "from", prevIP, "to", w.RemoteIP)
+			if err := c.cfg.Engine.RestartXray("public address changed"); err != nil {
+				c.log.Error("restart xray", "error", err)
+			}
+		}
 
 	case proto.TypeOK:
 		// Under stats_ack the panel answers a stats report with its sequence
