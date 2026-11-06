@@ -86,9 +86,14 @@ func main() {
 
 	log.Info("starting", "version", version, "sing-box", eng.SingboxVersion(),
 		"xray", eng.XrayVersion(), "panel", *panelURL)
+	// Stale rules only exist where nft worked before. A host where nft cannot
+	// run at all (an LXC/podman/OpenVZ guest without CAP_NET_ADMIN over
+	// nftables) has none to clean up, and must still serve its inbounds: only
+	// a Hysteria2 inbound with port hopping needs nft, and it reports its own
+	// error when it starts.
 	if err := porthop.CleanupStale(); err != nil {
-		log.Error("clean up stale hopping rules", "error", err)
-		os.Exit(1)
+		log.Warn("cannot clean up stale hopping rules; Hysteria2 port hopping will not work on this host",
+			"error", err)
 	}
 
 	// Run only returns when the context is cancelled; every network failure in
