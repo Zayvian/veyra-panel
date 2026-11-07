@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/Zayvian/veyra-panel/internal/service"
 	"github.com/Zayvian/veyra-panel/internal/singbox"
 	"github.com/Zayvian/veyra-panel/internal/store"
 )
@@ -77,6 +78,11 @@ func SingBox(entries []Entry, rulesBase string) ([]byte, error) {
 			ob.Password = e.Password
 		default:
 			continue
+		}
+		if e.Cert != "" && ob.TLS != nil {
+			// Trust exactly the self-signed certificate, which keeps
+			// verification on instead of switching it off.
+			ob.TLS.Certificate = service.PEMLines(e.Cert)
 		}
 		outbounds = append(outbounds, ob)
 		kept = append(kept, e)

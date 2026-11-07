@@ -38,6 +38,12 @@ type clashProxy struct {
 	AnyTLSSNI         string            `yaml:"sni,omitempty"`
 	ClientFingerprint string            `yaml:"client-fingerprint,omitempty"`
 	RealityOpts       *clashRealityOpts `yaml:"reality-opts,omitempty"`
+
+	// SkipCertVerify and Fingerprint accept a self-signed certificate:
+	// mihomo checks the certificate's SHA-256 against Fingerprint in place
+	// of a CA, whatever SkipCertVerify says.
+	SkipCertVerify bool   `yaml:"skip-cert-verify,omitempty"`
+	Fingerprint    string `yaml:"fingerprint,omitempty"`
 }
 
 // clashXHTTPOpts is mihomo's form of Xray's XHTTP transport.
@@ -131,6 +137,10 @@ func Clash(entries []Entry, rulesBase string) ([]byte, error) {
 			p.ClientFingerprint = "" // meaningless without TLS
 		default:
 			continue
+		}
+		if e.CertSHA256 != "" {
+			p.SkipCertVerify = true
+			p.Fingerprint = e.CertSHA256
 		}
 		proxies = append(proxies, p)
 		kept = append(kept, e)

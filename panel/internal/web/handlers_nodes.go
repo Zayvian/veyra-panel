@@ -403,6 +403,7 @@ func (s *Server) createInbound(w http.ResponseWriter, r *http.Request) {
 		CertPath:    strings.TrimSpace(r.FormValue("cert_path")),
 		KeyPath:     strings.TrimSpace(r.FormValue("key_path")),
 		ServerName:  strings.TrimSpace(r.FormValue("server_name")),
+		SelfSigned:  r.FormValue("self_signed") != "",
 		HopPorts:    strings.TrimSpace(r.FormValue("hop_ports")),
 		HopInterval: strings.TrimSpace(r.FormValue("hop_interval")),
 		Masquerade:  r.FormValue("masquerade"),
@@ -450,6 +451,8 @@ func (s *Server) inboundEditFields(data map[string]any, inbounds []*store.Inboun
 	data["HopPorts"] = client.HopPorts
 	data["HopInterval"] = client.HopInterval
 	data["SNI"] = client.SNI
+	data["SelfSigned"] = client.CertSHA256 != ""
+	data["CertSHA256"] = client.CertSHA256
 	data["EditRelayNodeID"] = in.RelayNodeID
 	if sb.TLS != nil {
 		data["CertPath"] = sb.TLS.CertificatePath
@@ -512,6 +515,7 @@ func (s *Server) updateInbound(w http.ResponseWriter, r *http.Request) {
 		CertPath:    strings.TrimSpace(r.FormValue("cert_path")),
 		KeyPath:     strings.TrimSpace(r.FormValue("key_path")),
 		ServerName:  strings.TrimSpace(r.FormValue("server_name")),
+		SelfSigned:  r.FormValue("self_signed") != "",
 		HopPorts:    strings.TrimSpace(r.FormValue("hop_ports")),
 		HopInterval: strings.TrimSpace(r.FormValue("hop_interval")),
 		Masquerade:  r.FormValue("masquerade"),

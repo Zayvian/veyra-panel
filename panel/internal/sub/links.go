@@ -75,6 +75,12 @@ func shareLink(e Entry) string {
 		if e.FP != "" {
 			q.Set("fp", e.FP)
 		}
+		if e.CertSHA256 != "" {
+			// A share link has no portable way to carry a certificate, so a
+			// self-signed one can only be accepted unverified.
+			q.Set("insecure", "1")
+			q.Set("allowInsecure", "1")
+		}
 		// No multiplex or smux parameter: AnyTLS multiplexes on its own, and
 		// stacking another muxer on top breaks the connection.
 		return "anytls://" + url.QueryEscape(e.Password) + "@" + host +
@@ -90,6 +96,19 @@ func shareLink(e Entry) string {
 			q.Set("congestion_control", "bbr")
 		} else if e.HopPorts != "" {
 			q.Set("mport", e.HopPorts)
+		}
+		if e.CertSHA256 != "" {
+			// Self-signed. Hysteria2's own URI scheme can pin the
+			// certificate, which clients that know pinSHA256 check even with
+			// insecure on; the rest of the ecosystem only knows the
+			// insecure flags, under one spelling or another.
+			q.Set("insecure", "1")
+			if e.Protocol == store.ProtoTUIC {
+				q.Set("allow_insecure", "1")
+				q.Set("allowInsecure", "1")
+			} else {
+				q.Set("pinSHA256", e.CertSHA256)
+			}
 		}
 		return e.Protocol + "://" + userinfo + "@" + host + "/?" + q.Encode() + "#" + frag(e.display())
 	case store.ProtoShadowsocks:

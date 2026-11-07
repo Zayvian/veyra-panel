@@ -40,6 +40,9 @@ type InboundSpec struct {
 	KeyPath  string
 	// ServerName goes in the TLS handshake; normally the node's own domain.
 	ServerName string
+	// SelfSigned has the panel generate a certificate for ServerName instead
+	// of reading CertPath and KeyPath on the node. See SelfSignedCert.
+	SelfSigned bool
 
 	// Address overrides what subscriptions tell clients to connect to for this
 	// inbound. Blank means the node's own address. It exists for relays: a
@@ -80,6 +83,12 @@ type ClientParams struct {
 
 	Method    string `json:"method,omitempty"`     // Shadowsocks
 	ServerPSK string `json:"server_psk,omitempty"` // Shadowsocks, server half of the key pair
+
+	// A self-signed certificate, which clients have to be told to trust:
+	// the certificate itself for sing-box, its SHA-256 for everything else.
+	// Empty for a certificate from a CA.
+	Cert       string `json:"cert,omitempty"`
+	CertSHA256 string `json:"cert_sha256,omitempty"`
 }
 
 // SSMethod is the only Shadowsocks method this panel emits. The user PSK it
@@ -168,28 +177,20 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 		}
 
 	case store.ProtoAnyTLS, store.ProtoHysteria2, store.ProtoTUIC:
-		// Blank means "wherever the installer put it". Refusing instead would
-		// make the field look mandatory when the answer is the same on every
-		// node the installer touched.
-		if spec.CertPath == "" {
-			spec.CertPath = DefaultCertPath
-		}
-		if spec.KeyPath == "" {
-			spec.KeyPath = DefaultKeyPath
-		}
+		// Blank paths mean "wherever the installer put it" (applyCertificate).
+		// Refusing instead would make the fields look mandatory when the
+		// answer is the same on every node the installer touched.
 		if spec.ServerName == "" {
 			return nil, invalid("%s needs a server name", spec.Protocol)
 		}
 		in.Type = spec.Protocol
-		in.TLS = &singbox.TLS{
-			Enabled:         true,
-			ServerName:      spec.ServerName,
-			CertificatePath: spec.CertPath,
-			KeyPath:         spec.KeyPath,
-		}
+		in.TLS = &singbox.TLS{Enabled: true, ServerName: spec.ServerName}
 		// No multiplex block: AnyTLS multiplexes on its own, and configuring
 		// smux on top of it breaks the connection.
 		client = ClientParams{SNI: spec.ServerName, FP: "chrome"}
+		if err := applyCertificate(in.TLS, &client, spec.SelfSigned, spec.CertPath, spec.KeyPath, ""); err != nil {
+			return nil, err
+		}
 		if spec.Protocol != store.ProtoAnyTLS {
 			client.FP = ""
 			in.TLS.ALPN = []string{"h3"}
@@ -233,6 +234,42 @@ func BuildInbound(spec InboundSpec) (*store.Inbound, error) {
 		Tag: spec.Tag, Protocol: spec.Protocol, Port: spec.Port, Core: spec.Core,
 		Config: string(cfgJSON), Client: string(clientJSON), Enabled: true,
 	}, nil
+}
+
+// applyCertificate points an inbound's TLS block at its certificate: the files
+// on the node, or a self-signed certificate carried inline.
+//
+// oldSNI is the server name the inbound had before an edit, empty when it is
+// new. A self-signed certificate already issued for the same name is kept, so
+// that saving an unrelated change does not invalidate every pinned client;
+// one for a different name is replaced, because its SAN would no longer match
+// what clients verify.
+func applyCertificate(t *singbox.TLS, client *ClientParams, selfSigned bool,
+	certPath, keyPath, oldSNI string,
+) error {
+	if !selfSigned {
+		if certPath == "" {
+			certPath = DefaultCertPath
+		}
+		if keyPath == "" {
+			keyPath = DefaultKeyPath
+		}
+		t.CertificatePath, t.KeyPath = certPath, keyPath
+		t.Certificate, t.Key = nil, nil
+		client.Cert, client.CertSHA256 = "", ""
+		return nil
+	}
+	t.CertificatePath, t.KeyPath = "", ""
+	if client.CertSHA256 != "" && len(t.Key) > 0 && oldSNI == t.ServerName {
+		return nil
+	}
+	cert, err := NewSelfSignedCert(t.ServerName)
+	if err != nil {
+		return err
+	}
+	t.Certificate, t.Key = PEMLines(cert.CertPEM), PEMLines(cert.KeyPEM)
+	client.Cert, client.CertSHA256 = cert.CertPEM, cert.SHA256
+	return nil
 }
 
 // newRealityKeypair returns (private, public), both base64url without padding.
