@@ -39,6 +39,7 @@ type InboundEdit struct {
 	CertPath   string
 	KeyPath    string
 	ServerName string
+	SelfSigned bool
 
 	// Hysteria2.
 	Masquerade string
@@ -119,16 +120,12 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 		if e.ServerName == "" {
 			return nil, invalid("%s needs a server name", in.Protocol)
 		}
-		if e.CertPath == "" {
-			e.CertPath = DefaultCertPath
-		}
-		if e.KeyPath == "" {
-			e.KeyPath = DefaultKeyPath
-		}
+		oldSNI := sb.TLS.ServerName
 		sb.TLS.ServerName = e.ServerName
-		sb.TLS.CertificatePath = e.CertPath
-		sb.TLS.KeyPath = e.KeyPath
 		client.SNI = e.ServerName
+		if err := applyCertificate(sb.TLS, &client, e.SelfSigned, e.CertPath, e.KeyPath, oldSNI); err != nil {
+			return nil, err
+		}
 		if in.Protocol == store.ProtoHysteria2 {
 			if err := applyHysteria2(&sb, e.Masquerade); err != nil {
 				return nil, err

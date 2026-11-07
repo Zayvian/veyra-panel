@@ -211,6 +211,7 @@ All keys, short ids and Shadowsocks server keys are generated for you.
 - 「端口」(**port**): one TCP port can serve only one inbound per node. Sharing a host with the panel, keep away from 80 and 443.
 - 「证书路径 / 私钥路径」(**certificate / key path**): files on the node; blank means `/opt/skysbx/cert.pem` and `key.pem`, where the installer puts them.
 - **SNI**: the domain the node's certificate is for, usually the node domain.
+- 「自签证书」(**self-signed certificate**, AnyTLS, Hysteria2 and TUIC): for a node that cannot get a certificate — a NAT VPS whose port 80 is not forwarded, or no domain at all. The panel generates a certificate and sends it to the node inline, so nothing is installed there. Subscriptions tell clients to trust it: sing-box gets the certificate itself, Clash/mihomo and Hysteria2 links pin its fingerprint, other share links can only skip verification. The certificate paths are then unused and the SNI can be any name, e.g. `www.bing.com`. Changing the SNI issues a new certificate, so customers must update their subscription once.
 - 「节点内排序」(**order within the node**, on edit): smaller first. Changing only the order does not restart the node.
 
 ### VLESS Reality: the handshake site

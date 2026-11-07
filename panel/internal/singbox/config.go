@@ -171,6 +171,13 @@ type TLS struct {
 	CertificatePath string `json:"certificate_path,omitempty"`
 	KeyPath         string `json:"key_path,omitempty"`
 
+	// Certificate and Key carry a certificate inline, as PEM line arrays,
+	// instead of naming files on the node. The panel uses them for the
+	// self-signed certificates it generates, so a node needs nothing
+	// installed. Mutually exclusive with the paths above.
+	Certificate []string `json:"certificate,omitempty"`
+	Key         []string `json:"key,omitempty"`
+
 	Reality *Reality `json:"reality,omitempty"`
 }
 

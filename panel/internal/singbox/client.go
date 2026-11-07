@@ -63,6 +63,11 @@ type ClientTLS struct {
 	ServerName string         `json:"server_name,omitempty"`
 	UTLS       *UTLS          `json:"utls,omitempty"`
 	Reality    *ClientReality `json:"reality,omitempty"`
+
+	// Certificate is the PEM line array of the one certificate to trust, for
+	// a server whose certificate is self-signed. It replaces the system
+	// roots, so verification still happens — against exactly that.
+	Certificate []string `json:"certificate,omitempty"`
 }
 
 // UTLS makes the client's TLS handshake look like a browser's. Reality needs it

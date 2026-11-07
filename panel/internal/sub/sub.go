@@ -49,6 +49,11 @@ type Entry struct {
 	PBK string // Reality public key
 	SID string // Reality short id
 
+	// A self-signed certificate to trust instead of a CA: the PEM itself and
+	// its SHA-256 in lowercase hex. Both empty for a CA-issued certificate.
+	Cert       string
+	CertSHA256 string
+
 	// Info marks an entry that is a message, not a node — an announcement or
 	// an account notice. It is listed like any other so the user reads it,
 	// but kept out of automatic selection, which would only measure it as
@@ -153,6 +158,8 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 			FP:          client.FP,
 			PBK:         client.PBK,
 			SID:         client.SID,
+			Cert:        client.Cert,
+			CertSHA256:  client.CertSHA256,
 		}
 
 		switch in.Protocol {
