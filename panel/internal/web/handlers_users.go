@@ -125,10 +125,14 @@ func ipLimitFromForm(r *http.Request) (int, error) {
 func resetDayFromForm(r *http.Request, created time.Time) int {
 	v := strings.TrimSpace(r.FormValue("reset_day"))
 	if v == "created" {
+		// 「按创建日次日」: the day after the account was made, so the first
+		// cycle is never cut short by a reset a few hours after creation.
+		// Taking the day from the following date, rather than adding 1 to
+		// the day number, lets a month-end creation roll over to the 1st.
 		if created.IsZero() {
-			return time.Now().Day()
+			created = time.Now()
 		}
-		return created.In(time.Local).Day()
+		return created.In(time.Local).AddDate(0, 0, 1).Day()
 	}
 	n, err := strconv.Atoi(v)
 	if err != nil {

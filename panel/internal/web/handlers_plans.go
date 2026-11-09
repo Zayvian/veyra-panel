@@ -64,7 +64,7 @@ func planFromForm(r *http.Request) (*store.Plan, error) {
 	if p.IPLimit, err = ipLimitFromForm(r); err != nil {
 		return nil, err
 	}
-	// 「按创建日」 cannot be resolved yet — there is no user — so it is kept
+	// 「按创建日次日」 cannot be resolved yet — there is no user — so it is kept
 	// as itself and resolved when a user is made from the plan.
 	if strings.TrimSpace(r.FormValue("reset_day")) == "created" {
 		p.ResetDay = store.PlanResetOnCreation

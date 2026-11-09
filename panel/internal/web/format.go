@@ -83,7 +83,7 @@ func nextResetAtLabel(day, hour, minute int) string {
 func planResetLabel(day int) string {
 	switch {
 	case day == store.PlanResetOnCreation:
-		return "每月按创建日"
+		return "每月按创建日次日"
 	case day >= 31:
 		return "每月最后一天"
 	case day > 0:
