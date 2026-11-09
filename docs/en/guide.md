@@ -43,7 +43,7 @@ Every feature, page by page, in the order of the panel's top navigation. Not ins
 | 到期 (expiry) | an exact expiry time, in the server's time zone. Blank means it never expires |
 | 流量上限 GiB (traffic limit) | blank or 0 means unlimited. 1 GiB = 1024³ bytes |
 | 同时在线 IP (concurrent IPs) | how many different source addresses may use the account at once; blank means unlimited — see below |
-| 流量重置 (traffic reset) | for monthly plans: the day used traffic goes back to zero — 「按创建日」(the day it was created), 「每月 N 号」(the Nth), or 「每月最后一天」(the last day) |
+| 流量重置 (traffic reset) | for monthly plans: the day used traffic goes back to zero — 「按创建日」(the day and time of day it was created; the reset time field is filled from it), 「每月 N 号」(the Nth), or 「每月最后一天」(the last day) |
 | 重置时间 (reset time) | the time of day the reset happens |
 | 备注 (note) | visible only to you |
 
