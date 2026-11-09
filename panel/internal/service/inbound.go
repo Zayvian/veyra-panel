@@ -57,6 +57,10 @@ type InboundSpec struct {
 	RelayNodeID int64
 	RelayPort   int
 
+	// PublicPort is the NAT external port; zero means the same as Port. See
+	// store.Inbound.PublicPort.
+	PublicPort int
+
 	// Hysteria2: the website non-clients are shown. See applyHysteria2.
 	Masquerade string
 }

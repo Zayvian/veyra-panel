@@ -399,6 +399,7 @@ func (s *Server) createInbound(w http.ResponseWriter, r *http.Request) {
 		Address:     strings.TrimSpace(r.FormValue("address")),
 		RelayNodeID: relayNodeID,
 		RelayPort:   relayPort,
+		PublicPort:  publicPortForm(r),
 		Handshake:   r.FormValue("handshake"),
 		CertPath:    strings.TrimSpace(r.FormValue("cert_path")),
 		KeyPath:     strings.TrimSpace(r.FormValue("key_path")),
@@ -511,6 +512,7 @@ func (s *Server) updateInbound(w http.ResponseWriter, r *http.Request) {
 		Address:     strings.TrimSpace(r.FormValue("address")),
 		RelayNodeID: relayNodeID,
 		RelayPort:   relayPort,
+		PublicPort:  publicPortForm(r),
 		Handshake:   r.FormValue("handshake"),
 		CertPath:    strings.TrimSpace(r.FormValue("cert_path")),
 		KeyPath:     strings.TrimSpace(r.FormValue("key_path")),
@@ -584,4 +586,14 @@ func (s *Server) deleteInbound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.renderInbounds(w, r, in.NodeID, http.StatusOK)
+}
+
+// publicPortForm reads the optional NAT external port; blank or junk is zero,
+// meaning the same as the inbound's own port.
+func publicPortForm(r *http.Request) int {
+	port, err := strconv.Atoi(strings.TrimSpace(r.FormValue("public_port")))
+	if err != nil || port < 0 {
+		return 0
+	}
+	return port
 }

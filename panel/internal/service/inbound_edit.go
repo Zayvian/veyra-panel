@@ -31,6 +31,9 @@ type InboundEdit struct {
 	RelayNodeID int64
 	RelayPort   int
 
+	// PublicPort is the NAT external port; zero means the same as Port.
+	PublicPort int
+
 	// VLESS: the site whose handshake is borrowed. Reality's key pair is
 	// deliberately absent; see EditInbound.
 	Handshake string
@@ -78,6 +81,9 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 	}
 	if e.Port < 1 || e.Port > 65535 {
 		return nil, invalid("port %d out of range", e.Port)
+	}
+	if e.PublicPort < 0 || e.PublicPort > 65535 {
+		return nil, invalid("external port %d out of range", e.PublicPort)
 	}
 	relay, err := s.resolveRelay(in.NodeID, e.RelayNodeID, e.Port, e.RelayPort,
 		e.Address, in.ID)
@@ -160,7 +166,7 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 	// means the node losing it has to be told as well as the node gaining it.
 	previousRelay := in.RelayNodeID
 	relayChange := in.RelayNodeID != relay.nodeID || in.RelayPort != relay.port ||
-		(relay.nodeID != 0 && (in.Port != e.Port || in.Tag != tag))
+		(relay.nodeID != 0 && (in.Port != e.Port || in.Tag != tag || in.PublicPort != e.PublicPort))
 
 	in.Tag = tag
 	in.Port = e.Port
@@ -169,6 +175,7 @@ func (s *Service) EditInbound(id int64, e InboundEdit) (*store.Inbound, error) {
 	in.Address = relay.address
 	in.RelayNodeID = relay.nodeID
 	in.RelayPort = relay.port
+	in.PublicPort = e.PublicPort
 
 	if err := s.checkHopConflicts(in); err != nil {
 		return nil, err

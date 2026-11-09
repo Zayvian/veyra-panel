@@ -56,7 +56,7 @@ func relayListener(in *store.Inbound, originAddress string) singbox.Inbound {
 		Listen:          "::",
 		ListenPort:      in.RelayPort,
 		OverrideAddress: originAddress,
-		OverridePort:    in.Port,
+		OverridePort:    in.ReachPort(),
 	}
 }
 

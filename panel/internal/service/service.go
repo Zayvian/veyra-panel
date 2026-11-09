@@ -486,6 +486,10 @@ func (s *Service) CreateInbound(nodeID int64, spec InboundSpec) (*store.Inbound,
 		return nil, err
 	}
 	in.Address, in.RelayNodeID, in.RelayPort = relay.address, relay.nodeID, relay.port
+	if spec.PublicPort < 0 || spec.PublicPort > 65535 {
+		return nil, invalid("external port %d out of range", spec.PublicPort)
+	}
+	in.PublicPort = spec.PublicPort
 
 	if err := s.checkHopConflicts(in); err != nil {
 		return nil, err

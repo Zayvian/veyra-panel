@@ -126,7 +126,7 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 		// An inbound may be reached through a relay on a different host, in
 		// which case that is what clients dial and the node's own address
 		// never appears.
-		address, port := node.Address, in.Port
+		address, port := node.Address, in.ReachPort()
 		switch {
 		case in.RelayNodeID != 0:
 			// A relay run by a node this panel manages. byNode holds only
@@ -140,7 +140,7 @@ func Build(u *store.User, nodes []*store.Node, inbounds []*store.Inbound,
 			}
 			address, port = relay.Address, in.RelayPort
 		case in.Address != "":
-			address, port = relayTarget(in.Address, in.Port)
+			address, port = relayTarget(in.Address, in.ReachPort())
 		}
 
 		// Billing follows the inbound's own node, relay or not, so that is the
