@@ -432,3 +432,44 @@ func TestPolicySkipsRelayListeners(t *testing.T) {
 		t.Errorf("a node with no relays got %+v, want the sniffer first", origCfg.Route)
 	}
 }
+
+// Relaying to a NAT VPS: the origin listens on its internal port, but only the
+// provider-assigned external port reaches it from outside, so that is what the
+// relay must forward to — and an edit of it alone must reach the relay node.
+func TestRelayForwardsToTheNATExternalPort(t *testing.T) {
+	svc, origin, relay := relayFixture(t)
+	in := mustInbound(t, svc, origin, InboundSpec{
+		Protocol: store.ProtoShadowsocks, Port: 443, PublicPort: 1439,
+		RelayNodeID: relay, RelayPort: 443,
+	})
+
+	own, err := svc.NodeConfig(origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := own.Inbounds[len(own.Inbounds)-1].ListenPort; got != 443 {
+		t.Errorf("origin listens on %d, want its internal 443", got)
+	}
+	cfg, err := svc.NodeConfig(relay)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Inbounds[0].OverridePort != 1439 {
+		t.Errorf("relay forwards to port %d, want the external 1439", cfg.Inbounds[0].OverridePort)
+	}
+
+	spy := &spyNotifier{}
+	svc.SetNotifier(spy)
+	if _, err := svc.EditInbound(in.ID, InboundEdit{
+		Port: 443, PublicPort: 1500, RelayNodeID: relay, RelayPort: 443,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(spy.config, relay) {
+		t.Errorf("changing the external port did not reach the relay node: %v", spy.config)
+	}
+	cfg, _ = svc.NodeConfig(relay)
+	if cfg.Inbounds[0].OverridePort != 1500 {
+		t.Errorf("relay forwards to port %d after the edit, want 1500", cfg.Inbounds[0].OverridePort)
+	}
+}

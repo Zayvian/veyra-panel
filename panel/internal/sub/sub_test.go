@@ -723,3 +723,26 @@ func TestInPanelRelayDropsTheEntryWhenTheRelayIsOff(t *testing.T) {
 		}
 	}
 }
+
+// A NAT VPS forwards a provider-assigned external port to the inbound's own.
+// Clients have to be told the external one; the node's address stays.
+func TestNATExternalPortIsAdvertised(t *testing.T) {
+	u, nodes, inbounds := fixture(t)
+	natted := inbounds[1] // port 8443
+	natted.PublicPort = 1439
+
+	entries, err := Build(u, nodes, inbounds, nil)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	for _, e := range entries {
+		if e.Name != natted.Tag {
+			continue
+		}
+		if e.Address != nodes[0].Address || e.Port != 1439 {
+			t.Errorf("NAT inbound advertises %s:%d, want %s:1439", e.Address, e.Port, nodes[0].Address)
+		}
+		return
+	}
+	t.Fatal("no entry for the NAT inbound")
+}

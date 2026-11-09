@@ -170,6 +170,12 @@ type Inbound struct {
 	RelayNodeID int64
 	RelayPort   int
 
+	// PublicPort is the port this inbound is reachable on at its node's
+	// address, for a NAT VPS that forwards a provider-assigned external port to
+	// Port. Zero means the same as Port. Subscriptions and relay listeners
+	// dial ReachPort; the node itself still listens on Port.
+	PublicPort int
+
 	// Config is the sing-box inbound object, with an empty users array. Users
 	// are pushed separately so they can be hot-swapped without rebuilding the
 	// listener.
@@ -188,4 +194,13 @@ type Inbound struct {
 	Core string
 
 	Enabled bool
+}
+
+// ReachPort is the port on the node's address that reaches this inbound from
+// outside: PublicPort behind NAT, Port otherwise.
+func (in *Inbound) ReachPort() int {
+	if in.PublicPort > 0 {
+		return in.PublicPort
+	}
+	return in.Port
 }
