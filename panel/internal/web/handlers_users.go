@@ -122,15 +122,26 @@ func ipLimitFromForm(r *http.Request) (int, error) {
 	return n, nil
 }
 
-func resetDayFromForm(r *http.Request, created time.Time) int {
-	v := strings.TrimSpace(r.FormValue("reset_day"))
-	if v == "created" {
+// resetScheduleFromForm reads 流量重置 and 重置时间 together. 「按创建日」
+// takes the day and the time of day from the moment the user was created
+// (now, for a user being created), so the counter clears exactly a month
+// after the account was made and the time field never needs adjusting by
+// hand; whatever the form sent as 重置时间 is ignored in that case.
+func resetScheduleFromForm(r *http.Request, created time.Time) (day, hour, minute int, err error) {
+	if strings.TrimSpace(r.FormValue("reset_day")) == "created" {
 		if created.IsZero() {
-			return time.Now().Day()
+			created = nowFunc()
 		}
-		return created.In(time.Local).Day()
+		c := created.In(time.Local)
+		return c.Day(), c.Hour(), c.Minute(), nil
 	}
-	n, err := strconv.Atoi(v)
+	day = resetDayFromForm(r)
+	hour, minute, err = resetTimeFromForm(r)
+	return day, hour, minute, err
+}
+
+func resetDayFromForm(r *http.Request) int {
+	n, err := strconv.Atoi(strings.TrimSpace(r.FormValue("reset_day")))
 	if err != nil {
 		return 0
 	}
@@ -199,8 +210,7 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nu.IPLimit = ipLimit
-	nu.ResetDay = resetDayFromForm(r, time.Time{})
-	nu.ResetHour, nu.ResetMinute, err = resetTimeFromForm(r)
+	nu.ResetDay, nu.ResetHour, nu.ResetMinute, err = resetScheduleFromForm(r, time.Time{})
 	if err != nil {
 		s.errorBanner(w, http.StatusBadRequest, err.Error())
 		return
@@ -262,8 +272,7 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	u.ExpiresAt = expires
 	u.TrafficLimit = limit
 	u.IPLimit = ipLimit
-	u.ResetDay = resetDayFromForm(r, u.CreatedAt)
-	u.ResetHour, u.ResetMinute, err = resetTimeFromForm(r)
+	u.ResetDay, u.ResetHour, u.ResetMinute, err = resetScheduleFromForm(r, u.CreatedAt)
 	if err != nil {
 		s.errorBanner(w, http.StatusBadRequest, err.Error())
 		return
